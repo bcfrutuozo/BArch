@@ -3,6 +3,7 @@
 #   ./scripts/sync.sh "message"
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
+[[ $EUID -eq 0 ]] && die "Run without sudo: the script asks for it only where needed."
 
 "$REPO/scripts/update-packages.sh"
 "$REPO/scripts/collect-system.sh"
