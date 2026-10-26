@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+cd ~/.cache/paru/clone/linux-cachyos
+old=$(git rev-parse HEAD)
+git pull --ff-only
+if [[ "$(git rev-parse HEAD)" == "$old" && "$1" != "-f" ]]; then
+    exit 0
+fi
+_cpusched=bore makepkg -si --skipchecksums --cleanbuild
+dkms status

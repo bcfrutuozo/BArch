@@ -1,0 +1,99 @@
+# barch.script — tema do Plymouth (inicialização) no visual do sistema.
+# Fundo com as montanhas à noite, três pontos pulsando e, se o disco pedir senha
+# (o TPM não destravou), uma caixa de senha no estilo da tela de bloqueio.
+
+W = Window.GetWidth();
+H = Window.GetHeight();
+
+# cor de fundo para qualquer área (ou monitor) que a imagem não cubra
+Window.SetBackgroundTopColor(0.06, 0.06, 0.09);
+Window.SetBackgroundBottomColor(0.07, 0.07, 0.10);
+
+# ---------- fundo ----------
+bg_image = Image("background.png");
+bg = Sprite(bg_image.Scale(W, H));
+bg.SetPosition(0, 0, -100);
+
+# tamanho de referência (funciona em 1080p e 4K)
+u = H / 1080;
+
+# ---------- pontos pulsando ----------
+dot_size = Math.Int(9 * u);
+gap = Math.Int(22 * u);
+dot_img = Image("dot.png").Scale(dot_size, dot_size);
+for (i = 0; i < 3; i++) {
+  dots[i] = Sprite(dot_img);
+  dots[i].SetPosition(W / 2 - gap + i * gap - dot_size / 2, H * 0.42, 10);
+  dots[i].SetOpacity(0.3);
+}
+
+t = 0;
+asking = 0;   # 1 enquanto a caixa de senha está na tela
+fun refresh() {
+  t++;
+  if (asking) return;
+  for (i = 0; i < 3; i++) {
+    phase = (t / 9) - i * 0.9;
+    dots[i].SetOpacity(0.25 + 0.75 * Math.Clamp((Math.Sin(phase) + 1) / 2, 0, 1));
+  }
+}
+Plymouth.SetRefreshFunction(refresh);
+
+# ---------- senha do disco (só se o TPM não destravar) ----------
+box_w = Math.Int(320 * u);
+box_h = Math.Int(52 * u);
+box_img = Image("pill.png").Scale(box_w, box_h);
+box = Sprite(box_img);
+box.SetPosition(W / 2 - box_w / 2, H * 0.42 - box_h / 2, 20);
+box.SetOpacity(0);
+
+prompt_sprite = Sprite();
+bullets_sprite = Sprite();
+font_prompt = "Sans " + Math.Int(13 * u);
+font_bullets = "Sans Bold " + Math.Int(18 * u);
+
+fun show_dots(on) {
+  for (i = 0; i < 3; i++) dots[i].SetOpacity(on * 0.3);
+}
+
+fun display_password(prompt, count) {
+  asking = 1;
+  show_dots(0);
+  box.SetOpacity(1);
+  label = "Disk password";
+  p = Image.Text(label, 0.80, 0.78, 0.90, 1, font_prompt);
+  prompt_sprite.SetImage(p);
+  prompt_sprite.SetPosition(W / 2 - p.GetWidth() / 2, H * 0.42 - box_h / 2 - p.GetHeight() - 14 * u, 30);
+  prompt_sprite.SetOpacity(1);
+  s = "";
+  for (i = 0; i < count && i < 24; i++) s += "•  ";
+  b = Image.Text(s, 0.97, 0.97, 0.95, 1, font_bullets);
+  bullets_sprite.SetImage(b);
+  bullets_sprite.SetPosition(W / 2 - b.GetWidth() / 2, H * 0.42 - b.GetHeight() / 2, 30);
+  bullets_sprite.SetOpacity(1);
+}
+
+fun display_normal() {
+  asking = 0;
+  box.SetOpacity(0);
+  prompt_sprite.SetOpacity(0);
+  bullets_sprite.SetOpacity(0);
+  show_dots(1);
+}
+
+Plymouth.SetDisplayPasswordFunction(display_password);
+Plymouth.SetDisplayNormalFunction(display_normal);
+
+# ---------- mensagens (ex.: avisos do sistema) ----------
+msg_sprite = Sprite();
+fun show_message(text) {
+  m = Image.Text(text, 0.80, 0.78, 0.90, 1, font_prompt);
+  msg_sprite.SetImage(m);
+  msg_sprite.SetPosition(W / 2 - m.GetWidth() / 2, H * 0.90, 30);
+}
+Plymouth.SetMessageFunction(show_message);
+
+# ---------- desligando / reiniciando ----------
+if (Plymouth.GetMode() == "shutdown" || Plymouth.GetMode() == "reboot") {
+  show_message("");
+}

@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# ~/.local/bin/wallpaper-mode — troca os papéis de parede para o modo claro/escuro.
+# Uso: wallpaper-mode dark|light        (o theme-auto chama isto ao trocar de modo)
+#
+# Espera em ~/Pictures/Wallpapers:
+#   primary-dark.png  primary-light.png      (monitor principal, paisagem)
+#   secondary-dark.png secondary-light.png   (monitor vertical, retrato)
+# e mantém os links primary.png / secondary.png apontando para o modo atual
+# (o hyprpaper.conf e o hyprlock.conf usam esses links, então o login também acerta).
+
+mode="${1:-dark}"
+dir="$HOME/Pictures/Wallpapers"
+declare -A monitors=( [primary]="HDMI-A-2" [secondary]="HDMI-A-1" )
+
+set_wallpaper() {   # monitor arquivo
+  local mon="$1" file="$2" out
+  # versões novas aceitam direto; as antigas precisam do preload antes
+  out=$(hyprctl hyprpaper wallpaper "$mon,$file" 2>&1)
+  if [[ "$out" != *ok* ]]; then
+    hyprctl hyprpaper preload "$file" >/dev/null 2>&1
+    out=$(hyprctl hyprpaper wallpaper "$mon,$file" 2>&1)
+  fi
+  [[ "$out" == *ok* ]]
+}
+
+failed=0
+for name in "${!monitors[@]}"; do
+  file="$dir/$name-$mode.png"
+  [[ -f "$file" ]] || { echo "missing: $file" >&2; continue; }
+  ln -sfn "$name-$mode.png" "$dir/$name.png"
+  set_wallpaper "${monitors[$name]}" "$file" || failed=1
+done
+
+# libera da memória as imagens do outro modo (sem erro se a versão não suportar)
+hyprctl hyprpaper unload unused >/dev/null 2>&1
+
+# se a troca ao vivo não funcionou, reinicia o hyprpaper (ele relê os links)
+if (( failed )); then
+  if systemctl --user is-active --quiet hyprpaper.service 2>/dev/null; then
+    systemctl --user restart hyprpaper.service
+  else
+    pkill -x hyprpaper; sleep 0.3
+    setsid -f hyprpaper >/dev/null 2>&1
+  fi
+fi

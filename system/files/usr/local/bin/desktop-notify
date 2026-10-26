@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# /usr/local/bin/desktop-notify — manda uma notificação de um serviço do sistema (root)
+# para a sessão gráfica de quem estiver logado (aparece na central da barra).
+# Uso: desktop-notify <low|normal|critical> "Título" "Texto"
+urgency="${1:-normal}"; title="$2"; body="$3"
+
+for bus in /run/user/*/bus; do
+  [[ -S "$bus" ]] || continue
+  uid=$(stat -c %u "$bus")
+  user=$(id -nu "$uid" 2>/dev/null) || continue
+  runuser -u "$user" -- env DBUS_SESSION_BUS_ADDRESS="unix:path=$bus" \
+    notify-send -u "$urgency" -a "Disk Health" -i drive-harddisk "$title" "$body" || true
+done

@@ -1,0 +1,12 @@
+[Unit]
+Description=Dracula colors on the text consoles (TTY)
+After=systemd-vconsole-setup.service
+Before=getty.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/setvtrgb /etc/vtrgb-dracula
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

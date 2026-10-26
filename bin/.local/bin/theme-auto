@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Usage: theme-auto [dark|light]
+DAY_START=8
+NIGHT_START=18
+
+mode="${1:-}"
+if [[ -z "$mode" ]]; then
+    h=$((10#$(date +%H)))
+    if (( h >= DAY_START && h < NIGHT_START )); then mode=light; else mode=dark; fi
+fi
+
+# Hyprland
+ln -sf "$mode.lua" "$HOME/.config/hypr/themes/current.lua"
+hyprctl reload
+
+# Apps (GTK, Thunar, navegadores, Electron)
+if [[ $mode == dark ]]; then
+    gtk_theme=Adwaita-dark; scheme=prefer-dark; prefer=1
+else
+    gtk_theme=Adwaita; scheme=prefer-light; prefer=0
+fi
+
+gsettings set org.gnome.desktop.interface color-scheme "$scheme"
+gsettings set org.gnome.desktop.interface gtk-theme "$gtk_theme"
+
+# Papéis de parede
+wallpaper-mode "$mode"
+apps-theme "$mode"
+
+for dir in "$HOME/.config/gtk-3.0" "$HOME/.config/gtk-4.0"; do
+    mkdir -p "$dir"
+    cat > "$dir/settings.ini" <<EOF
+[Settings]
+gtk-theme-name=$gtk_theme
+gtk-application-prefer-dark-theme=$prefer
+EOF
+done

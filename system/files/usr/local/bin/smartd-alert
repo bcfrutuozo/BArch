@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# /usr/local/bin/smartd-alert — chamado pelo smartd quando o SSD reporta um problema
+# (ou num teste). O smartd passa os detalhes em variáveis SMARTD_*.
+device="${SMARTD_DEVICE:-disk}"
+failtype="${SMARTD_FAILTYPE:-Unknown}"
+message="${SMARTD_MESSAGE:-No details}"
+
+if [[ "$failtype" == "EmailTest" ]]; then
+  /usr/local/bin/desktop-notify normal "Disk Monitor Test" "smartd is watching $device. Notifications work."
+else
+  /usr/local/bin/desktop-notify critical "Disk Problem: $device" "$message  ($failtype)
+Details: sudo smartctl -a $device"
+fi

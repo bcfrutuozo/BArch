@@ -1,0 +1,3 @@
+singleton Theme Theme.qml
+singleton Popups Popups.qml
+PanelAnim 1.0 PanelAnim.qml

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# /usr/local/bin/btrfs-scrub-report — roda ao fim do btrfs-scrub@ (verificação mensal)
+# e avisa o resultado. O systemd passa SERVICE_RESULT ("success" se não houve erro).
+mnt="${1:-/}"
+
+if [[ "${SERVICE_RESULT:-}" == "success" ]]; then
+  summary=$(btrfs scrub status "$mnt" 2>/dev/null | awk -F': *' '/Total to scrub|Duration/ {printf "%s: %s   ", $1, $2}')
+  /usr/local/bin/desktop-notify low "Disk Check Complete" "No errors found on $mnt.  ${summary}"
+else
+  /usr/local/bin/desktop-notify critical "Disk Check Found Errors" "The monthly btrfs check on $mnt reported problems (${SERVICE_RESULT:-unknown}).
+Details: sudo btrfs scrub status $mnt"
+fi

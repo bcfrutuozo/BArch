@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=BArch
+Description=Night mountains in Dracula colours, with a pulsing dots spinner
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/barch
+ScriptFile=/usr/share/plymouth/themes/barch/barch.script

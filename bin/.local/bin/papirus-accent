@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""Cria um tema de ícones na pasta pessoal: o Papirus com as pastas de outra cor.
+
+Uso: papirus-accent <nome> <tema-base> <cor>
+     papirus-accent BArch-Light Papirus-Light blue
+
+Não mexe em /usr/share/icons (o papirus-folders muda a cor para todos os modos de uma
+vez). O tema novo herda tudo do tema-base e só troca os ícones de pastas, por links
+para os folder-<cor>-*.svg / user-<cor>-*.svg do Papirus.
+"""
+import configparser, os, re, shutil, subprocess, sys
+
+name, base, color = sys.argv[1:4]
+src_root = os.environ.get("PAPIRUS_ROOT", "/usr/share/icons/Papirus")
+dest = os.path.expanduser(f"~/.local/share/icons/{name}")
+
+idx = configparser.ConfigParser(interpolation=None, strict=False)
+idx.optionxform = str
+idx.read(f"{src_root}/index.theme")
+COLORS = ("adwaita|black|blue|bluegrey|breeze|brown|carmine|cyan|darkcyan|deeporange|green|grey|indigo"
+          "|magenta|nordic|orange|palebrown|paleorange|pink|red|teal|violet|white|yellow")
+colored = re.compile(rf"^(folder|user)-(?:{COLORS})(-.+)?\.svg$")
+
+# ícones que no Papirus são de cor fixa e ficam melhor como pasta da cor escolhida
+# ("Browse Network" do Thunar é um globo roxo em qualquer modo)
+EXTRA = {"network-workgroup.svg": "folder-%s-network.svg"}
+
+shutil.rmtree(dest, ignore_errors=True)
+dirs = []
+for sec in idx.sections():
+    if not sec.endswith("/places"):
+        continue
+    src = os.path.join(src_root, sec)
+    if not os.path.isdir(src):
+        continue
+    made = 0
+    for f in os.listdir(src):
+        # segue os apelidos (folder-publicshare -> folder-public -> folder-violet-public, network-workgroup...)
+        # e troca qualquer pasta colorida pela da cor escolhida
+        m = colored.match(os.path.basename(os.path.realpath(os.path.join(src, f))))
+        if f in EXTRA:
+            target = os.path.realpath(os.path.join(src, EXTRA[f] % color))
+        elif not m or colored.match(f):
+            continue
+        else:
+            target = os.path.realpath(os.path.join(src, f"{m.group(1)}-{color}{m.group(2) or ''}.svg"))
+        if not os.path.exists(target):
+            continue
+        os.makedirs(os.path.join(dest, sec), exist_ok=True)
+        os.symlink(target, os.path.join(dest, sec, f))
+        made += 1
+    if made:
+        dirs.append(sec)
+
+if not dirs:
+    sys.exit(f"no folder-{color}-* icons found in {src_root}")
+
+out = configparser.ConfigParser(interpolation=None)
+out.optionxform = str
+out["Icon Theme"] = {"Name": name, "Comment": f"{base} with {color} folders",
+                     "Inherits": f"{base},breeze,hicolor", "Example": "folder",
+                     "Directories": ",".join(dirs)}
+for d in dirs:
+    out[d] = dict(idx[d])
+with open(os.path.join(dest, "index.theme"), "w") as fh:
+    out.write(fh, space_around_delimiters=False)
+subprocess.run(["gtk-update-icon-cache", "-qf", dest], check=False)
+print(f"{name}: {base} + {color} folders ({len(dirs)} sizes)")

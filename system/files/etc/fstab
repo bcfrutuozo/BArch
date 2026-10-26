@@ -1,0 +1,50 @@
+# Static information about the filesystems.
+# See fstab(5) for details.
+
+# <file system> <dir> <type> <options> <dump> <pass>
+# /dev/mapper/cryptroot LABEL=arch
+UUID=22b8de79-9b74-4c99-a64e-72d1a3ce1d61	/         	btrfs     	rw,noatime,compress=zstd:1,ssd,discard=async,space_cache=v2,subvol=/@	0 0
+
+# /dev/mapper/cryptroot LABEL=arch
+UUID=22b8de79-9b74-4c99-a64e-72d1a3ce1d61	/home     	btrfs     	rw,noatime,compress=zstd:1,ssd,discard=async,space_cache=v2,subvol=/@home	0 0
+
+# /dev/mapper/cryptroot LABEL=arch
+UUID=22b8de79-9b74-4c99-a64e-72d1a3ce1d61	/home/bcfrutuozo/Games	btrfs     	rw,noatime,compress=zstd:1,ssd,discard=async,space_cache=v2,subvol=/@games	0 0
+
+# /dev/mapper/cryptroot LABEL=arch
+UUID=22b8de79-9b74-4c99-a64e-72d1a3ce1d61	/.snapshots	btrfs     	rw,noatime,compress=zstd:1,ssd,discard=async,space_cache=v2,subvol=/@snapshots	0 0
+
+# /dev/mapper/cryptroot LABEL=arch
+UUID=22b8de79-9b74-4c99-a64e-72d1a3ce1d61	/var/log  	btrfs     	rw,noatime,compress=zstd:1,ssd,discard=async,space_cache=v2,subvol=/@log	0 0
+
+# /dev/mapper/cryptroot LABEL=arch
+UUID=22b8de79-9b74-4c99-a64e-72d1a3ce1d61	/var/cache/pacman/pkg	btrfs     	rw,noatime,compress=zstd:1,ssd,discard=async,space_cache=v2,subvol=/@pkg	0 0
+
+# /dev/mapper/cryptroot LABEL=arch
+UUID=22b8de79-9b74-4c99-a64e-72d1a3ce1d61	/var/lib/docker	btrfs     	rw,noatime,compress=zstd:1,ssd,discard=async,space_cache=v2,subvol=/@docker	0 0
+
+# /dev/mapper/cryptroot LABEL=arch
+UUID=22b8de79-9b74-4c99-a64e-72d1a3ce1d61	/var/lib/libvirt/images	btrfs     	rw,noatime,compress=zstd:1,ssd,discard=async,space_cache=v2,subvol=/@vms	0 0
+
+# /dev/nvme0n1p1 LABEL=ESP
+UUID=A937-BB67      	/boot     	vfat      	rw,relatime,fmask=0077,dmask=0077,codepage=437,iocharset=ascii,shortname=mixed,utf8,errors=remount-ro	0 2
+
+//NASfrutuozo/appdata  /mnt/nasfrutuozo/appdata  cifs  credentials=/etc/samba/credentials/nasfrutuozo,uid=1000,gid=1000,file_mode=0644,dir_mode=0755,iocharset=utf8,vers=3.1.1,noserverino,_netdev,nofail,x-systemd.automount,x-systemd.mount-timeout=10  0  0
+
+//NASfrutuozo/downloads  /mnt/nasfrutuozo/downloads  cifs  credentials=/etc/samba/credentials/nasfrutuozo,uid=1000,gid=1000,file_mode=0644,dir_mode=0755,iocharset=utf8,vers=3.1.1,noserverino,_netdev,nofail,x-systemd.automount,x-systemd.mount-timeout=10  0  0
+
+//NASfrutuozo/games  /mnt/nasfrutuozo/games  cifs  credentials=/etc/samba/credentials/nasfrutuozo,uid=1000,gid=1000,file_mode=0644,dir_mode=0755,iocharset=utf8,vers=3.1.1,noserverino,_netdev,nofail,x-systemd.automount,x-systemd.mount-timeout=10  0  0
+
+//NASfrutuozo/isos  /mnt/nasfrutuozo/isos  cifs  credentials=/etc/samba/credentials/nasfrutuozo,uid=1000,gid=1000,file_mode=0644,dir_mode=0755,iocharset=utf8,vers=3.1.1,noserverino,_netdev,nofail,x-systemd.automount,x-systemd.mount-timeout=10  0  0
+
+//NASfrutuozo/media  /mnt/nasfrutuozo/media  cifs  credentials=/etc/samba/credentials/nasfrutuozo,uid=1000,gid=1000,file_mode=0644,dir_mode=0755,iocharset=utf8,vers=3.1.1,noserverino,_netdev,nofail,x-systemd.automount,x-systemd.mount-timeout=10  0  0
+
+//NASfrutuozo/nvr  /mnt/nasfrutuozo/nvr  cifs  credentials=/etc/samba/credentials/nasfrutuozo,uid=1000,gid=1000,file_mode=0644,dir_mode=0755,iocharset=utf8,vers=3.1.1,noserverino,_netdev,nofail,x-systemd.automount,x-systemd.mount-timeout=10  0  0
+
+//NASfrutuozo/organization  /mnt/nasfrutuozo/organization  cifs  credentials=/etc/samba/credentials/nasfrutuozo,uid=1000,gid=1000,file_mode=0644,dir_mode=0755,iocharset=utf8,vers=3.1.1,noserverino,_netdev,nofail,x-systemd.automount,x-systemd.mount-timeout=10  0  0
+
+//NASfrutuozo/softwares  /mnt/nasfrutuozo/softwares  cifs  credentials=/etc/samba/credentials/nasfrutuozo,uid=1000,gid=1000,file_mode=0644,dir_mode=0755,iocharset=utf8,vers=3.1.1,noserverino,_netdev,nofail,x-systemd.automount,x-systemd.mount-timeout=10  0  0
+
+//NASfrutuozo/source  /mnt/nasfrutuozo/source  cifs  credentials=/etc/samba/credentials/nasfrutuozo,uid=1000,gid=1000,file_mode=0644,dir_mode=0755,iocharset=utf8,vers=3.1.1,noserverino,_netdev,nofail,x-systemd.automount,x-systemd.mount-timeout=10  0  0
+
+//NASfrutuozo/temporary  /mnt/nasfrutuozo/temporary  cifs  credentials=/etc/samba/credentials/nasfrutuozo,uid=1000,gid=1000,file_mode=0644,dir_mode=0755,iocharset=utf8,vers=3.1.1,noserverino,_netdev,nofail,x-systemd.automount,x-systemd.mount-timeout=10  0  0

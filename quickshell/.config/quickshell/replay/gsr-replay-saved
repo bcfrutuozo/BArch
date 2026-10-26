@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# ~/.local/bin/gsr-replay-saved — chamado pelo gpu-screen-recorder depois de salvar um vídeo.
+# Recebe: $1 = caminho do arquivo, $2 = tipo ("replay", "regular" ou "screenshot").
+# Mostra uma notificação com o botão "Open" (abre o vídeo) e "Folder" (abre a pasta).
+
+file="$1"
+kind="${2:-replay}"
+[[ -f "$file" ]] || exit 0
+
+size=$(du -h "$file" | cut -f1)
+title="Replay Saved"
+[[ "$kind" == "regular" ]] && title="Recording Saved"
+
+# roda em segundo plano para não segurar o gravador esperando o clique
+(
+  action=$(timeout 600 notify-send -a "Replay" -i media-record \
+    -A open="Open" -A folder="Folder" \
+    "$title" "$(basename "$file")  ·  $size")
+  case "$action" in
+    open)   xdg-open "$file" ;;
+    folder) xdg-open "$(dirname "$file")" ;;
+  esac
+) >/dev/null 2>&1 &

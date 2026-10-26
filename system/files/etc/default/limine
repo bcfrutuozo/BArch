@@ -1,0 +1,4 @@
+ENABLE_UKI=yes
+KERNEL_CMDLINE[default]="rd.luks.name=0f94e182-d3f8-475e-bcda-5bd7b2058457=cryptroot rd.luks.options=tpm2-device=auto root=/dev/mapper/cryptroot rootflags=subvol=/@ rw quiet splash loglevel=3 zswap.enabled=0"
+ROOT_SNAPSHOTS_PATH="/@snapshots"
+MAX_SNAPSHOT_ENTRIES=8

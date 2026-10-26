@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# ~/.local/bin/apps-theme — põe os apps GTK/Qt no modo claro ou escuro.
+# Uso: apps-theme dark|light        (o theme-auto chama isto ao trocar de modo)
+#
+# As cores vêm do Quickshell (Theme.qml gera os temas BArch-dark/BArch-light, o
+# gtk-4.0/gtk.css e os esquemas do qt6ct); aqui só se escolhe o lado.
+mode="${1:-dark}"
+
+cursor="Bibata-Modern-Classic"
+cursor_size=24
+font="SF Pro Text 11"
+mono="JetBrainsMono Nerd Font 11"
+
+if [[ "$mode" == dark ]]; then
+  gtk="BArch-dark"; icons="Papirus-Dark"; scheme="prefer-dark"; prefer=1
+else
+  gtk="BArch-light"; icons="Papirus-Light"; scheme="prefer-light"; prefer=0
+fi
+# modo claro: Papirus-Light com pastas azuis (Latte), se o papirus-accent já criou o tema
+[[ $mode != dark && -f "$HOME/.local/share/icons/BArch-Light/index.theme" ]] && icons="BArch-Light"
+# sem os temas gerados (barra ainda não rodou), usa o adw-gtk3 puro
+[[ -d "$HOME/.local/share/themes/$gtk" ]] || gtk=$([[ $mode == dark ]] && echo adw-gtk3-dark || echo adw-gtk3)
+
+# ---- GTK (apps abertos trocam na hora) ----
+gs() { gsettings set org.gnome.desktop.interface "$1" "$2" 2>/dev/null; }
+gs color-scheme "$scheme"
+gs gtk-theme "$gtk"
+gs icon-theme "$icons"
+gs cursor-theme "$cursor"
+gs cursor-size "$cursor_size"
+gs font-name "$font"
+gs document-font-name "$font"
+gs monospace-font-name "$mono"
+
+ini() {   # pasta, incluir tema?
+  mkdir -p "$1"
+  {
+    echo "[Settings]"
+    [[ "$2" == yes ]] && echo "gtk-theme-name=$gtk"
+    echo "gtk-icon-theme-name=$icons"
+    echo "gtk-cursor-theme-name=$cursor"
+    echo "gtk-cursor-theme-size=$cursor_size"
+    echo "gtk-font-name=$font"
+    echo "gtk-application-prefer-dark-theme=$prefer"
+  } > "$1/settings.ini"
+}
+ini "$HOME/.config/gtk-3.0" yes
+ini "$HOME/.config/gtk-4.0" no    # GTK 4 usa o gtk.css gerado pela barra, não um tema
+
+# ---- Qt (vale para apps abertos a partir de agora) ----
+conf="$HOME/.config/qt6ct/qt6ct.conf"
+if [[ -f "$conf" ]]; then
+  sed -i -e "s|^icon_theme=.*|icon_theme=$icons|" \
+         -e "s|^color_scheme_path=.*|color_scheme_path=$HOME/.config/qt6ct/colors/barch-$mode.conf|" "$conf"
+fi
+
+# ---- cursor do Hyprland ----
+hyprctl setcursor "$cursor" "$cursor_size" >/dev/null 2>&1 || true
+exit 0

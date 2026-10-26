@@ -1,0 +1,6 @@
+[Unit]
+Description=Change hyprland day/night mode by daytime
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/theme-auto

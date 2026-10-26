@@ -1,0 +1,10 @@
+[Unit]
+Description=Liga o numlock nos TTYs
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/numlock
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
