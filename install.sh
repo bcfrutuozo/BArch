@@ -69,6 +69,15 @@ for pkg in "${pkgs[@]}"; do
   ok "$pkg"
 done
 
+step "Theme links"
+# arquivos que o tema gera/troca em uso e por isso ficam fora do git: cria um ponto de partida
+themes="$HOME/.config/hypr/themes"
+if [[ -d "$themes" && ! -e "$themes/current.lua" ]]; then
+  ln -sfn dark.lua "$themes/current.lua" && ok "Hyprland theme: dark (theme-auto switches it later)"
+fi
+hl="$HOME/.config/hypr/hyprlock-colors.conf"
+[[ -e "$hl" ]] || { touch "$hl"; ok "empty hyprlock-colors.conf (the bar fills it on first start)"; }
+
 step "Wallpapers"
 if compgen -G "$HOME/Pictures/Wallpapers/primary-dark.png" >/dev/null; then
   ok "already there"
