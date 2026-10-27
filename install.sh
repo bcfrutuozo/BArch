@@ -75,8 +75,27 @@ themes="$HOME/.config/hypr/themes"
 if [[ -d "$themes" && ! -e "$themes/current.lua" ]]; then
   ln -sfn dark.lua "$themes/current.lua" && ok "Hyprland theme: dark (theme-auto switches it later)"
 fi
+# cores da tela de bloqueio: a barra gera ao abrir, mas o hyprlock roda antes dela no
+# primeiro login; sem o arquivo ele mostra "$placeholder" literalmente. Começa com o Dracula.
 hl="$HOME/.config/hypr/hyprlock-colors.conf"
-[[ -e "$hl" ]] || { touch "$hl"; ok "empty hyprlock-colors.conf (the bar fills it on first start)"; }
+if [[ ! -s "$hl" ]]; then
+  cat > "$hl" <<'COLORS'
+# Ponto de partida (Dracula); o Theme.qml da barra reescreve este arquivo.
+$fg          = rgba(f8f8f2f2)
+$fg_dim      = rgba(f8f8f2a6)
+$accent      = rgba(bd93f9ff)
+$ok          = rgba(50fa7bff)
+$fail        = rgba(ff5555ff)
+$warn        = rgba(f1fa8cff)
+$pill        = rgba(282a3673)
+$outline     = rgba(f8f8f224)
+$placeholder = ##f8f8f288
+$shadow      = rgba(00000066)
+$bg_brightness = 0.8
+$bg_contrast   = 1.0
+COLORS
+  ok "hyprlock colors: Dracula (the bar takes over on first start)"
+fi
 
 step "Wallpapers"
 if compgen -G "$HOME/Pictures/Wallpapers/primary-dark.png" >/dev/null; then
@@ -85,6 +104,11 @@ else
   mkdir -p "$HOME/Pictures/Wallpapers"
   python3 "$REPO/tools/make_wallpapers.py" "$HOME/Pictures/Wallpapers" && ok "generated in ~/Pictures/Wallpapers"
 fi
+# links primary.png / secondary.png (hyprpaper e hyprlock usam estes; o wallpaper-mode troca depois)
+for n in primary secondary; do
+  f="$HOME/Pictures/Wallpapers/$n.png"
+  [[ -e "$f" ]] || ln -sfn "$n-dark.png" "$f"
+done
 
 step "User services"
 systemctl --user daemon-reload || true
