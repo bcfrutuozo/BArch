@@ -4,7 +4,8 @@
 // está valendo (inclusive os criados em laços, como os dos workspaces).
 // O texto vem da opção description de cada hl.bind, no formato "Grupo|Descrição":
 //     hl.bind(mainMod .. " + T", hl.dsp.exec_cmd(terminal), { description = "Apps|Terminal" })
-// Atalhos sem description aparecem em "Other", com o comando que executam.
+// Atalhos sem description aparecem em "Other", com o comando que executam;
+// os do grupo "Hidden" não aparecem.
 // Sequências numeradas ("Go to Workspace 1", "… 2", …) viram uma linha só.
 //
 // Abre no monitor em foco com:  qs ipc call keys toggle
@@ -114,6 +115,7 @@ Scope {
             let group = "Other", label = raw
             const bar = raw.indexOf("|")
             if (bar >= 0) { group = raw.slice(0, bar).trim() || "Other"; label = raw.slice(bar + 1).trim() }
+            if (group === "Hidden") continue          // atalhos auxiliares (ex.: soltar o Alt do Alt+Tab)
             if (label === "") label = describe(b)
 
             const m = mods(b.modmask || 0)

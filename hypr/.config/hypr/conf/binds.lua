@@ -26,6 +26,14 @@ hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.fullscreen({ mode = "fullscreen
 hl.bind(mainMod .. " + P", hl.dsp.window.pseudo(), { description = "Windows|Pseudotile" })
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"), { description = "Windows|Toggle Split" })    -- só dwindle
 
+-- Trocar de janela (Alt+Tab com prévia) e visão geral dos workspaces
+hl.bind("ALT + Tab",         hl.dsp.exec_cmd("qs ipc call switcher next"), { description = "Windows|Switch Windows" })
+hl.bind("ALT + SHIFT + Tab", hl.dsp.exec_cmd("qs ipc call switcher prev"), { description = "Windows|Switch Windows Backwards" })
+-- soltar o Alt confirma a escolha (só age com o seletor aberto)
+hl.bind("ALT + Alt_L",         hl.dsp.exec_cmd("qs ipc call switcher commit"), { release = true, description = "Hidden|Switcher commit" })
+hl.bind("ALT + SHIFT + Alt_L", hl.dsp.exec_cmd("qs ipc call switcher commit"), { release = true, description = "Hidden|Switcher commit" })
+hl.bind(mainMod .. " + Tab", hl.dsp.exec_cmd("qs ipc call overview toggle"), { description = "Workspaces|Overview" })
+
 -- Foco com mainMod + setas
 hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }),  { description = "Windows|Focus Left" })
 hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }), { description = "Windows|Focus Right" })

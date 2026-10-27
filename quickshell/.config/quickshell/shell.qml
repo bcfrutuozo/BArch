@@ -28,6 +28,8 @@ import "vms"
 import "updates"
 import "launcher"
 import "keys"
+import "switcher"
+import "overview"
 import "privacy"
 import "notifications"
 import "replay"
@@ -41,6 +43,8 @@ ShellRoot {
   // Launcher de apps (Super): qs ipc call launcher toggle
   Launcher {}
   Keybinds {}
+  Switcher {}
+  Overview {}
 
   // Balões de notificação (servidor próprio, no lugar do swaync)
   NotificationPopups {}

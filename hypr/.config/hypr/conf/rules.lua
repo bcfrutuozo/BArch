@@ -42,6 +42,58 @@ hl.window_rule({
     idle_inhibit = "fullscreen",
 })
 
+hl.window_rule({
+    -- Battle.net (launcher e janelas dele, como login e avisos) sempre flutuante.
+    -- O WoW tem outra class (wow.exe) e continua no tiling normal.
+    name  = "battlenet-float",
+    match = { class = "^battle\\.net\\.exe$" },
+
+    float = true,
+})
+
+hl.window_rule({
+    -- Janela principal do launcher: centralizada e num tamanho confortável
+    name  = "battlenet-launcher-size",
+    match = { class = "^battle\\.net\\.exe$", title = "^Battle\\.net$" },
+
+    size   = "1280 800",
+    center = true,
+})
+
+-- Picture-in-Picture (Brave/Chromium e Firefox): flutuando, por cima de tudo,
+-- em todos os workspaces, no canto inferior direito.
+hl.window_rule({
+    name  = "pip",
+    match = { title = "^Picture[- ]in[- ][Pp]icture$" },
+
+    float             = true,
+    pin               = true,          -- segue você em todos os workspaces
+    keep_aspect_ratio = true,
+    no_initial_focus  = true,          -- não rouba o foco ao abrir
+    size  = "480 270",
+    move  = "monitor_w-500 monitor_h-290",
+})
+
+-- Diálogos de arquivo: flutuando e centralizados, num tamanho fixo.
+hl.window_rule({
+    name  = "file-dialogs",
+    match = { title = "^(Open|Save|Open File|Save File|Save As|Open Files|Open Folder|Select Folder|Select File|Choose Files?|File Upload)$" },
+
+    float  = true,
+    center = true,
+    size   = "1100 700",
+})
+
+-- Diálogos que passam pelo portal do GTK (alguns apps abrem o seletor por ele)
+hl.window_rule({
+    name  = "portal-dialogs",
+    match = { class = "^xdg-desktop-portal-gtk$" },
+
+    float  = true,
+    center = true,
+    size   = "1100 700",
+})
+
 -- Layer rules também retornam um handle
 -- local overlayLayerRule = hl.layer_rule({
 --     name  = "no-anim-overlay",
