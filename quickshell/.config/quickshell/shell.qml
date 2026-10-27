@@ -34,6 +34,9 @@ import "agenda"
 import "record"
 import "minimize"
 import "pin"
+import "session"
+import "corner"
+import "notes"
 import "privacy"
 import "notifications"
 import "replay"
@@ -49,6 +52,10 @@ ShellRoot {
   Keybinds {}
   Switcher {}
   Overview {}
+  HotCorner {}
+  QuickNotes {}
+  // restaurar a sessão: o singleton só existe se alguém o usar, então é "tocado" aqui
+  readonly property bool sessionReady: Session.ready
 
   // Balões de notificação (servidor próprio, no lugar do swaync)
   NotificationPopups {}
