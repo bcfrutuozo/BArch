@@ -26,6 +26,7 @@ import "disks"
 import "media"
 import "vms"
 import "updates"
+import "health"
 import "launcher"
 import "keys"
 import "switcher"
@@ -571,6 +572,7 @@ ShellRoot {
         NotificationCenter {}
 
         // Atualizações
+        HealthWidget {}
         UpdatesWidget {
           kernelScript: "/home/bcfrutuozo/.local/bin/kernel-update"
         }

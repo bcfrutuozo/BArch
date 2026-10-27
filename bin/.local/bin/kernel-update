@@ -1,10 +1,34 @@
 #!/bin/bash
+# kernel-update — compila e instala o linux-cachyos do AUR com o agendador BORE.
+#   kernel-update      compila só se o AUR tiver versão diferente da instalada
+#   kernel-update -f   compila mesmo assim
+# A cópia do pacote fica em ~/.cache/paru/clone/linux-cachyos; se ela sumir (limpeza
+# de cache), é baixada de novo. O BORE vem da variável _cpusched=bore a cada compilação,
+# então não depende de nenhuma edição guardada no PKGBUILD.
 set -e
-cd ~/.cache/paru/clone/linux-cachyos
-old=$(git rev-parse HEAD)
+dir=~/.cache/paru/clone/linux-cachyos
+
+if [[ ! -d "$dir/.git" ]]; then
+    echo "==> Downloading linux-cachyos from the AUR (local copy was missing)"
+    mkdir -p "$(dirname "$dir")"
+    rm -rf "$dir"
+    git clone https://aur.archlinux.org/linux-cachyos.git "$dir"
+fi
+
+cd "$dir"
 git pull --ff-only
-if [[ "$(git rev-parse HEAD)" == "$old" && "$1" != "-f" ]]; then
+
+# versão do PKGBUILD (pkgver-pkgrel, com epoch se houver) x versão instalada
+want=$(makepkg --printsrcinfo | awk -F' = ' '
+    /^\tepoch/ {e=$2} /^\tpkgver/ {v=$2} /^\tpkgrel/ {r=$2}
+    END {printf "%s%s-%s", (e ? e ":" : ""), v, r}')
+have=$(pacman -Q linux-cachyos 2>/dev/null | awk '{print $2}')
+
+if [[ "$want" == "$have" && "$1" != "-f" ]]; then
+    echo "linux-cachyos $have is up to date."
     exit 0
 fi
+
+echo "==> Building linux-cachyos $want with BORE (installed: ${have:-none})"
 _cpusched=bore makepkg -si --skipchecksums --cleanbuild
 dkms status

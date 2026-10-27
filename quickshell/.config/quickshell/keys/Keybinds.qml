@@ -8,7 +8,10 @@
 // os do grupo "Hidden" não aparecem.
 // Sequências numeradas ("Go to Workspace 1", "… 2", …) viram uma linha só.
 //
-// Abre no monitor em foco com:  qs ipc call keys toggle
+// Aba "Neovim": os atalhos com descrição da sua config do Neovim (nvim-keys.sh), agrupados
+// pelos grupos do which-key (Space c = Code, Space d = Debug…), mais os de LSP, que só
+// existem com um arquivo aberto.
+// Abre no monitor em foco com:  qs ipc call keys toggle   (Tab troca de aba)
 // Teclas: digite para filtrar · Esc fecha.
 
 import QtQuick
@@ -24,6 +27,8 @@ Scope {
 
     property bool shown: false
     property var groups: []          // [{ name, items: [{ keys: [..], label }] }]
+    property var nvimGroups: []
+    property string tab: "hyprland"  // hyprland | neovim
     property string filter: ""
 
     function open() {
@@ -33,6 +38,7 @@ Scope {
         search.text = ""
         hideTimer.stop()
         bindsProc.running = true
+        if (!nvimProc.running) nvimProc.running = true
         win.visible = true
         shown = true
         search.forceActiveFocus()
@@ -150,8 +156,78 @@ Scope {
         return order.filter(n => n !== "Other").concat(order.filter(n => n === "Other")).map(n => byName[n])
     }
 
+    // ---------- Neovim ----------
+    Process {
+        id: nvimProc
+        command: ["bash", Quickshell.shellDir + "/keys/nvim-keys.sh"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let list = []
+                try { list = JSON.parse(text) } catch (e) {}
+                root.nvimGroups = root.buildNvim(list)
+            }
+        }
+    }
+
+    // grupos do which-key (keymaps.lua) e um nome para o resto
+    readonly property var nvimPrefixes: [
+        [" c", "Code"], [" d", "Debug"], [" g", "Git"], [" m", "Build"], [" ", "Search & Files"]
+    ]
+    // atalhos de LSP (lsp.lua): só existem com um arquivo aberto, por isso ficam fixos aqui
+    readonly property var lspKeys: [
+        { keys: ["g", "d"], label: "Go to Definition" }, { keys: ["g", "D"], label: "Go to Declaration" },
+        { keys: ["g", "r", "r"], label: "References" }, { keys: ["g", "r", "i"], label: "Implementations" },
+        { keys: ["g", "y"], label: "Type Definition" }, { keys: ["K"], label: "Hover Documentation" },
+        { keys: ["Ctrl+K"], label: "Signature Help (insert)" },
+        { keys: ["Space", "r"], label: "Rename Symbol" }, { keys: ["Space", "a"], label: "Code Actions" },
+        { keys: ["Space", "c", "f"], label: "Format File" }, { keys: ["Space", "c", "h"], label: "Toggle Inlay Hints" },
+        { keys: ["Space", "s"], label: "Symbols in File" }, { keys: ["Space", "S"], label: "Symbols in Project" },
+        { keys: ["Space", "o"], label: "Switch Header/Source (C++)" }
+    ]
+
+    function nvimTokens(lhs) {
+        const out = []
+        const re = /<[^>]+>|./g
+        let m
+        while ((m = re.exec(lhs)) !== null) {
+            let t = m[0]
+            if (t === " ") t = "Space"
+            else if (t.startsWith("<")) {
+                const inner = t.slice(1, -1)
+                const named = { CR: "Enter", Esc: "Esc", Tab: "Tab", BS: "Backspace", Space: "Space", Left: "←", Right: "→", Up: "↑", Down: "↓" }
+                const mm = inner.match(/^([CMAS])-(.+)$/i)
+                if (mm) t = ({ C: "Ctrl", M: "Alt", A: "Alt", S: "Shift" })[mm[1].toUpperCase()] + "+" + (mm[2].length === 1 ? mm[2].toUpperCase() : mm[2])
+                else t = named[inner] || inner
+            }
+            out.push(t)
+        }
+        return out
+    }
+
+    function buildNvim(list) {
+        const byName = {}, order = []
+        const add = (g, it) => { if (!byName[g]) { byName[g] = { name: g, items: [] }; order.push(g) } byName[g].items.push(it) }
+        const seen = {}
+        for (const k of list) {
+            const id = k.lhs + "|" + k.desc
+            if (seen[id]) continue
+            seen[id] = true
+            let group = k.mode === "t" ? "Terminal" : k.mode === "i" ? "Insert Mode" : "Editor"
+            for (const p of nvimPrefixes) if (k.lhs.startsWith(p[0]) && k.lhs.length > p[0].length) { group = p[1]; break }
+            if (k.lhs.startsWith("<C-") && k.lhs.length <= 6 && /^<C-[hjkl]>$/i.test(k.lhs)) group = "Windows"
+            add(group, { keys: nvimTokens(k.lhs), label: k.desc + (k.mode === "x" ? " (visual)" : "") })
+        }
+        for (const it of lspKeys) add("Code (LSP)", it)
+        const first = ["Search & Files", "Code", "Code (LSP)", "Build", "Debug", "Git", "Windows"]
+        order.sort((a, b) => (first.indexOf(a) + 1 || 99) - (first.indexOf(b) + 1 || 99))
+        return order.map(n => byName[n])
+    }
+
+    readonly property var currentGroups: tab === "neovim" ? nvimGroups : groups
+
     readonly property var visibleGroups: {
         const f = filter.trim().toLowerCase()
+        const groups = currentGroups
         if (f === "") return groups
         return groups.map(g => ({
             name: g.name,
@@ -214,6 +290,34 @@ Scope {
                     font.pixelSize: Theme.fontSize + 4
                     font.weight: Font.DemiBold
                 }
+                // abas: Hyprland | Neovim (Tab alterna)
+                Row {
+                    spacing: 4
+                    Repeater {
+                        model: [{ key: "hyprland", label: "Hyprland" }, { key: "neovim", label: "Neovim" }]
+                        Rectangle {
+                            id: tabBtn
+                            required property var modelData
+                            readonly property bool sel: root.tab === modelData.key
+                            implicitWidth: tabText.implicitWidth + 20
+                            implicitHeight: 28
+                            radius: Theme.buttonRadius
+                            color: sel ? Theme.hover : (tabMouse.containsMouse ? Theme.hover : "transparent")
+                            border.width: sel ? 1 : 0
+                            border.color: Theme.accent
+                            Text {
+                                id: tabText
+                                anchors.centerIn: parent
+                                text: tabBtn.modelData.label
+                                color: tabBtn.sel ? Theme.accent : Theme.dim
+                                font.family: Theme.font
+                                font.pixelSize: Theme.fontSize - 1
+                            }
+                            MouseArea { id: tabMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                        onClicked: { root.tab = tabBtn.modelData.key; Qt.callLater(flow.relayout) } }
+                        }
+                    }
+                }
                 Item { Layout.fillWidth: true }
                 Rectangle {
                     implicitWidth: 220
@@ -230,6 +334,7 @@ Scope {
                         selectionColor: Theme.accent
                         onTextChanged: root.filter = text
                         Keys.onEscapePressed: root.close()
+                        Keys.onTabPressed: { root.tab = root.tab === "neovim" ? "hyprland" : "neovim"; Qt.callLater(flow.relayout) }
                         Text {
                             anchors.fill: parent
                             verticalAlignment: Text.AlignVCenter
@@ -358,7 +463,7 @@ Scope {
             Text {
                 anchors.centerIn: parent
                 visible: root.visibleGroups.length === 0
-                text: root.groups.length === 0 ? "Reading shortcuts…" : "No shortcuts match"
+                text: root.currentGroups.length === 0 ? "Reading shortcuts…" : "No shortcuts match"
                 color: Theme.dim
                 font.family: Theme.font
                 font.pixelSize: Theme.fontSize
