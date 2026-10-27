@@ -16,6 +16,10 @@
 644 /etc/modprobe.d/kvm.conf
 644 /etc/modprobe.d/nvidia.conf
 644 /etc/pacman.conf
+644 /etc/pacman.d/hooks/00-archnews.hook
+644 /etc/pacman.d/hooks/05-uki-prev.hook
+644 /etc/pacman.d/hooks/90-limine-copy.hook
+644 /etc/pacman.d/hooks/90-mkinitcpio-install.hook
 644 /etc/plymouth/plymouthd.conf
 644 /etc/smartd.conf
 644 /etc/systemd/system/btrfs-scrub@.service.d/report.conf
@@ -25,6 +29,7 @@
 644 /etc/systemd/system/setvtrgb.service
 644 /etc/vconsole.conf
 644 /etc/vtrgb-dracula
+755 /usr/local/bin/archnews
 755 /usr/local/bin/btrfs-scrub-report
 755 /usr/local/bin/desktop-notify
 755 /usr/local/bin/smartd-alert

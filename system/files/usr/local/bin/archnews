@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""archnews — avisos do Arch Linux (archlinux.org/news) que pedem ação antes de atualizar.
+
+Uso:
+  archnews                mostra as notícias não lidas e pergunta se marca como lidas
+  archnews check --json   notícias não lidas em JSON (para a barra)
+  archnews mark-read      marca tudo como lido sem mostrar
+  archnews hook           usado pelo hook do pacman: aborta a atualização se houver notícia não lida
+
+O que já foi lido fica em /var/lib/archnews/last-read (data da notícia mais nova lida).
+Sem rede, nada é bloqueado: só aparece um aviso.
+"""
+import email.utils
+import html
+import json
+import os
+import re
+import sys
+import textwrap
+import urllib.request
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+
+FEED = os.environ.get("ARCHNEWS_FEED", "https://archlinux.org/feeds/news/")
+STATE = os.environ.get("ARCHNEWS_STATE", "/var/lib/archnews/last-read")
+EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+bold, blue, yellow, red, dim, reset = "\033[1m", "\033[34m", "\033[33m", "\033[31m", "\033[2m", "\033[0m"
+if not sys.stdout.isatty():
+    bold = blue = yellow = red = dim = reset = ""
+
+
+def fetch(timeout=8):
+    req = urllib.request.Request(FEED, headers={"User-Agent": "archnews (BArch)"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        root = ET.fromstring(r.read())
+    items = []
+    for it in root.iter("item"):
+        date = email.utils.parsedate_to_datetime(it.findtext("pubDate", ""))
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=timezone.utc)
+        items.append({
+            "title": (it.findtext("title") or "").strip(),
+            "link": (it.findtext("link") or "").strip(),
+            "date": date,
+            "html": it.findtext("description") or "",
+        })
+    items.sort(key=lambda x: x["date"], reverse=True)
+    return items
+
+
+def last_read():
+    try:
+        with open(STATE) as f:
+            return datetime.fromisoformat(f.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def save_read(date):
+    try:
+        with open(STATE, "w") as f:
+            f.write(date.isoformat() + "\n")
+        return True
+    except OSError as e:
+        print(f"{red}Couldn't save {STATE}: {e}{reset}", file=sys.stderr)
+        return False
+
+
+def unread(items):
+    lr = last_read()
+    if lr is None:              # primeira vez: só a notícia mais recente conta como não lida
+        return items[:1]
+    return [i for i in items if i["date"] > lr]
+
+
+def to_text(raw, width=88):
+    s = raw
+    s = re.sub(r"(?is)<(script|style).*?</\1>", "", s)
+    s = re.sub(r"(?i)<br\s*/?>", "\n", s)
+    s = re.sub(r"(?i)<li[^>]*>", "\n  • ", s)
+    s = re.sub(r"(?i)</(p|div|ul|ol|pre|h\d)>", "\n\n", s)
+    s = re.sub(r'(?is)<a [^>]*href="([^"]+)"[^>]*>(.*?)</a>', r"\2 (\1)", s)
+    s = re.sub(r"(?is)<code>(.*?)</code>", r"`\1`", s)
+    s = re.sub(r"<[^>]+>", "", s)
+    s = html.unescape(s)
+    out = []
+    for para in re.split(r"\n\s*\n", s):
+        para = para.strip("\n")
+        if not para.strip():
+            continue
+        lines = para.split("\n")
+        if any(l.startswith("  • ") for l in lines) or any(l.startswith("    ") for l in lines):
+            out.append("\n".join(textwrap.fill(l, width, subsequent_indent="    ") for l in lines if l.strip()))
+        else:
+            out.append(textwrap.fill(" ".join(l.strip() for l in lines), width))
+    return "\n\n".join(out)
+
+
+def cmd_check():
+    try:
+        items = unread(fetch())
+        data = {"unread": [{"title": i["title"], "link": i["link"], "date": i["date"].strftime("%Y-%m-%d")}
+                           for i in items], "error": ""}
+    except Exception as e:
+        data = {"unread": [], "error": f"Couldn't read Arch news ({e.__class__.__name__})"}
+    print(json.dumps(data))
+
+
+def cmd_read():
+    try:
+        items = fetch()
+    except Exception as e:
+        print(f"{red}Couldn't read Arch news: {e}{reset}")
+        return 1
+    new = unread(items)
+    if not new:
+        print(f"{bold}No unread Arch news.{reset}")
+        return 0
+    for i in reversed(new):    # da mais antiga para a mais nova
+        print(f"\n{bold}{blue}==> {i['title']}{reset}")
+        print(f"{dim}{i['date'].strftime('%Y-%m-%d')} · {i['link']}{reset}\n")
+        print(to_text(i["html"]))
+    print()
+    try:
+        a = input(f"{bold}Mark as read? [Y/n] {reset}").strip().lower()
+    except EOFError:
+        a = "n"
+    if a in ("", "y", "yes", "s", "sim"):
+        if save_read(items[0]["date"]):
+            print("Marked as read.")
+    return 0
+
+
+def cmd_mark():
+    try:
+        items = fetch()
+    except Exception as e:
+        print(f"Couldn't read Arch news: {e}")
+        return 1
+    return 0 if items and save_read(items[0]["date"]) else 1
+
+
+def cmd_hook():
+    try:
+        new = unread(fetch(timeout=6))
+    except Exception as e:
+        print(f"{yellow}warning: couldn't check Arch news ({e.__class__.__name__}); continuing.{reset}")
+        return 0
+    if not new:
+        return 0
+    print(f"{bold}{yellow}Unread Arch Linux news — read it before updating:{reset}")
+    for i in new:
+        print(f"  • {i['date'].strftime('%Y-%m-%d')}  {i['title']}")
+    print(f"\nRun {bold}archnews{reset} to read and mark them as read, then update again.")
+    return 1
+
+
+def main():
+    args = sys.argv[1:]
+    if not args:
+        return cmd_read()
+    if args[0] == "check":
+        return cmd_check()
+    if args[0] == "mark-read":
+        return cmd_mark()
+    if args[0] == "hook":
+        return cmd_hook()
+    print(__doc__)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

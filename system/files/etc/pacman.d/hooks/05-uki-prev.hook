@@ -1,0 +1,9 @@
+[Trigger]
+Operation = Upgrade
+Type = Package
+Target = linux
+
+[Action]
+Description = Storing previous UKIs
+When = PreTransaction
+Exec = /usr/bin/bash -c 'cd /boot/EFI/Linux && cp -f arch-linux.efi arch-linux-prev.efi'

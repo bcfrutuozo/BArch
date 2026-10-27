@@ -1,0 +1,12 @@
+# Bloqueia atualizações enquanto houver notícia do Arch não lida (archlinux.org/news).
+# Leia com "archnews" e atualize de novo. Sem rede, não bloqueia.
+[Trigger]
+Operation = Upgrade
+Type = Package
+Target = *
+
+[Action]
+Description = Checking Arch Linux news...
+When = PreTransaction
+Exec = /usr/local/bin/archnews hook
+AbortOnFail

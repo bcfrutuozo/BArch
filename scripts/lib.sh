@@ -55,6 +55,8 @@ SYSTEM_FILES=(
   /usr/local/bin/desktop-notify
   /usr/local/bin/smartd-alert
   /usr/local/bin/btrfs-scrub-report
+  /usr/local/bin/archnews
+  "/etc/pacman.d/hooks/*"
   "/etc/modprobe.d/*"
   "/etc/sysctl.d/*"
   "/etc/udev/rules.d/*"

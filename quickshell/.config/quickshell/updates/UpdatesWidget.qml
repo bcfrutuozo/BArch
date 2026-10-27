@@ -1,6 +1,7 @@
 // UpdatesWidget.qml — atualizações pendentes na barra do Quickshell
 // Na barra: ícone com a quantidade de atualizações; fica azul quando há kernel novo
 // e gira enquanto a atualização roda.
+// Notícias do Arch não lidas (archnews): jornalzinho amarelo na barra e um aviso no painel.
 // Clique: painel com os pacotes (repositórios e AUR), aviso de kernel e botões:
 //   "Update All" → terminal com paru -Syu e, se houver kernel novo, o seu script do kernel
 //   "Kernel Only"    → terminal só com o script do kernel
@@ -45,6 +46,7 @@ Item {
     property var repo: []
     property var aur: []
     property bool kernel: false
+    property var news: []               // notícias do Arch não lidas: [{ title, link, date }]
     property string errorText: ""
     property date checkedAt: new Date(0)
 
@@ -76,6 +78,7 @@ Item {
                     root.repo = r.repo
                     root.aur = r.aur
                     root.kernel = r.kernel
+                    root.news = r.news || []
                     root.errorText = r.error
                     root.checkedAt = new Date()
                 } catch (e) {
@@ -126,6 +129,14 @@ Item {
                 loops: Animation.Infinite
                 onStopped: barIcon.rotation = 0
             }
+        }
+        Text {
+            visible: root.news.length > 0
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.glyph(0xF1004)   // newspaper_variant_outline
+            color: Theme.warn
+            font.family: root.iconFont
+            font.pixelSize: root.fontSize + 1
         }
         Text {
             visible: root.count > 0 && !root.updating
@@ -222,6 +233,92 @@ Item {
                     }
                 }
 
+                // --- notícias do Arch não lidas ---
+                Rectangle {
+                    visible: root.news.length > 0
+                    Layout.fillWidth: true
+                    implicitHeight: newsCol.implicitHeight + 16
+                    radius: 10
+                    color: "transparent"
+                    border.width: 1
+                    border.color: Theme.warn
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        anchors.leftMargin: 12
+                        spacing: 10
+
+                        Text {
+                            Layout.alignment: Qt.AlignTop
+                            text: root.glyph(0xF1004)   // newspaper_variant_outline
+                            color: Theme.warn
+                            font.family: root.iconFont
+                            font.pixelSize: root.fontSize + 6
+                        }
+                        ColumnLayout {
+                            id: newsCol
+                            Layout.fillWidth: true
+                            spacing: 3
+                            Text {
+                                text: root.news.length === 1 ? "Arch News" : "Arch News (" + root.news.length + ")"
+                                color: Theme.warn
+                                font.family: root.fontFamily
+                                font.pixelSize: root.fontSize - 1
+                                font.bold: true
+                            }
+                            Repeater {
+                                model: root.news
+                                Text {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    text: modelData.date + "  " + modelData.title
+                                    color: newsMouse.containsMouse ? root.accent : root.fg
+                                    font.family: root.fontFamily
+                                    font.pixelSize: root.fontSize - 3
+                                    font.underline: newsMouse.containsMouse
+                                    elide: Text.ElideRight
+                                    MouseArea {
+                                        id: newsMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: { Popups.hide(popup); Quickshell.execDetached(["xdg-open", parent.modelData.link]) }
+                                    }
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Layout.topMargin: 2
+                                spacing: 8
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: "Update All shows it first; updates stay blocked until it's read."
+                                    color: root.dim
+                                    font.family: root.fontFamily
+                                    font.pixelSize: root.fontSize - 3
+                                    wrapMode: Text.Wrap
+                                }
+                                Text {
+                                    text: "Read"
+                                    color: readMouse.containsMouse ? root.accent : Theme.warn
+                                    font.family: root.fontFamily
+                                    font.pixelSize: root.fontSize - 2
+                                    font.bold: true
+                                    MouseArea {
+                                        id: readMouse
+                                        anchors.fill: parent
+                                        anchors.margins: -6
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.run("news")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // --- aviso de kernel novo ---
                 Rectangle {
                     visible: root.kernel
@@ -283,7 +380,7 @@ Item {
 
                 // --- em dia ---
                 RowLayout {
-                    visible: root.count === 0 && !checkProc.running && root.errorText === ""
+                    visible: root.count === 0 && root.news.length === 0 && !checkProc.running && root.errorText === ""
                         && root.checkedAt.getTime() > 0
                     spacing: 8
                     Text {

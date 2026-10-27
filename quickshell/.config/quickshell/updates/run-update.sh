@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Roda dentro do terminal aberto pelo UpdatesWidget.
-# Uso: run-update.sh <all|kernel> <script-do-kernel> <kernel-pendente: 1|0>
+# Uso: run-update.sh <all|kernel|news> <script-do-kernel> <kernel-pendente: 1|0>
+# Antes do paru, mostra as notícias do Arch não lidas (archnews); o hook do pacman
+# bloqueia a atualização enquanto houver alguma.
 mode="$1"
 kernel_script="$2"
 kernel_pending="$3"
@@ -21,10 +23,22 @@ run_kernel() {
   "$kernel_script"
 }
 
+unread_news() {
+  command -v archnews >/dev/null || return 1
+  local n; n=$(archnews check 2>/dev/null | jq '.unread | length' 2>/dev/null)
+  [[ "${n:-0}" -gt 0 ]]
+}
+
 status=0
-if [[ "$mode" == "kernel" ]]; then
+if [[ "$mode" == "news" ]]; then
+  archnews || status=$?
+elif [[ "$mode" == "kernel" ]]; then
   run_kernel || status=$?
 else
+  if unread_news; then
+    step "Arch news (read before updating)"
+    archnews
+  fi
   step "paru -Syu"
   paru -Syu || status=$?
   if [[ $status -eq 0 && "$kernel_pending" == "1" ]]; then

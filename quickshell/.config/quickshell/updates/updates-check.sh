@@ -2,6 +2,7 @@
 # Atualizações pendentes (repositórios + AUR) em JSON, para o UpdatesWidget.
 # Repositórios: checkupdates (pacman-contrib), que usa uma cópia do banco e não mexe no sistema.
 # AUR: paru -Qua.
+# Notícias: archnews check (avisos do Arch ainda não lidos).
 # Uso: updates-check.sh [regex dos pacotes de kernel]
 
 KERNEL_RE="${1:-^linux-cachyos(-headers)?$}"
@@ -25,12 +26,21 @@ aur_out=$(timeout 60 paru -Qua 2>/dev/null); rc=$?
 [[ $rc -gt 1 ]] && errors+=("paru -Qua failed")
 aur=$(to_json <<<"$aur_out")
 
-jq -n --argjson repo "$repo" --argjson aur "$aur" --arg re "$KERNEL_RE" \
+# Notícias do Arch que pedem ação (archnews, em /usr/local/bin)
+news='{"unread":[],"error":""}'
+if command -v archnews >/dev/null; then
+  out=$(timeout 20 archnews check 2>/dev/null) && jq -e . >/dev/null 2>&1 <<<"$out" && news="$out"
+fi
+news_err=$(jq -r '.error' <<<"$news")
+[[ -n "$news_err" ]] && errors+=("$news_err")
+
+jq -n --argjson repo "$repo" --argjson aur "$aur" --arg re "$KERNEL_RE" --argjson news "$news" \
   --arg error "$(IFS='; '; echo "${errors[*]}")" \
   '{
      repo: $repo,
      aur: $aur,
      kernel: ([$repo[], $aur[]] | map(select(.name | test($re))) | length > 0),
+     news: $news.unread,
      error: $error,
      checked: (now | floor)
    }'
