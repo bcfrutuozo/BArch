@@ -10,9 +10,18 @@ modes="$REPO/system/modes.txt"
 
 mode_of() { awk -v f="$1" '$2 == f { print $1; exit }' "$modes" 2>/dev/null || true; }
 
+# Numa VM (teste do repositório), arquivos ligados ao disco, ao boot e ao hardware desta
+# máquina ficam de fora: aplicá-los deixaria a VM sem boot.
+VIRT=$(systemd-detect-virt 2>/dev/null || true)
+VM_SKIP='^/(etc/fstab|etc/crypttab|etc/kernel/cmdline|etc/default/limine|boot/|etc/mkinitcpio|etc/initcpio/|etc/modprobe\.d/nvidia|etc/hostname|etc/vconsole\.conf|etc/systemd/system/getty@)'
+[[ -n "$VIRT" && "$VIRT" != none ]] && warn "running in a VM ($VIRT): disk, boot and NVIDIA files are skipped"
+
 changed=()
 while IFS= read -r -d '' file; do
   target="/${file#"$src"/}"
+  if [[ -n "$VIRT" && "$VIRT" != none && "$target" =~ $VM_SKIP ]]; then
+    ok "skipped in VM: $target"; continue
+  fi
   if sudo test -f "$target" && sudo cmp -s "$file" "$target"; then
     ok "unchanged: $target"; continue
   fi

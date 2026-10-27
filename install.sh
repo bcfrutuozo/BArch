@@ -4,25 +4,53 @@
 set -euo pipefail
 source "$(dirname "$0")/scripts/lib.sh"
 
+# Virtual machine (testing the repo): skip hardware-specific packages
+VIRT=$(systemd-detect-virt 2>/dev/null || true)
+HW_ONLY='^(nvidia|lib32-nvidia|opencl-nvidia|cuda|linux-cachyos|libva-nvidia|egl-gbm|egl-x11|nvtop|gpu-screen-recorder)'
+if [[ -n "$VIRT" && "$VIRT" != none ]]; then
+  warn "running in a VM ($VIRT): NVIDIA, the CachyOS kernel and the GPU recorder are skipped"
+fi
+filter_hw() { if [[ -n "$VIRT" && "$VIRT" != none ]]; then grep -vE "$HW_ONLY" || true; else cat; fi; }
+
+step "Repositories"
+# multilib: bibliotecas de 32 bits (Steam, Proton, lib32-*); vem desligado numa instalação nova
+if ! grep -q '^\[multilib\]' /etc/pacman.conf; then
+  sudo sed -i '/^#\[multilib\]/{s/^#//;n;s/^#//}' /etc/pacman.conf
+  ok "multilib enabled"
+fi
+sudo pacman -Sy
+
 step "Base tools"
-sudo pacman -S --needed --noconfirm git stow
+sudo pacman -S --needed --noconfirm git stow base-devel openssh
 
 step "Official packages"
-missing=$(comm -23 <(sort -u "$REPO/packages/pacman.txt") <(pacman -Qq | sort -u))
+missing=$(comm -23 <(sort -u "$REPO/packages/pacman.txt") <(pacman -Qq | sort -u) | filter_hw)
 if [[ -n "$missing" ]]; then
-  sudo pacman -S --needed $missing
+  # only what still exists in the repositories (renamed/removed packages would abort the whole install)
+  available=$(comm -12 <(sort -u <<<"$missing") <(pacman -Slq | sort -u))
+  gone=$(comm -23 <(sort -u <<<"$missing") <(sort -u <<<"$available"))
+  [[ -n "$gone" ]] && warn "not in the repositories anymore (skipped): $(tr '\n' ' ' <<<"$gone")"
+  [[ -n "$available" ]] && sudo pacman -S --needed $available
 else
   ok "all installed"
 fi
 
+step "AUR helper (paru)"
+if ! command -v paru >/dev/null; then
+  tmp=$(mktemp -d)
+  git clone --depth 1 https://aur.archlinux.org/paru-bin.git "$tmp/paru-bin"
+  (cd "$tmp/paru-bin" && makepkg -si --noconfirm)
+  rm -rf "$tmp"
+fi
+command -v paru >/dev/null && ok "paru" || warn "paru could not be installed"
+
 step "AUR packages"
 if command -v paru >/dev/null; then
   # packages built by hand (e.g. the custom kernel) are listed in aur-ignore.txt
-  todo=$(grep -vxFf "$REPO/packages/aur-ignore.txt" "$REPO/packages/aur.txt" || true)
+  todo=$(grep -vxFf "$REPO/packages/aur-ignore.txt" "$REPO/packages/aur.txt" | filter_hw || true)
   todo=$(comm -23 <(sort -u <<<"$todo") <(pacman -Qq | sort -u))
-  if [[ -n "$todo" ]]; then paru -S --needed $todo; else ok "all installed"; fi
-else
-  warn "paru not found: install it, then rerun this script for the AUR packages"
+  if [[ -n "$todo" ]]; then paru -S --needed $todo || warn "some AUR packages failed; rerun this script to retry"
+  else ok "all installed"; fi
 fi
 
 step "Linking configs"
