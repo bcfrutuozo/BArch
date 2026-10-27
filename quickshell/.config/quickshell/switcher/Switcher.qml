@@ -17,6 +17,7 @@ import Quickshell.Wayland
 import Quickshell.Widgets
 import Quickshell.Hyprland
 import "../theme"
+import "../minimize"
 
 Scope {
     id: root
@@ -69,7 +70,10 @@ Scope {
         if (!shown) return
         const w = windows[index]
         close()
-        if (w) Hyprland.dispatch('hl.dsp.focus({ window = "address:0x' + strip(w.address) + '" })')
+        if (!w) return
+        // minimizada: traz de volta para o workspace atual em vez de abrir o workspace escondido
+        if (w.ws === "Minimized") Minimized.restore(w.address)
+        else Hyprland.dispatch('hl.dsp.focus({ window = "address:0x' + strip(w.address) + '" })')
     }
 
     function close() {
@@ -101,7 +105,8 @@ Scope {
                     address: c.address,
                     title: c.title || c.class || "",
                     cls: c.class || "",
-                    ws: c.workspace.name.startsWith("special:") ? "Scratchpad" : String(c.workspace.name),
+                    ws: c.workspace.name === "special:minimized" ? "Minimized"
+                        : c.workspace.name.startsWith("special:") ? "Scratchpad" : String(c.workspace.name),
                     handle: root.handleFor(c.address)
                 }))
                 const n = root.windows.length

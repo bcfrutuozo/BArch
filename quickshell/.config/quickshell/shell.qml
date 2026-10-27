@@ -31,6 +31,9 @@ import "keys"
 import "switcher"
 import "overview"
 import "agenda"
+import "record"
+import "minimize"
+import "pin"
 import "privacy"
 import "notifications"
 import "replay"
@@ -466,6 +469,9 @@ ShellRoot {
 
         // Monitor de recursos
         PrivacyWidget {}
+        PinWidget {}
+        MinimizedWidget {}
+        RecordWidget {}
         ReplayWidget {}
         SysMonitor {}
 

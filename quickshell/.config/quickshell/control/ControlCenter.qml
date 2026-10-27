@@ -1,7 +1,7 @@
 // ControlCenter.qml — central de controle da barra
 // Um ícone que abre blocos de liga/desliga: modo claro/escuro (do sistema inteiro),
 // Bluetooth, cafeína, luz noturna (hyprsunset), não perturbe, HDR e MangoHud nos jogos,
-// captura de tela (grim + slurp) e a tela: HDR e brilho do SDR do monitor principal e o
+// captura e gravação de tela (grim/slurp, gpu-screen-recorder via record/record.sh) e a tela: HDR e brilho do SDR do monitor principal e o
 // monitor vertical ligado/desligado (precisa do monitors.lua com BArch.set_monitor).
 // O shell.qml passa a janela da barra em "window" (usada pela cafeína).
 
@@ -15,6 +15,7 @@ import Quickshell.Bluetooth
 import "../theme"
 import "../notifications"
 import "../audio"
+import "../record"
 
 Item {
     id: root
@@ -146,6 +147,20 @@ Item {
 
     function toggleDnd() { Notifs.setDnd(!Notifs.dnd) }
 
+    // gravação de tela: escolha entre tela inteira e área
+    property bool chooseRecord: false
+    function recordTile() {
+        if (Recorder.recording) { Recorder.stop(); return }
+        chooseRecord = !chooseRecord
+    }
+    function record(mode) {
+        chooseRecord = false
+        Popups.hide(popup)
+        recDelay.mode = mode
+        recDelay.restart()        // espera o painel sumir (ele não pode aparecer no vídeo)
+    }
+    Timer { id: recDelay; property string mode: "full"; interval: 350; onTriggered: Recorder.start(mode) }
+
     function screenshot() {
         Popups.hide(popup)
         shotDelay.restart()       // espera o painel sumir antes de selecionar a área
@@ -222,7 +237,10 @@ Item {
         // só um painel aberto por vez na barra
         Connections {
             target: popup
-            function onVisibleChanged() { popup.visible ? Popups.opened(popup) : Popups.closed(popup) }
+            function onVisibleChanged() {
+                popup.visible ? Popups.opened(popup) : Popups.closed(popup)
+                if (!popup.visible) root.chooseRecord = false
+            }
         }
         visible: false
         // canto inferior direito da ilha, popupGap abaixo dela
@@ -484,10 +502,65 @@ Item {
 
                     Tile {
                         icon: root.glyph(0xF0A6D)   // selection_drag
-                        Layout.columnSpan: 2
                         label: "Screenshot"
                         sublabel: "Select a region"
                         onClicked: root.screenshot()
+                    }
+
+                    Tile {
+                        icon: Recorder.recording ? root.glyph(0xF0667) : root.glyph(0xF0EC3)   // stop_circle / record_circle
+                        label: Recorder.recording ? "Stop Recording" : "Record"
+                        sublabel: Recorder.recording ? Recorder.elapsed : "Screen or region"
+                        active: Recorder.recording || root.chooseRecord
+                        onClicked: root.recordTile()
+                    }
+                }
+
+                // escolha do que gravar (aparece ao clicar em Record)
+                RowLayout {
+                    visible: root.chooseRecord && !Recorder.recording
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Repeater {
+                        model: [
+                            { mode: "full",   icon: 0xF0379, label: "Full Screen" },   // monitor
+                            { mode: "region", icon: 0xF0A6D, label: "Region" }        // selection_drag
+                        ]
+                        Rectangle {
+                            id: opt
+                            required property var modelData
+                            Layout.fillWidth: true
+                            implicitHeight: 36
+                            radius: Theme.buttonRadius
+                            color: optMouse.containsMouse ? Theme.hover : "transparent"
+                            border.width: 1
+                            border.color: Theme.accent
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 8
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: root.glyph(opt.modelData.icon)
+                                    color: Theme.accent
+                                    font.family: Theme.iconFont
+                                    font.pixelSize: Theme.fontSize + 2
+                                }
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: opt.modelData.label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: Theme.fontSize - 1
+                                }
+                            }
+                            MouseArea {
+                                id: optMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.record(opt.modelData.mode)
+                            }
+                        }
                     }
                 }
             }

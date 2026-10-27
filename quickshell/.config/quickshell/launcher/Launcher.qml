@@ -196,8 +196,24 @@ Scope {
             onStreamFinished: {
                 if (text.trim() === "__missing__") { root.clips = null; return }
                 root.clips = text.split("\n").filter(l => l.includes("\t"))
+                if (!thumbProc.running) thumbProc.running = true
             }
         }
+    }
+
+    // miniaturas das imagens do histórico: decodifica cada imagem uma vez para o cache
+    // (~/.cache/quickshell/cliphist/<id>.<ext>) e apaga as que saíram do histórico
+    readonly property string thumbDir: Quickshell.env("HOME") + "/.cache/quickshell/cliphist"
+    property int thumbsVersion: 0
+    Process {
+        id: thumbProc
+        command: ["bash", Quickshell.shellDir + "/launcher/clip-thumbs.sh", root.thumbDir]
+        onExited: root.thumbsVersion++
+    }
+
+    function thumbFor(line) {
+        const m = line.match(/^(\d+)\t\[\[ binary data.* (png|jpeg|jpg|bmp|webp|gif) /)
+        return m ? thumbDir + "/" + m[1] + "." + m[2] : ""
     }
 
     // ---------- emojis ----------
@@ -311,7 +327,7 @@ Scope {
             const isImage = /^\[\[ binary data/.test(preview)
             out.push({ kind: "clip", title: isImage ? "Image" : preview.replace(/\s+/g, " ").trim(),
                        subtitle: isImage ? preview.replace(/^\[\[ binary data |\s*\]\]$/g, "") : "",
-                       glyph: isImage ? 0xF0976 : 0xF09ED, line: line })
+                       glyph: isImage ? 0xF0976 : 0xF09ED, line: line, thumb: isImage ? thumbFor(line) : "" })
             if (out.length >= 150) break
         }
         return out
@@ -583,8 +599,9 @@ Scope {
                         required property int index
                         readonly property bool current: ListView.isCurrentItem
                         readonly property bool hasIcon: modelData.kind === "app" || modelData.kind === "window"
+                        readonly property bool hasThumb: (modelData.thumb || "") !== ""
                         width: ListView.view.width
-                        height: root.rowHeight
+                        height: hasThumb ? 84 : root.rowHeight
                         radius: Theme.buttonRadius
                         color: current ? Theme.hover : "transparent"
 
@@ -602,8 +619,27 @@ Scope {
                             anchors.rightMargin: 12
                             spacing: 12
 
+                            // imagem do clipboard: miniatura no lugar do ícone
+                            Rectangle {
+                                visible: row.hasThumb
+                                implicitWidth: 128
+                                implicitHeight: 72
+                                radius: 6
+                                color: Theme.surface
+                                clip: true
+                                Image {
+                                    anchors.fill: parent
+                                    source: row.hasThumb && root.thumbsVersion > 0 ? "file://" + row.modelData.thumb : ""
+                                    fillMode: Image.PreserveAspectFit
+                                    sourceSize: Qt.size(256, 144)
+                                    asynchronous: true
+                                    cache: false
+                                }
+                            }
+
                             // ícone: do app, emoji, glifo, ou a inicial do nome
                             Item {
+                                visible: !row.hasThumb
                                 implicitWidth: 28
                                 implicitHeight: 28
 

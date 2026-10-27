@@ -1,0 +1,2 @@
+singleton Recorder Recorder.qml
+RecordWidget 1.0 RecordWidget.qml

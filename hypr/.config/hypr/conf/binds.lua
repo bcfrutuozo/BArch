@@ -25,6 +25,9 @@ hl.bind(mainMod .. " + F", hl.dsp.window.float({ action = "toggle" }), { descrip
 hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" }), { description = "Windows|Fullscreen" })
 hl.bind(mainMod .. " + P", hl.dsp.window.pseudo(), { description = "Windows|Pseudotile" })
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"), { description = "Windows|Toggle Split" })    -- só dwindle
+hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("qs ipc call minimize window"), { description = "Windows|Minimize" })
+hl.bind(mainMod .. " + SHIFT + M", hl.dsp.exec_cmd("qs ipc call minimize restoreLast"), { description = "Windows|Restore Last Minimized" })
+hl.bind(mainMod .. " + SHIFT + P", hl.dsp.exec_cmd("qs ipc call pin toggle"), { description = "Windows|Always on Top" })
 
 -- Trocar de janela (Alt+Tab com prévia) e visão geral dos workspaces
 hl.bind("ALT + Tab",         hl.dsp.exec_cmd("qs ipc call switcher next"), { description = "Windows|Switch Windows" })
