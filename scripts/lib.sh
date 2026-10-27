@@ -7,6 +7,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Stow packages: each one is a folder in the repo that mirrors $HOME.
 # name -> paths (relative to $HOME, separated by spaces) that belong to it
 declare -A PACKAGES=(
+  [claude]=".claude/settings.json"
   [hypr]=".config/hypr"
   [quickshell]=".config/quickshell"
   [foot]=".config/foot"
