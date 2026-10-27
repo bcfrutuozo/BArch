@@ -276,6 +276,11 @@ Singleton {
         target: "notifs"
         function dnd(): string { root.setDnd(!root.dnd); return "dnd: " + (root.dnd ? "on" : "off") }
         function clear(): void { root.clearAll() }
+        // quantas notificações chegaram desde <segundos desde 1970> (a tela de bloqueio usa)
+        function awayCount(since: string): string {
+            const t = Number(since) * 1000
+            return String(root.list.filter(e => e.time >= t).length)
+        }
         function test(): void {
             Quickshell.execDetached(["notify-send", "-a", "Quickshell", "-i", "dialog-information",
                                      "Test notification", "This is how notifications look now."])

@@ -76,6 +76,10 @@ Item {
                     if (d.error) { root.error = d.error; return }   // mantém o último dado bom
                     root.wx = d
                     root.error = ""
+                    // resumo para a tela de bloqueio (lock/lock-info.sh weather)
+                    Theme.writeFile(Quickshell.env("HOME") + "/.cache/quickshell/weather-now.txt",
+                        String.fromCodePoint(root.iconFor(d.current.code, d.current.day)) + "\t"
+                        + Math.round(d.current.temp) + "°\t" + root.describe(d.current.code) + "\n")
                 } catch (e) { root.error = "Unexpected response" }
             }
         }

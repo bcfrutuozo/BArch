@@ -1,7 +1,8 @@
 // ControlCenter.qml — central de controle da barra
 // Um ícone que abre blocos de liga/desliga: modo claro/escuro (do sistema inteiro),
-// Bluetooth, cafeína, luz noturna (hyprsunset), não perturbe, HDR e MangoHud nos jogos
-// e captura de tela (grim + slurp).
+// Bluetooth, cafeína, luz noturna (hyprsunset), não perturbe, HDR e MangoHud nos jogos,
+// captura de tela (grim + slurp) e a tela: HDR e brilho do SDR do monitor principal e o
+// monitor vertical ligado/desligado (precisa do monitors.lua com BArch.set_monitor).
 // O shell.qml passa a janela da barra em "window" (usada pela cafeína).
 
 import QtQuick
@@ -13,6 +14,7 @@ import Quickshell.Wayland
 import Quickshell.Bluetooth
 import "../theme"
 import "../notifications"
+import "../audio"
 
 Item {
     id: root
@@ -44,6 +46,82 @@ Item {
 
     function refresh() {
         nightProc.running = true
+        displayProc.running = true
+    }
+
+    // ---------- tela ----------
+    property string mainOutput: "HDMI-A-2"
+    property string sideOutput: "HDMI-A-1"
+    property int sdrMin: 120                 // faixa do controle de brilho do SDR (nits)
+    property int sdrMax: 420
+    property bool hdrOn: true
+    property int sdrWhite: 250
+    property bool sideOn: true
+    property var displayOverrides: ({})      // o que a barra mudou no monitor principal
+    readonly property string displayPath: Quickshell.env("HOME") + "/.local/state/quickshell/display.json"
+
+    function luaValue(v) { return typeof v === "string" ? '"' + v + '"' : String(v) }
+    function pushDisplay() {
+        const keys = Object.keys(displayOverrides)
+        if (keys.length === 0) return
+        const t = "{ " + keys.map(k => k + " = " + luaValue(displayOverrides[k])).join(", ") + " }"
+        Quickshell.execDetached(["hyprctl", "eval",
+            'if BArch and BArch.set_monitor then BArch.set_monitor("' + mainOutput + '", ' + t + ') end'])
+    }
+    function setMain(changes) {
+        const o = Object.assign({}, displayOverrides, changes)
+        displayOverrides = o
+        Theme.writeFile(displayPath, JSON.stringify(o))
+        pushDisplay()
+        displayRecheck.restart()
+    }
+    function resetDisplay() {
+        displayOverrides = ({})
+        Theme.writeFile(displayPath, "{}")
+        Quickshell.execDetached(["hyprctl", "eval",
+            'if BArch and BArch.apply_monitor then BArch.monitor_overrides = {}; BArch.apply_monitor("' + mainOutput + '") end'])
+        displayRecheck.restart()
+    }
+    function toggleHdr() { hdrOn = !hdrOn; setMain({ cm: hdrOn ? "hdr" : "srgb" }) }
+    function toggleSide() {
+        sideOn = !sideOn
+        Hyprland.dispatch('hl.dsp.dpms({ action = "' + (sideOn ? "on" : "off") + '", monitor = "' + sideOutput + '" })')
+        displayRecheck.restart()
+    }
+
+    FileView {
+        path: root.displayPath
+        onLoaded: {
+            try { root.displayOverrides = JSON.parse(text()) || {} } catch (e) { root.displayOverrides = {} }
+            displayStart.restart()
+        }
+    }
+    // depois de iniciar e a cada reload do Hyprland, reaplica o que foi mudado pela barra
+    Timer { id: displayStart; interval: 1500; onTriggered: root.pushDisplay() }
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) { if (event.name === "configreloaded") displayStart.restart() }
+    }
+    Timer { id: sdrApply; interval: 180; onTriggered: root.setMain({ sdr_max_luminance: root.sdrWhite }) }
+    Timer { id: displayRecheck; interval: 1200; onTriggered: displayProc.running = true }
+
+    Process {
+        id: displayProc
+        command: ["hyprctl", "monitors", "all", "-j"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let list = []
+                try { list = JSON.parse(text) } catch (e) { return }
+                for (const m of list) {
+                    if (m.name === root.mainOutput) {
+                        root.hdrOn = (m.colorManagementPreset || "") === "hdr"
+                        if (!sdrApply.running && m.sdrMaxLuminance) root.sdrWhite = Math.round(m.sdrMaxLuminance)
+                    } else if (m.name === root.sideOutput) {
+                        root.sideOn = m.dpmsStatus !== false
+                    }
+                }
+            }
+        }
     }
 
     // ---------- ações ----------
@@ -250,6 +328,97 @@ Item {
                             }
                         }
                     }
+                }
+
+                // --- tela ---
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 2
+                    Text {
+                        Layout.fillWidth: true
+                        text: "Display"
+                        color: Theme.dim
+                        font.family: Theme.font
+                        font.pixelSize: Theme.fontSize - 2
+                    }
+                    Text {
+                        visible: Object.keys(root.displayOverrides).length > 0
+                        text: "Reset"
+                        color: resetMouse.containsMouse ? Theme.accent : Theme.dim
+                        font.family: Theme.font
+                        font.pixelSize: Theme.fontSize - 2
+                        MouseArea {
+                            id: resetMouse
+                            anchors.fill: parent
+                            anchors.margins: -4
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.resetDisplay()
+                        }
+                    }
+                }
+
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: 2
+                    rowSpacing: 8
+                    columnSpacing: 8
+
+                    Tile {
+                        icon: root.glyph(0xF0D7D)   // hdr
+                        label: "HDR"
+                        sublabel: root.hdrOn ? "Main display" : "Off"
+                        active: root.hdrOn
+                        onClicked: root.toggleHdr()
+                    }
+                    Tile {
+                        icon: root.sideOn ? root.glyph(0xF0379) : root.glyph(0xF0D90)   // monitor / monitor_off
+                        label: "Side Display"
+                        sublabel: root.sideOn ? "On" : "Screen off"
+                        active: root.sideOn
+                        onClicked: root.toggleSide()
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 4
+                    Layout.rightMargin: 4
+                    spacing: 10
+                    opacity: root.hdrOn ? 1 : 0.4
+                    enabled: root.hdrOn
+
+                    Text {
+                        text: root.glyph(0xF00DF)   // brightness_6
+                        color: Theme.fg
+                        font.family: Theme.iconFont
+                        font.pixelSize: Theme.fontSize + 3
+                    }
+                    VolumeSlider {
+                        Layout.fillWidth: true
+                        widget: Theme
+                        value: (root.sdrWhite - root.sdrMin) / (root.sdrMax - root.sdrMin)
+                        onMoved: v => {
+                            root.sdrWhite = Math.round((root.sdrMin + v * (root.sdrMax - root.sdrMin)) / 5) * 5
+                            sdrApply.restart()
+                        }
+                    }
+                    Text {
+                        Layout.preferredWidth: 64
+                        horizontalAlignment: Text.AlignRight
+                        text: root.sdrWhite + " nits"
+                        color: Theme.dim
+                        font.family: Theme.font
+                        font.pixelSize: Theme.fontSize - 2
+                    }
+                }
+
+                Text {
+                    text: "Quick Settings"
+                    color: Theme.dim
+                    font.family: Theme.font
+                    font.pixelSize: Theme.fontSize - 2
+                    Layout.topMargin: 2
                 }
 
                 GridLayout {
