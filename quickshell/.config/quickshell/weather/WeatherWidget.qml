@@ -17,6 +17,45 @@ Item {
     property string country: "BR"
     property int refreshMinutes: 15
 
+    // ---------- aviso de chuva ----------
+    // Com chuva prevista para a próxima ~1h30 (chance >= rainThreshold), manda uma notificação
+    // (uma vez por horário previsto) e mostra um guarda-chuva ao lado da temperatura.
+    // Não avisa se já estiver chovendo.
+    property int rainThreshold: 60
+    property var rainSoon: null              // { time: "15:00", prob: 80, hourKey }
+    property string lastRainKey: ""
+    readonly property string rainStatePath: Quickshell.env("HOME") + "/.local/state/quickshell/rain-notified"
+
+    function isRainCode(c) { return (c >= 51 && c <= 67) || (c >= 80 && c <= 82) || c >= 95 }
+
+    function checkRain(d) {
+        if (!d || !d.hourly || isRainCode(d.current.code)) { rainSoon = null; return }
+        const now = new Date()
+        let found = null
+        for (const h of d.hourly) {
+            const t = new Date(h.time)               // "2026-10-27T15:00": hora local
+            const mins = (t - now) / 60000
+            if (mins < -50 || mins > 90) continue    // hora atual até ~1h30 à frente
+            if (h.rain >= rainThreshold && (isRainCode(h.code) || h.rain >= 80)) {
+                found = { time: Qt.formatTime(t, "HH:mm"), prob: h.rain, hourKey: h.time, past: mins <= 0 }
+                break
+            }
+        }
+        rainSoon = found
+        if (found && found.hourKey !== lastRainKey) {
+            lastRainKey = found.hourKey
+            Theme.writeFile(rainStatePath, found.hourKey)
+            Quickshell.execDetached(["notify-send", "-a", "Weather", "-i", "weather-showers",
+                "Rain Expected", (found.past ? "Rain likely within the hour" : "Rain expected around " + found.time)
+                + "  ·  " + found.prob + "% chance in " + (wx && wx.place ? wx.place.split(",")[0] : "your area")])
+        }
+    }
+
+    FileView {
+        path: root.rainStatePath
+        onLoaded: root.lastRainKey = text().trim()
+    }
+
     // Ilha da barra onde o widget está (primeiro ancestral com "radius"); o painel se alinha a ela
     readonly property Item island: {
         let p = root.parent
@@ -76,6 +115,7 @@ Item {
                     if (d.error) { root.error = d.error; return }   // mantém o último dado bom
                     root.wx = d
                     root.error = ""
+                    root.checkRain(d)
                     // resumo para a tela de bloqueio (lock/lock-info.sh weather)
                     Theme.writeFile(Quickshell.env("HOME") + "/.cache/quickshell/weather-now.txt",
                         String.fromCodePoint(root.iconFor(d.current.code, d.current.day)) + "\t"
@@ -124,6 +164,15 @@ Item {
             color: Theme.subtext
             font.family: Theme.font
             font.pixelSize: Theme.fontSize
+        }
+        // chuva chegando: guarda-chuva em destaque
+        Text {
+            visible: root.rainSoon !== null
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.glyph(0xF054B)   // umbrella_outline
+            color: Theme.accent
+            font.family: Theme.iconFont
+            font.pixelSize: Theme.fontSize + 1
         }
     }
 
@@ -202,6 +251,14 @@ Item {
                             color: Theme.fg
                             font.family: Theme.font
                             font.pixelSize: Theme.fontSize
+                        }
+                        Text {
+                            visible: root.rainSoon !== null
+                            text: root.rainSoon ? (root.rainSoon.past ? "Rain likely within the hour" : "Rain expected around " + root.rainSoon.time)
+                                                  + "  ·  " + root.rainSoon.prob + "%" : ""
+                            color: Theme.accent
+                            font.family: Theme.font
+                            font.pixelSize: Theme.fontSize - 2
                         }
                         Text {
                             Layout.fillWidth: true
