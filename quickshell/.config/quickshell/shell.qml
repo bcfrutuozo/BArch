@@ -13,6 +13,7 @@ import Quickshell.Widgets
 import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Effects
 import Quickshell.Wayland
 import "theme"
 import "control"
@@ -499,8 +500,19 @@ ShellRoot {
           IconImage {
             id: trayIcon
             required property var modelData
-            source: modelData.icon
+            // no modo claro, troca ícones de painel claros pela versão escura do tema (Theme.trayIcon)
+            source: Theme.trayIcon(modelData.icon)
             implicitSize: 16
+            // apps que escolhem a cor do ícone por conta própria (e erram o contraste com a barra):
+            // o ícone vira uma silhueta na cor do texto da barra, em qualquer modo
+            readonly property bool forceMono: Theme.monoTrayApps.some(a =>
+                ((modelData.id || "") + " " + (modelData.title || "")).toLowerCase().includes(a))
+            layer.enabled: forceMono
+            layer.effect: MultiEffect {
+              brightness: Theme.isDark ? 1.0 : -1.0     // vira branco no escuro, preto no claro
+              colorization: 1.0
+              colorizationColor: Theme.fg
+            }
             scale: trayMouse.containsMouse ? 1.2 : 1.0
             Behavior on scale { NumberAnimation { duration: 120 } }
 

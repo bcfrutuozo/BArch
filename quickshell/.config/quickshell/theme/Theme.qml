@@ -132,7 +132,7 @@ Singleton {
 
     // (o swaync foi substituído pelas notificações do próprio Quickshell, em notifications/)
     function hex(c) { return c.toString().slice(0, 7) }
-    Component.onCompleted: { hyprApply.restart(); appsWrite.restart(); hudWrite.restart() }
+    Component.onCompleted: { hyprApply.restart(); appsWrite.restart(); hudWrite.restart(); panelIconsProc.running = true }
 
     // ================= terminal (foot) e editor (nvim) =================
     // Os dois recebem SEMPRE o par darkFlavor/lightFlavor (o "theme set" só afeta a barra).
@@ -392,6 +392,42 @@ Singleton {
         }
     }
 
+    // ================= ícones da bandeja (tray) =================
+    // A barra resolve os ícones pelo tema de ícones com que ela abriu, e não troca de tema
+    // sozinha. Os ícones "de painel" do Papirus (Nextcloud, Steam, Discord…) são claros no
+    // Papirus-Dark e escuros no Papirus-Light; sem isso, no modo claro ficariam brancos na
+    // barra clara. Aqui fica a lista dos ícones de painel do tema do modo atual, e
+    // trayIcon() troca o ícone pelo arquivo certo quando ele existe.
+    property var panelIcons: ({})
+    // apps da bandeja que escolhem a cor do ícone sozinhos e erram o contraste: viram silhueta
+    // na cor do texto da barra (compara com o id/título do item, em minúsculas)
+    property var monoTrayApps: ["nextcloud"]
+    Process {
+        id: panelIconsProc
+        command: ["sh", "-c", 'for s in 22x22 24x24 16x16; do d="/usr/share/icons/$1/$s/panel"; '
+            + '[ -d "$d" ] && find -L "$d" -maxdepth 1 -name "*.svg" -printf "%f\t$d/%f\n"; done', "sh",
+            root.isDark ? "Papirus-Dark" : "Papirus-Light"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const m = {}
+                for (const line of text.split("\n")) {
+                    const t = line.indexOf("\t")
+                    if (t < 0) continue
+                    const name = line.slice(0, t).replace(/\.svg$/, "")
+                    if (!(name in m)) m[name] = line.slice(t + 1)       // 22x22 tem prioridade
+                }
+                root.panelIcons = m
+            }
+        }
+    }
+    function trayIcon(src) {
+        const s = (src || "").toString()
+        const m = s.match(/^image:\/\/icon\/([^?]+)/)
+        if (!m) return s
+        const p = panelIcons[decodeURIComponent(m[1])]
+        return p ? "file://" + p : s
+    }
+
     // ================= jogos =================
     // Os dois botões de jogo do Control Center ficam salvos em ~/.local/state/quickshell/:
     //  - game-hud: mostra o MangoHud (o MangoHud relê a config sozinho, vale na hora);
@@ -440,6 +476,7 @@ Singleton {
     // troca o tema dos terminais abertos quando o modo do sistema muda
     property bool modeKnown: false
     onIsDarkChanged: {
+        panelIconsProc.running = true          // ícones da bandeja do modo novo
         if (!modeKnown) return
         Quickshell.execDetached(["pkill", isDark ? "-USR1" : "-USR2", "-x", "foot"])
         Quickshell.execDetached(["pkill", isDark ? "-USR1" : "-USR2", "-x", "footclient"])
