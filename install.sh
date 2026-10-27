@@ -69,6 +69,14 @@ for pkg in "${pkgs[@]}"; do
   ok "$pkg"
 done
 
+step "PATH"
+# os scripts do BArch ficam em ~/.local/bin: no terminal (bash) e na sessão (uwsm → Hyprland, barra)
+line='export PATH="$HOME/.local/bin:$PATH"'
+for f in "$HOME/.bashrc" "$HOME/.config/uwsm/env"; do
+  mkdir -p "$(dirname "$f")"; touch "$f"
+  grep -qF '.local/bin' "$f" || { echo "$line" >> "$f"; ok "~/.local/bin added to PATH in ${f/#$HOME/\~}"; }
+done
+
 step "Theme links"
 # arquivos que o tema gera/troca em uso e por isso ficam fora do git: cria um ponto de partida
 themes="$HOME/.config/hypr/themes"
@@ -102,7 +110,12 @@ if compgen -G "$HOME/Pictures/Wallpapers/primary-dark.png" >/dev/null; then
   ok "already there"
 else
   mkdir -p "$HOME/Pictures/Wallpapers"
-  python3 "$REPO/tools/make_wallpapers.py" "$HOME/Pictures/Wallpapers" && ok "generated in ~/Pictures/Wallpapers"
+  sudo pacman -S --needed --noconfirm python-numpy python-pillow >/dev/null   # o gerador precisa
+  if python3 "$REPO/tools/make_wallpapers.py" "$HOME/Pictures/Wallpapers"; then
+    ok "generated in ~/Pictures/Wallpapers"
+  else
+    warn "couldn't generate the wallpapers (run tools/make_wallpapers.py by hand to see why)"
+  fi
 fi
 # links primary.png / secondary.png (hyprpaper e hyprlock usam estes; o wallpaper-mode troca depois)
 for n in primary secondary; do
@@ -112,8 +125,13 @@ done
 
 step "User services"
 systemctl --user daemon-reload || true
-for s in "${USER_SERVICES[@]}"; do
-  systemctl --user enable "$s" && ok "$s" || warn "could not enable $s"
+# os listados em lib.sh + os que estavam ligados na máquina original (packages/user-services.txt)
+services=("${USER_SERVICES[@]}")
+[[ -f "$REPO/packages/user-services.txt" ]] && mapfile -t -O "${#services[@]}" services < "$REPO/packages/user-services.txt"
+for s in $(printf '%s\n' "${services[@]}" | sort -u); do
+  [[ -z "$s" ]] && continue
+  if [[ -n "$VIRT" && "$VIRT" != none ]] && grep -qE "$HW_ONLY|gsr-" <<<"$s"; then continue; fi
+  systemctl --user enable "$s" >/dev/null 2>&1 && ok "$s" || warn "could not enable $s"
 done
 
 step "Done"

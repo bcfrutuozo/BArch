@@ -1,0 +1,7 @@
+cliphist.service
+gsr-replay.service
+hyprpaper.service
+hyprsunset.service
+librepods.service
+theme-auto.timer
+vdirsyncer.timer
