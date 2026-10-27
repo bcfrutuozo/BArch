@@ -21,7 +21,7 @@ Singleton {
     id: root
 
     // ================= escolha aqui =================
-    property string darkFlavor: "dracula"      // paleta do modo escuro
+    property string darkFlavor: "dracula"     // paleta do modo escuro
     property string lightFlavor: "latte"    // paleta do modo claro
     property string defaultMode: "dark"     // se o sistema não declara preferência ("default")
 
@@ -127,10 +127,12 @@ Singleton {
     readonly property int popupGap: 14     // distância entre a ilha e o painel que abre embaixo dela
     readonly property int cardRadius: 10
     readonly property int buttonRadius: 8
+    // cantos das janelas no Hyprland: o mesmo raio dos painéis que abrem da barra
+    readonly property int windowRadius: popupRadius
 
     // (o swaync foi substituído pelas notificações do próprio Quickshell, em notifications/)
     function hex(c) { return c.toString().slice(0, 7) }
-    Component.onCompleted: hyprApply.restart()
+    Component.onCompleted: { hyprApply.restart(); appsWrite.restart(); hudWrite.restart() }
 
     // ================= terminal (foot) e editor (nvim) =================
     // Os dois recebem SEMPRE o par darkFlavor/lightFlavor (o "theme set" só afeta a barra).
@@ -357,7 +359,21 @@ Singleton {
                 "disabled_colors=" + roles(off, off, p.surface, off), ""].join("\n")
     }
 
-    readonly property string appsKey: darkFlavor + "/" + lightFlavor + "/" + gtk4Css.length
+    // fontconfig: a fonte da barra vira a fonte de interface de todos os apps, e a do
+    // terminal vira a monoespaçada padrão (menus, diálogos, páginas sem fonte própria)
+    readonly property string fontsConf: [
+        '<?xml version="1.0"?>',
+        '<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">',
+        "<!-- Gerado automaticamente pelo Theme.qml do Quickshell. Não edite. -->",
+        "<fontconfig>",
+        "  <alias binding=\"same\"><family>sans-serif</family><prefer><family>" + font + "</family></prefer></alias>",
+        "  <alias binding=\"same\"><family>sans</family><prefer><family>" + font + "</family></prefer></alias>",
+        "  <alias binding=\"same\"><family>system-ui</family><prefer><family>" + font + "</family></prefer></alias>",
+        "  <alias binding=\"same\"><family>monospace</family><prefer><family>" + monoFont + "</family></prefer></alias>",
+        "</fontconfig>", ""
+    ].join("\n")
+
+    readonly property string appsKey: darkFlavor + "/" + lightFlavor + "/" + gtk4Css.length + "/" + fontsConf
     onAppsKeyChanged: appsWrite.restart()
     Timer {
         id: appsWrite
@@ -372,7 +388,53 @@ Singleton {
             root.writeFile(home + "/.config/gtk-4.0/gtk.css", root.gtk4Css)
             root.writeFile(home + "/.config/qt6ct/colors/barch-dark.conf", root.qtScheme(root.darkPalette))
             root.writeFile(home + "/.config/qt6ct/colors/barch-light.conf", root.qtScheme(root.lightPalette))
+            root.writeFile(home + "/.config/fontconfig/conf.d/60-barch-fonts.conf", root.fontsConf)
         }
+    }
+
+    // ================= jogos =================
+    // Os dois botões de jogo do Control Center ficam salvos em ~/.local/state/quickshell/:
+    //  - game-hud: mostra o MangoHud (o MangoHud relê a config sozinho, vale na hora);
+    //  - game-hdr: o run.sh do Battle.net lê na hora de abrir (vale no próximo lançamento).
+    // A config do MangoHud usa sempre a paleta escura (darkFlavor).
+    property bool gameHud: false
+    property bool gameHdr: true
+    readonly property string stateDir: Quickshell.env("HOME") + "/.local/state/quickshell/"
+    FileView { path: root.stateDir + "game-hud"; onLoaded: root.gameHud = text().trim() === "on" }
+    FileView { path: root.stateDir + "game-hdr"; onLoaded: root.gameHdr = text().trim() !== "off" }
+    function setGameHud(on) { gameHud = on; writeFile(stateDir + "game-hud", on ? "on" : "off") }
+    function setGameHdr(on) { gameHdr = on; writeFile(stateDir + "game-hdr", on ? "on" : "off") }
+
+    readonly property string mangohudConf: {
+        const d = darkPalette
+        const t = terminal(d)
+        const H = x => hx(x)
+        return [
+            "# Gerado automaticamente pelo Theme.qml do Quickshell (" + darkFlavor + "). Não edite.",
+            "# Mostrar/esconder: botão Game HUD no Control Center.",
+            "legacy_layout=false",
+            gameHud ? "" : "no_display",
+            "horizontal", "hud_compact",
+            "position=top-left", "offset_x=16", "offset_y=16",
+            "font_size=22", "round_corners=" + cardRadius,
+            "background_alpha=0.7", "background_color=" + H(d.crust),
+            "text_color=" + H(d.text), "text_outline=0",
+            "fps", "fps_color_change", "fps_value=60,120",
+            "fps_color=" + [H(d.red), H(d.yellow), H(d.green)].join(","),
+            "frametime", "frametime_color=" + H(d.subtext), "frame_timing=0",
+            "gpu_stats", "gpu_temp", "gpu_power", "gpu_color=" + H(d.accent),
+            "cpu_stats", "cpu_temp", "cpu_color=" + H(t.regular[6]),
+            "vram", "vram_color=" + H(t.regular[5]),
+            "ram", "ram_color=" + H(t.bright[5]),
+            "engine_color=" + H(d.accent), "wine_color=" + H(d.accent),
+            "toggle_hud=Shift_L+F12", ""
+        ].filter((l, i, a) => l !== "" || i === a.length - 1).join("\n")
+    }
+    onMangohudConfChanged: hudWrite.restart()
+    Timer {
+        id: hudWrite
+        interval: 300
+        onTriggered: root.writeFile(Quickshell.env("HOME") + "/.config/MangoHud/MangoHud.conf", root.mangohudConf)
     }
 
     // troca o tema dos terminais abertos quando o modo do sistema muda
@@ -405,6 +467,8 @@ Singleton {
         // grupos de janelas (abas)
         "  { group = { col = { border_active = " + q(rgba(accent)) + ", border_inactive = " + q(rgba(surface)) + " } } },",
         "  { group = { groupbar = { col = { active = " + q(rgba(accent)) + ", inactive = " + q(rgba(surface)) + " } } } },",
+        // cantos das janelas iguais aos painéis da barra
+        "  { decoration = { rounding = " + windowRadius + " } },",
         // fundo visível quando não há papel de parede
         "  { misc = { background_color = " + q(rgba(base)) + " } },",
         "}) do pcall(hl.config, t) end"

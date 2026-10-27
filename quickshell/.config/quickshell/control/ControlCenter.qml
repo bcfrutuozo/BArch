@@ -1,6 +1,7 @@
 // ControlCenter.qml — central de controle da barra
 // Um ícone que abre blocos de liga/desliga: modo claro/escuro (do sistema inteiro),
-// Bluetooth, cafeína, luz noturna (hyprsunset), não perturbe e captura de tela (grim + slurp).
+// Bluetooth, cafeína, luz noturna (hyprsunset), não perturbe, HDR e MangoHud nos jogos
+// e captura de tela (grim + slurp).
 // O shell.qml passa a janela da barra em "window" (usada pela cafeína).
 
 import QtQuick
@@ -294,6 +295,22 @@ Item {
                         sublabel: root.dnd ? "Notifications muted" : "Off"
                         active: root.dnd
                         onClicked: root.toggleDnd()
+                    }
+
+                    Tile {
+                        icon: Theme.gameHdr ? root.glyph(0xF0D7D) : root.glyph(0xF0D7E)   // hdr / hdr_off
+                        label: "Game HDR"
+                        sublabel: Theme.gameHdr ? "On next launch" : "Off"
+                        active: Theme.gameHdr
+                        onClicked: Theme.setGameHdr(!Theme.gameHdr)
+                    }
+
+                    Tile {
+                        icon: root.glyph(0xF04C5)   // speedometer
+                        label: "Game HUD"
+                        sublabel: Theme.gameHud ? "MangoHud shown" : "Hidden"
+                        active: Theme.gameHud
+                        onClicked: Theme.setGameHud(!Theme.gameHud)
                     }
 
                     Tile {
