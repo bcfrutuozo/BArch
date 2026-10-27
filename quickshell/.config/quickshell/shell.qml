@@ -133,6 +133,7 @@ ShellRoot {
   }
 
   Variants {
+    id: bars
     // Barra só no monitor principal; se ele estiver desconectado, volta a aparecer em todos
     model: {
       const s = Quickshell.screens.filter(s => s.name === "HDMI-A-2")
@@ -142,6 +143,8 @@ ShellRoot {
     PanelWindow {
       id: bar
       required property var modelData
+      // só a primeira barra responde ao IPC dos widgets que existem uma vez por barra
+      readonly property bool primary: modelData === bars.model[0]
       screen: modelData
       anchors { top: true; left: true; right: true }
       implicitHeight: Theme.islandHeight + Theme.gap
@@ -584,13 +587,13 @@ ShellRoot {
         NotificationCenter {}
 
         // Atualizações
-        HealthWidget {}
+        HealthWidget { ipcEnabled: bar.primary }
         UpdatesWidget {
           kernelScript: "/home/bcfrutuozo/.local/bin/kernel-update"
         }
 
         // Central de controle: modo claro/escuro, cafeína, luz noturna, não perturbe, captura
-        ControlCenter { window: bar }
+        ControlCenter { window: bar; ipcEnabled: bar.primary }
 
         // Energia
         Label {

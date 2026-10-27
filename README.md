@@ -29,7 +29,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `mpv/` | `~/.config/mpv` | Video player (HDR, NVDEC) |
 | `uwsm/`, `environment/` | `~/.config/uwsm`, `~/.config/environment.d` | Session environment (Qt theme, cursor) |
 | `systemd/` | `~/.config/systemd/user` | User services (cliphist, replay) |
-| `bin/` | `~/.local/bin` | `kernel-update`, `theme-auto`, `wallpaper-mode`, `apps-theme`, `papirus-accent` |
+| `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `wallpaper-mode`, `apps-theme`, `papirus-accent` |
 | `games/` | `~/Games/battle.net/run.sh`, `~/.config/gamemode.ini` | Battle.net launcher (umu + Proton-GE) and gamemode rules |
 | `calendar/` | `~/.config/khal`, `~/.config/vdirsyncer/config` | iCloud calendar sync (the app password stays out of the repo) |
 | `tools/` | — | Generators: wallpapers (`make_wallpapers.py`), Limine theme (`limine-theme.py`) |
@@ -58,6 +58,23 @@ The main pieces:
   iCloud agenda in the clock's calendar; quick notes (Super+N); session restore at login.
 - **System health:** `.pacnew` files, failed services, TPM fallback warning and a monthly cleanup.
 - **Updates:** pending packages, unread Arch news (also enforced by a pacman hook) and the kernel.
+
+## barch CLI
+
+`barch` is the stable command line for scripts (and agents). It only asks the bar over Quickshell
+IPC, so it does exactly what the Control Center does; the bar has to be running.
+
+```bash
+barch notify "Backup" "Finished in 4 min" [--critical|--low] [--app NAME]   # through the bar's server
+barch theme light|dark|auto|status
+barch hdr on|off|status            barch sdr <nits>|status
+barch monitor side on|off|status   barch caffeine on|off|status
+barch nightlight on|off|status     barch dnd on|off|status
+barch health [--refresh]           # .pacnew, failed services, TPM, cleanup
+```
+
+Every command takes `--json`. Exit codes: `0` ok, `1` the bar refused, `2` usage, `3` bar not reachable.
+On the QML side these are the `IpcHandler`s `control`, `theme`, `notifs` and `health` (`qs ipc show`).
 
 ## Theme
 

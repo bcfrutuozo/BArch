@@ -111,6 +111,7 @@ ripgrep
 satty
 sbctl
 seahorse
+shellcheck
 slurp
 smartmontools
 snap-pac

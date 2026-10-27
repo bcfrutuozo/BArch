@@ -23,6 +23,15 @@ and commit messages stay in English, like the rest of the repo.
 - **No secrets in the repo.** App passwords (vdirsyncer, etc.) stay outside. Never add
   `~/.claude` contents other than `settings.json`, `CLAUDE.md` and skills that live in this repo.
 
+## Controlling the desktop: `barch`
+
+Prefer `barch` (`bin/.local/bin/barch`, see `barch help`) over editing state files, calling
+`hyprctl`/`gsettings` or `notify-send` whenever a subcommand exists: notifications, theme, HDR and
+SDR brightness, side monitor, caffeine, night light, Do Not Disturb, system health. Use `--json` to
+read state and check the exit code (`3` = the bar is not running). A new bar feature that scripts
+should reach gets an `IpcHandler` function answering JSON (`{"ok": ...}`) plus a `barch` subcommand,
+reusing the widget's own functions.
+
 ## How the repo works
 
 - **Stow packages** are the top-level folders listed in `PACKAGES` in `scripts/lib.sh`

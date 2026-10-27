@@ -7,10 +7,12 @@ pragma Singleton
 //
 // Comandos:
 //   qs ipc call theme toggle       alterna o modo do SISTEMA inteiro (barra + apps)
-//   qs ipc call theme mode light   força claro/escuro no sistema (light | dark)
+//   qs ipc call theme mode light   Light / Dark / Auto da central de controle (light | dark | auto; JSON)
 //   qs ipc call theme set nord     só a barra, para testar uma paleta (até reiniciar)
 //   qs ipc call theme auto         volta a seguir o sistema
 //   qs ipc call theme list         paletas disponíveis
+//   qs ipc call theme status       aparência escolhida, modo atual e paleta (JSON)
+// O barch (~/.local/bin) usa "mode" e "status": theme light | dark | auto | status.
 
 import QtQuick
 import Quickshell
@@ -644,10 +646,16 @@ Singleton {
             root.chooseAppearance(next)
             return "mode: " + next
         }
+        // Light / Dark / Auto, como na central de controle (JSON, usado pelo barch)
         function mode(m: string): string {
-            if (m !== "light" && m !== "dark" && m !== "auto") return "use: light | dark | auto"
+            if (m !== "light" && m !== "dark" && m !== "auto")
+                return JSON.stringify({ ok: false, error: "use: light | dark | auto" })
             root.chooseAppearance(m)
-            return "appearance: " + m
+            return JSON.stringify({ ok: true, appearance: m })
+        }
+        function status(): string {
+            return JSON.stringify({ ok: true, appearance: root.appearance || "unset", mode: root.currentMode,
+                                    flavor: root.flavor, dayStart: root.dayStart, nightStart: root.nightStart })
         }
         function set(name: string): string {
             if (!root.palettes[name]) return "unknown theme: " + name

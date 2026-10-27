@@ -3,7 +3,8 @@
 // Bluetooth, cafeína, luz noturna (hyprsunset), não perturbe, HDR e MangoHud nos jogos,
 // captura e gravação de tela (grim/slurp, gpu-screen-recorder via record/record.sh) e a tela: HDR e brilho do SDR do monitor principal e o
 // monitor vertical ligado/desligado (precisa do monitors.lua com BArch.set_monitor).
-// O shell.qml passa a janela da barra em "window" (usada pela cafeína).
+// O shell.qml passa a janela da barra em "window" (usada pela cafeína) e "ipcEnabled"
+// (só a barra da tela principal responde ao IPC "control", usado pelo barch em ~/.local/bin).
 
 import QtQuick
 import QtQuick.Layouts
@@ -28,6 +29,7 @@ Item {
     }
 
     property var window: null           // janela da barra (para a cafeína)
+    property bool ipcEnabled: true      // falso nas cópias da barra em outras telas
     property int nightTemp: 4500        // temperatura da luz noturna, em kelvin
     property string screenshotDir: Quickshell.env("HOME") + "/Pictures/Screenshots"
 
@@ -83,12 +85,15 @@ Item {
             'if BArch and BArch.apply_monitor then BArch.monitor_overrides = {}; BArch.apply_monitor("' + mainOutput + '") end'])
         displayRecheck.restart()
     }
-    function toggleHdr() { hdrOn = !hdrOn; setMain({ cm: hdrOn ? "hdr" : "srgb" }) }
-    function toggleSide() {
-        sideOn = !sideOn
-        Hyprland.dispatch('hl.dsp.dpms({ action = "' + (sideOn ? "on" : "off") + '", monitor = "' + sideOutput + '" })')
+    function setHdr(on) { hdrOn = on; setMain({ cm: on ? "hdr" : "srgb" }) }
+    function toggleHdr() { setHdr(!hdrOn) }
+    function setSdr(nits) { sdrWhite = nits; setMain({ sdr_max_luminance: nits }) }
+    function setSide(on) {
+        sideOn = on
+        Hyprland.dispatch('hl.dsp.dpms({ action = "' + (on ? "on" : "off") + '", monitor = "' + sideOutput + '" })')
         displayRecheck.restart()
     }
+    function toggleSide() { setSide(!sideOn) }
 
     FileView {
         path: root.displayPath
@@ -103,7 +108,7 @@ Item {
         target: Hyprland
         function onRawEvent(event) { if (event.name === "configreloaded") displayStart.restart() }
     }
-    Timer { id: sdrApply; interval: 180; onTriggered: root.setMain({ sdr_max_luminance: root.sdrWhite }) }
+    Timer { id: sdrApply; interval: 180; onTriggered: root.setSdr(root.sdrWhite) }
     Timer { id: displayRecheck; interval: 1200; onTriggered: displayProc.running = true }
 
     Process {
@@ -134,8 +139,7 @@ Item {
     // Não usamos o "identity" do hyprsunset para desligar, porque depois dele o hyprsunset
     // continua informando a última temperatura e a barra achava que ainda estava ligado.
     property real nightToggledAt: 0
-    function toggleNight() {
-        const on = !nightLight
+    function setNight(on) {
         Quickshell.execDetached(["sh", "-c",
             'if pgrep -x hyprsunset >/dev/null; then hyprctl hyprsunset temperature "$1" >/dev/null; '
             + 'elif [ "$1" -lt 6000 ]; then exec hyprsunset -t "$1"; fi',
@@ -144,6 +148,7 @@ Item {
         nightToggledAt = Date.now()
         recheck.restart()
     }
+    function toggleNight() { setNight(!nightLight) }
 
     function toggleDnd() { Notifs.setDnd(!Notifs.dnd) }
 
@@ -170,6 +175,42 @@ Item {
     IdleInhibitor {
         window: root.window
         enabled: root.caffeine && root.window !== null
+    }
+
+    // ---------- IPC (barch) ----------
+    // Todas respondem JSON: {"ok": true, ...estado} ou {"ok": false, "error": "..."}.
+    // O estado do monitor é relido a cada 15 s e logo depois de cada mudança.
+    function state() {
+        return {
+            ok: true, hdr: hdrOn, sdrWhite: sdrWhite, sdrMin: sdrMin, sdrMax: sdrMax, side: sideOn,
+            caffeine: caffeine, nightLight: nightLight, nightTemp: nightTemp, hasHyprsunset: hasHyprsunset,
+            mainOutput: mainOutput, sideOutput: sideOutput
+        }
+    }
+    function fail(msg) { return JSON.stringify({ ok: false, error: msg }) }
+    IpcHandler {
+        target: "control"
+        enabled: root.ipcEnabled
+        function status(): string { root.refresh(); return JSON.stringify(root.state()) }
+        function hdr(on: bool): string { root.setHdr(on); return JSON.stringify(root.state()) }
+        function sdr(nits: int): string {
+            if (!root.hdrOn) return root.fail("HDR is off; the SDR brightness only applies in HDR")
+            if (nits < root.sdrMin || nits > root.sdrMax)
+                return root.fail("SDR brightness must be between " + root.sdrMin + " and " + root.sdrMax + " nits")
+            root.setSdr(nits)
+            return JSON.stringify(root.state())
+        }
+        function side(on: bool): string { root.setSide(on); return JSON.stringify(root.state()) }
+        function caffeine(on: bool): string {
+            if (root.window === null) return root.fail("no bar window to hold the idle inhibitor")
+            root.caffeine = on
+            return JSON.stringify(root.state())
+        }
+        function nightLight(on: bool): string {
+            if (!root.hasHyprsunset) return root.fail("hyprsunset is not installed")
+            if (on !== root.nightLight) root.setNight(on)
+            return JSON.stringify(root.state())
+        }
     }
 
     // ---------- leitura do estado ----------

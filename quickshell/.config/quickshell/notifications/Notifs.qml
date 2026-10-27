@@ -16,7 +16,8 @@ pragma Singleton
 // notificação aberta, a entrada também guarda a original (notif) para a imagem e os botões;
 // quando o app a fecha, a cópia continua no histórico.
 //
-// IPC:  qs ipc call notifs dnd | clear | test
+// IPC:  qs ipc call notifs dnd | clear | test | dndSet <bool> | dndStatus | post <title> <body> <urgency> <app>
+//       (as que respondem JSON são usadas pelo barch, em ~/.local/bin)
 
 import QtQuick
 import Quickshell
@@ -120,25 +121,30 @@ Singleton {
             // quando o app (ou um clique) fecha a notificação, a cópia fica no histórico
             n.closed.connect(() => { e.notif = null; e.image = ""; root.hidePopup(e) })
 
-            // "transient" (ex.: aviso de volume) só aparece em balão, não vai para o histórico
-            if (!n.transient) {
-                let l = root.list.concat([e])
-                if (l.length > root.maxHistory) l = l.slice(l.length - root.maxHistory)
-                root.list = l
-                root.save()
-            }
-            if (!root.dnd) {
-                root.popups = root.popups.concat([e])
-                root.playSound(n)
-            }
-            console.log("[notifs]", n.appName, "|", n.summary, "| dnd:", root.dnd, "| popups:", root.popups.length)
+            root.post(e, n.transient, n.hints || {})
         }
     }
 
+    // Mostra uma entrada: histórico, balão e som. Usada pelo servidor (DBus) e pelo IPC (barch notify).
+    // "transient" (ex.: aviso de volume) só aparece em balão, não vai para o histórico.
+    function post(e, transient, hints) {
+        if (!transient) {
+            let l = list.concat([e])
+            if (l.length > maxHistory) l = l.slice(l.length - maxHistory)
+            list = l
+            save()
+        }
+        if (!dnd) {
+            popups = popups.concat([e])
+            playSound(e.critical, hints)
+        }
+        console.log("[notifs]", e.appName, "|", e.summary, "| dnd:", dnd, "| popups:", popups.length)
+    }
+
     // ---------- som ----------
-    function playSound(n) {
+    function playSound(critical, hints) {
         if (!soundEnabled) return
-        const h = n.hints || {}
+        const h = hints || {}
         if (h["suppress-sound"]) return
         const now = Date.now()
         if (now - lastSound < 400) return          // várias de uma vez: um som só
@@ -148,7 +154,7 @@ Singleton {
         if (file.startsWith("file://")) file = file.slice(7)
         if (!file && h["sound-name"])
             file = soundDir + h["sound-name"] + ".oga"
-        if (!file) file = n.urgency === NotificationUrgency.Critical ? soundCritical : soundNormal
+        if (!file) file = critical ? soundCritical : soundNormal
         Quickshell.execDetached(["sh", "-c", '[ -f "$1" ] && exec pw-play --volume "$2" "$1"',
                                  "sh", file, String(soundVolume)])
     }
@@ -280,6 +286,19 @@ Singleton {
         function awayCount(since: string): string {
             const t = Number(since) * 1000
             return String(root.list.filter(e => e.time >= t).length)
+        }
+        function dndSet(on: bool): string { root.setDnd(on); return JSON.stringify({ ok: true, dnd: root.dnd }) }
+        function dndStatus(): string { return JSON.stringify({ ok: true, dnd: root.dnd }) }
+        // notificação da própria barra, sem passar pelo DBus (barch notify). urgency: low | normal | critical
+        function post(summary: string, body: string, urgency: string, app: string): string {
+            if (summary === "") return JSON.stringify({ ok: false, error: "empty title" })
+            if (urgency !== "low" && urgency !== "normal" && urgency !== "critical")
+                return JSON.stringify({ ok: false, error: "urgency must be low, normal or critical" })
+            root.post(root.makeEntry({
+                appName: app || "barch", summary: summary, body: body,
+                critical: urgency === "critical", low: urgency === "low", time: Date.now()
+            }), false, {})
+            return JSON.stringify({ ok: true, dnd: root.dnd })
         }
         function test(): void {
             Quickshell.execDetached(["notify-send", "-a", "Quickshell", "-i", "dialog-information",

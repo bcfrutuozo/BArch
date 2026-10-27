@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+# barch — stable command line for the BArch desktop, for scripts and agents.
+#
+# A thin client: every command is an IPC call into the Quickshell bar (qs ipc call <target> <fn>),
+# which does the actual work with the same functions as the Control Center. Nothing is
+# reimplemented here. The IPC functions answer JSON: {"ok":true,...} or {"ok":false,"error":"..."}.
+#
+# Exit codes: 0 ok, 1 the bar refused or failed, 2 usage error, 3 the bar is not reachable.
+# Needs: qs (quickshell), jq.
+
+set -uo pipefail
+
+PROG=${0##*/}
+JSON=0
+
+usage() {
+  cat <<EOF
+Usage: $PROG [--json] <command> [args]
+
+  notify <title> [body] [--critical|--low] [--app NAME]
+                              notification through the bar's own server
+  theme light|dark|auto|status
+                              appearance (Auto follows the theme-auto schedule)
+  hdr on|off|status           HDR on the main monitor
+  sdr <nits>|status           SDR brightness inside HDR
+  monitor side on|off|status  side monitor (DPMS)
+  caffeine on|off|status      keep the screen from idling, locking and suspending
+  nightlight on|off|status    night light (hyprsunset)
+  dnd on|off|status           Do Not Disturb
+  health [--refresh]          system health summary (.pacnew, failed services, TPM, cleanup)
+  help                        this text
+
+  --json   print the bar's JSON instead of text (every command)
+
+Exit codes: 0 ok, 1 the bar refused or failed, 2 usage error, 3 the bar is not reachable.
+EOF
+}
+
+die() { echo "$PROG: $2" >&2; exit "$1"; }
+usage_error() { echo "$PROG: $1" >&2; echo "Try '$PROG help'." >&2; exit 2; }
+
+command -v qs >/dev/null || die 3 "qs (quickshell) not found"
+command -v jq >/dev/null || die 3 "jq not found"
+
+# ipc <target> <function> [args...] → the JSON answer in $OUT; exits on any failure.
+# (A global instead of $(ipc ...), so that die exits the script and not a subshell.)
+# qs ipc call exits 0 even for "Target not found.", so the answer itself is checked.
+OUT=""
+ipc() {
+  local out
+  out=$(qs ipc call "$@" 2>&1) || die 3 "the bar is not reachable: ${out:-qs ipc failed}"
+  if ! jq -e 'type == "object" and has("ok")' >/dev/null 2>&1 <<<"$out"; then
+    die 3 "the bar is not reachable (qs ipc call $1 $2): ${out:-no answer}"
+  fi
+  if [[ $(jq -r '.ok' <<<"$out") != true ]]; then
+    [[ $JSON == 1 ]] && jq . <<<"$out"
+    die 1 "$(jq -r '.error // "unknown error"' <<<"$out")"
+  fi
+  OUT=$out
+}
+
+# show <json> <jq filter for the text output>
+show() {
+  if [[ $JSON == 1 ]]; then jq . <<<"$1"; else jq -r "$2" <<<"$1"; fi
+}
+
+# toggle <target> <function> on|off|status <text filter>: status, or set and show the new state
+toggle() {
+  local target=$1 fn=$2 arg=$3 text=$4 status=status
+  [[ $target == notifs ]] && status=dndStatus
+  case $arg in
+    status) ipc "$target" "$status" ;;
+    on) ipc "$target" "$fn" true ;;
+    off) ipc "$target" "$fn" false ;;
+    *) usage_error "expected on, off or status, got '$arg'" ;;
+  esac
+  show "$OUT" "$text"
+}
+
+onoff_text='if . then "on" else "off" end'
+
+cmd_notify() {
+  local title="" body="" urgency=normal app=barch
+  local -a pos=()
+  while (($#)); do
+    case $1 in
+      --critical) urgency=critical ;;
+      --low) urgency=low ;;
+      --app) [[ $# -ge 2 ]] || usage_error "--app needs a name"; app=$2; shift ;;
+      --) shift; pos+=("$@"); break ;;
+      -*) usage_error "notify: unknown option '$1'" ;;
+      *) pos+=("$1") ;;
+    esac
+    shift
+  done
+  ((${#pos[@]} >= 1 && ${#pos[@]} <= 2)) || usage_error "notify needs <title> [body]"
+  title=${pos[0]}
+  body=${pos[1]:-}
+  [[ -n $title ]] || usage_error "notify: empty title"
+  ipc notifs post "$title" "$body" "$urgency" "$app"
+  show "$OUT" \
+    'if .dnd then "sent (Do Not Disturb is on: history only)" else "sent" end'
+}
+
+cmd_theme() {
+  local text='"appearance: \(.appearance) (now \(.mode), palette \(.flavor))"'
+  case ${1:-} in
+    light | dark | auto) ipc theme mode "$1"; ipc theme status ;;
+    status) ipc theme status ;;
+    *) usage_error "theme light|dark|auto|status" ;;
+  esac
+  show "$OUT" "$text"
+}
+
+control_text_hdr='"hdr: \(.hdr | '"$onoff_text"')" + (if .hdr then " (SDR white \(.sdrWhite) nits)" else "" end)'
+
+cmd_hdr() { toggle control hdr "${1:-}" "$control_text_hdr"; }
+
+cmd_sdr() {
+  local text='"SDR white: \(.sdrWhite) nits (range \(.sdrMin)–\(.sdrMax))" + (if .hdr then "" else ", HDR is off" end)'
+  case ${1:-} in
+    status) ipc control status ;;
+    '' | *[!0-9]*) usage_error "sdr <nits>|status" ;;
+    *) ipc control sdr "$1" ;;
+  esac
+  show "$OUT" "$text"
+}
+
+cmd_monitor() {
+  [[ ${1:-} == side ]] || usage_error "monitor side on|off|status"
+  toggle control side "${2:-}" '"side monitor (\(.sideOutput)): \(.side | '"$onoff_text"')"'
+}
+
+cmd_caffeine() { toggle control caffeine "${1:-}" '"caffeine: \(.caffeine | '"$onoff_text"')"'; }
+
+cmd_nightlight() {
+  local text='if .hasHyprsunset | not then "night light: hyprsunset not installed"
+              else "night light: \(.nightLight | '"$onoff_text"')" + (if .nightLight then " (\(.nightTemp) K)" else "" end) end'
+  toggle control nightLight "${1:-}" "$text"
+}
+
+cmd_dnd() { toggle notifs dndSet "${1:-}" '"do not disturb: \(.dnd | '"$onoff_text"')"'; }
+
+cmd_health() {
+  case ${1:-} in
+    '') ;;
+    --refresh)
+      local before i
+      ipc health refresh
+      before=$(jq -r '.checkedAt' <<<"$OUT")
+      for ((i = 0; i < 60; i++)); do          # the check takes a few seconds (du, journalctl)
+        sleep 0.5
+        ipc health status
+        [[ $(jq -r '.checkedAt' <<<"$OUT") != "$before" ]] && break
+      done
+      ((i < 60)) || die 1 "the health check did not finish in 30 s"
+      ;;
+    *) usage_error "health [--refresh]" ;;
+  esac
+  ipc health status
+  show "$OUT" '
+    def list(xs): if (xs | length) == 0 then "none" else (xs | join(", ")) end;
+    def day(ms): ms / 1000 | floor | strflocaltime("%Y-%m-%d");
+    if .loaded | not then "System health: not checked yet (the bar checks ~45 s after start; use --refresh)"
+    else
+      "System health: " + (if .issues == 0 then "ok" else "\(.issues) issue(s)" end)
+        + " (checked " + (.checkedAt / 1000 | floor | strflocaltime("%Y-%m-%d %H:%M")) + ")",
+      "  .pacnew/.pacsave: \(.pacnew | length)",
+      (.pacnew[] | "    \(.)"),
+      "  failed services: system: \(list(.failed.system)); user: \(list(.failed.user))",
+      "  TPM unlock: \(.tpm)" + (if .tpm == "failed" then "  → \(.reenroll)" else "" end),
+      "  cleanup: " + (if .cleanupDue then "due" else "not due" end)
+        + (if .lastCleanup > 0 then " (last \(day(.lastCleanup)))" else "" end)
+        + "; \(.clean.orphans) orphans, cache \(.clean.cache), journal \(.clean.journal)"
+    end'
+}
+
+# --json may come anywhere
+args=()
+for a in "$@"; do
+  case $a in
+    --json) JSON=1 ;;
+    *) args+=("$a") ;;
+  esac
+done
+set -- "${args[@]}"
+
+cmd=${1:-help}
+(($#)) && shift
+case $cmd in
+  notify) cmd_notify "$@" ;;
+  theme) cmd_theme "$@" ;;
+  hdr) cmd_hdr "$@" ;;
+  sdr) cmd_sdr "$@" ;;
+  monitor) cmd_monitor "$@" ;;
+  caffeine) cmd_caffeine "$@" ;;
+  nightlight | night-light) cmd_nightlight "$@" ;;
+  dnd) cmd_dnd "$@" ;;
+  health) cmd_health "$@" ;;
+  help | -h | --help) usage ;;
+  *) usage_error "unknown command '$cmd'" ;;
+esac

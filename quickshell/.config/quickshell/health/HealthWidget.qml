@@ -4,6 +4,7 @@
 //   - disco pediu senha no boot (o TPM não destravou) → comando de reenroll pronto (Copy / Run)
 //   - limpeza mensal (órfãos, cache, journal) → Clean Up (passo a passo, pergunta antes)
 // O aviso do TPM também chega como notificação, uma vez por boot.
+// IPC "health" (status em JSON, refresh), usado pelo "barch health" em ~/.local/bin.
 // Depende de health-check.sh e clean.sh (nesta pasta), pacman-contrib (pacdiff, paccache), jq e foot.
 
 import QtQuick
@@ -36,6 +37,8 @@ Item {
     property var clean: ({ orphans: 0, cache: "?", journal: "?" })
     property real lastCleanup: 0
     property bool loaded: false
+    property real checkedAt: 0              // fim da última verificação (ms)
+    property bool ipcEnabled: true          // falso nas cópias da barra em outras telas
 
     readonly property string reenroll: "sudo systemd-cryptenroll " + luksDevice
         + " --wipe-slot=tpm2 --tpm2-device=auto --tpm2-pcrs=" + tpmPcrs
@@ -64,6 +67,7 @@ Item {
                 root.tpm = d.tpm
                 root.clean = d.clean
                 root.loaded = true
+                root.checkedAt = Date.now()
                 if (root.tpm === "failed") tpmNotice.running = true
             }
         }
@@ -95,6 +99,20 @@ Item {
     }
 
     Process { id: runProc; onExited: root.refresh() }
+
+    IpcHandler {
+        target: "health"
+        enabled: root.ipcEnabled
+        function status(): string {
+            return JSON.stringify({
+                ok: true, loaded: root.loaded, checkedAt: root.checkedAt, running: checkProc.running,
+                issues: root.issues, pacnew: root.pacnew, failed: { system: root.failedSys, user: root.failedUsr },
+                tpm: root.tpm, reenroll: root.reenroll, clean: root.clean,
+                cleanupDue: root.cleanupDue, lastCleanup: root.lastCleanup
+            })
+        }
+        function refresh(): string { root.refresh(); return JSON.stringify({ ok: true, checkedAt: root.checkedAt }) }
+    }
 
     Timer { interval: 45000; running: true; onTriggered: root.refresh() }   // depois do boot assentar
     Timer { interval: 30 * 60000; running: true; repeat: true; onTriggered: root.refresh() }
