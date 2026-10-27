@@ -3,8 +3,9 @@
 // Atalhos (binds.lua):
 //   Alt+Tab        qs ipc call switcher next     abre / vai para a próxima janela
 //   Alt+Shift+Tab  qs ipc call switcher prev     volta uma
-//   soltar o Alt   qs ipc call switcher commit   foca a janela escolhida
-// Com ele aberto: ←/→ ou Tab navegam, Enter foca, Esc cancela, clique foca.
+//   soltar o Alt   qs ipc call switcher commit   a escolhida TROCA de lugar e tamanho com a atual
+// Com ele aberto: ←/→ ou Tab navegam, Enter troca, Space só foca (sem trocar), Esc cancela,
+// clique troca (Shift+clique só foca). Flutuantes, minimizadas e scratchpad: só foca.
 // As janelas vêm em ordem de uso (a atual por último na volta, a anterior já selecionada),
 // de todos os workspaces, inclusive o scratchpad.
 // A prévia usa o protocolo de captura de janelas do Hyprland (ScreencopyView).
@@ -66,14 +67,25 @@ Scope {
         index = (index + d + windows.length) % windows.length
     }
 
-    function commit() {
+    // Soltar o Alt: a janela escolhida TROCA de lugar e tamanho com a atual (como "trazer para cá").
+    // Space: só foca, sem trocar. Janelas flutuantes, minimizadas ou sem janela atual: só foca.
+    property bool swapOnCommit: true
+
+    function commit(focusOnly) {
         if (!shown) return
         const w = windows[index]
+        const cur = windows.length > 0 && windows[0].current ? windows[0] : null
         close()
         if (!w) return
-        // minimizada: traz de volta para o workspace atual em vez de abrir o workspace escondido
-        if (w.ws === "Minimized") Minimized.restore(w.address)
-        else Hyprland.dispatch('hl.dsp.focus({ window = "address:0x' + strip(w.address) + '" })')
+        // minimizada: devolve ao workspace de origem
+        if (w.ws === "Minimized") { Minimized.restore(w.address); return }
+        const target = '"address:0x' + strip(w.address) + '"'
+        if (swapOnCommit && !focusOnly && cur && cur.address !== w.address
+                && !cur.floating && !w.floating && !cur.special && !w.special) {
+            // a atual vai para o lugar da escolhida e vice-versa; o foco fica na escolhida
+            Hyprland.dispatch('hl.dsp.window.swap({ target = ' + target + ' })')
+        }
+        Hyprland.dispatch('hl.dsp.focus({ window = ' + target + ' })')
     }
 
     function close() {
@@ -86,7 +98,8 @@ Scope {
         target: "switcher"
         function next(): void { root.step(1) }
         function prev(): void { root.step(-1) }
-        function commit(): void { root.commit() }
+        function commit(): void { root.commit(false) }
+        function focus(): void { root.commit(true) }
         function cancel(): void { root.close() }
     }
 
@@ -105,6 +118,9 @@ Scope {
                     address: c.address,
                     title: c.title || c.class || "",
                     cls: c.class || "",
+                    floating: c.floating === true,
+                    special: c.workspace.name.startsWith("special:"),
+                    current: c.focusHistoryID === 0,
                     ws: c.workspace.name === "special:minimized" ? "Minimized"
                         : c.workspace.name.startsWith("special:") ? "Scratchpad" : String(c.workspace.name),
                     handle: root.handleFor(c.address)
@@ -145,7 +161,7 @@ Scope {
             id: box
             readonly property int maxCards: Math.max(1, Math.floor((win.width - 80) / (root.cardW + 10)))
             width: Math.max(root.cardW, Math.min(root.windows.length, maxCards) * (root.cardW + 10) - 10) + 24
-            height: root.previewH + 82
+            height: root.previewH + 104
             anchors.centerIn: parent
             radius: Theme.popupRadius
             color: Theme.bg
@@ -159,16 +175,28 @@ Scope {
             focus: true
             Keys.onPressed: ev => {
                 if (ev.key === Qt.Key_Escape) { root.close(); ev.accepted = true }
-                else if (ev.key === Qt.Key_Return || ev.key === Qt.Key_Enter) { root.commit(); ev.accepted = true }
+                else if (ev.key === Qt.Key_Return || ev.key === Qt.Key_Enter) { root.commit(false); ev.accepted = true }
+                else if (ev.key === Qt.Key_Space) { root.commit(true); ev.accepted = true }
                 else if (ev.key === Qt.Key_Right || ev.key === Qt.Key_Tab) { root.step(1); ev.accepted = true }
                 else if (ev.key === Qt.Key_Left || ev.key === Qt.Key_Backtab) { root.step(-1); ev.accepted = true }
             }
             // soltar o Alt também confirma (além do atalho de soltura do Hyprland)
-            Keys.onReleased: ev => { if (ev.key === Qt.Key_Alt) { root.commit(); ev.accepted = true } }
+            Keys.onReleased: ev => { if (ev.key === Qt.Key_Alt) { root.commit(false); ev.accepted = true } }
+
+            Text {
+                id: hint
+                anchors { bottom: parent.bottom; horizontalCenter: parent.horizontalCenter; bottomMargin: 8 }
+                text: root.swapOnCommit ? "Release Alt  Swap Places   ·   Space  Focus Only   ·   Esc  Cancel"
+                                        : "Release Alt  Focus   ·   Esc  Cancel"
+                color: Theme.dim
+                font.family: Theme.font
+                font.pixelSize: Theme.fontSize - 3
+            }
 
             ListView {
                 id: list
-                anchors { fill: parent; margins: 12 }
+                anchors { left: parent.left; right: parent.right; top: parent.top; bottom: hint.top
+                          leftMargin: 12; rightMargin: 12; topMargin: 12; bottomMargin: 6 }
                 orientation: ListView.Horizontal
                 spacing: 10
                 model: root.windows
@@ -196,7 +224,7 @@ Scope {
                         anchors.fill: parent
                         hoverEnabled: true
                         onEntered: root.index = card.index
-                        onClicked: { root.index = card.index; root.commit() }
+                        onClicked: mouse => { root.index = card.index; root.commit(mouse.modifiers & Qt.ShiftModifier) }
                     }
 
                     Item {

@@ -43,6 +43,16 @@ hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }), { descript
 hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }),    { description = "Windows|Focus Up" })
 hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }),  { description = "Windows|Focus Down" })
 
+-- Trocar de lugar com a vizinha (mainMod + SHIFT + setas) e redimensionar (mainMod + CTRL + setas)
+hl.bind(mainMod .. " + SHIFT + left",  hl.dsp.window.swap({ direction = "left" }),  { description = "Windows|Swap Left" })
+hl.bind(mainMod .. " + SHIFT + right", hl.dsp.window.swap({ direction = "right" }), { description = "Windows|Swap Right" })
+hl.bind(mainMod .. " + SHIFT + up",    hl.dsp.window.swap({ direction = "up" }),    { description = "Windows|Swap Up" })
+hl.bind(mainMod .. " + SHIFT + down",  hl.dsp.window.swap({ direction = "down" }),  { description = "Windows|Swap Down" })
+hl.bind(mainMod .. " + CTRL + left",  hl.dsp.window.resize({ x = -60, y = 0, relative = true }), { repeating = true, description = "Windows|Narrower" })
+hl.bind(mainMod .. " + CTRL + right", hl.dsp.window.resize({ x = 60, y = 0, relative = true }),  { repeating = true, description = "Windows|Wider" })
+hl.bind(mainMod .. " + CTRL + up",    hl.dsp.window.resize({ x = 0, y = -60, relative = true }), { repeating = true, description = "Windows|Shorter" })
+hl.bind(mainMod .. " + CTRL + down",  hl.dsp.window.resize({ x = 0, y = 60, relative = true }),  { repeating = true, description = "Windows|Taller" })
+
 -- Mover/redimensionar com mainMod + botão esquerdo/direito
 hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true, description = "Windows|Move" })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true, description = "Windows|Resize" })
