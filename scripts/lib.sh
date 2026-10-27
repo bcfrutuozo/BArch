@@ -17,6 +17,7 @@ declare -A PACKAGES=(
   [systemd]=".config/systemd/user"
   [games]="Games/battle.net/run.sh .config/gamemode.ini"
   [bin]=".local/bin/kernel-update .local/bin/theme-auto .local/bin/wallpaper-mode .local/bin/apps-theme .local/bin/papirus-accent"
+  [calendar]=".config/khal .config/vdirsyncer/config"
 )
 
 # User services to enable on a fresh install

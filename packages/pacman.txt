@@ -61,6 +61,7 @@ jdk17-openjdk
 jq
 kcalc
 kernel-modules-hook
+khal
 lib32-gamemode
 lib32-mangohud
 lib32-nvidia-utils
@@ -138,6 +139,7 @@ tumbler
 umu-launcher
 unzip
 uwsm
+vdirsyncer
 vdpauinfo
 virt-manager
 volk

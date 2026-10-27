@@ -30,6 +30,7 @@ import "launcher"
 import "keys"
 import "switcher"
 import "overview"
+import "agenda"
 import "privacy"
 import "notifications"
 import "replay"
@@ -290,7 +291,7 @@ ShellRoot {
           calMonth = clock.date.getMonth()
         }
         // Sempre abre no mês atual
-        onVisibleChanged: if (visible) goToday()
+        onVisibleChanged: if (visible) { goToday(); agenda.refresh() }
 
         Rectangle {
           anchors.fill: parent
@@ -372,6 +373,15 @@ ShellRoot {
                          : (cell.index % 7 === 0 || cell.index % 7 === 6) ? Theme.subtext : Theme.text
                     font.bold: cell.isToday
                   }
+                  // ponto: dia com compromisso (agenda do iCloud via khal)
+                  Rectangle {
+                    visible: cell.inMonth && agenda.hasEvents(new Date(calendar.calYear, calendar.calMonth, cell.offset))
+                    width: 4; height: 4; radius: 2
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 2
+                    color: cell.isToday ? Theme.crust : Theme.accent
+                  }
                 }
               }
             }
@@ -379,6 +389,14 @@ ShellRoot {
             // Rolar o mouse troca de mês
             WheelHandler {
               onWheel: event => calendar.shift(event.angleDelta.y > 0 ? -1 : 1)
+            }
+
+            // Próximos compromissos
+            Agenda {
+              id: agenda
+              Layout.fillWidth: true
+              Layout.preferredWidth: 238
+              Layout.maximumWidth: 238
             }
           }
         }
