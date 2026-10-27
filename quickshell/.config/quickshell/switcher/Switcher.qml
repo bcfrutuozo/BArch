@@ -5,7 +5,8 @@
 //   Alt+Shift+Tab  qs ipc call switcher prev     volta uma
 //   soltar o Alt   qs ipc call switcher commit   a escolhida TROCA de lugar e tamanho com a atual
 // Com ele aberto: ←/→ ou Tab navegam, Enter troca, Space só foca (sem trocar), Esc cancela,
-// clique troca (Shift+clique só foca). Flutuantes, minimizadas e scratchpad: só foca.
+// clique troca (Shift+clique só foca), clique direito abre o menu da janela.
+// Flutuantes, minimizadas e scratchpad: só foca.
 // As janelas vêm em ordem de uso (a atual por último na volta, a anterior já selecionada),
 // de todos os workspaces, inclusive o scratchpad.
 // A prévia usa o protocolo de captura de janelas do Hyprland (ScreencopyView).
@@ -19,6 +20,7 @@ import Quickshell.Widgets
 import Quickshell.Hyprland
 import "../theme"
 import "../minimize"
+import "../windowmenu"
 
 Scope {
     id: root
@@ -72,7 +74,7 @@ Scope {
     property bool swapOnCommit: true
 
     function commit(focusOnly) {
-        if (!shown) return
+        if (!shown || menu.visible) return      // menu do clique direito aberto: espera a escolha
         const w = windows[index]
         const cur = windows.length > 0 && windows[0].current ? windows[0] : null
         close()
@@ -121,6 +123,8 @@ Scope {
                     floating: c.floating === true,
                     special: c.workspace.name.startsWith("special:"),
                     current: c.focusHistoryID === 0,
+                    wsName: c.workspace.name,
+                    pinned: c.pinned === true,
                     ws: c.workspace.name === "special:minimized" ? "Minimized"
                         : c.workspace.name.startsWith("special:") ? "Scratchpad" : String(c.workspace.name),
                     handle: root.handleFor(c.address)
@@ -149,6 +153,9 @@ Scope {
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "qs-switcher"
         WlrLayershell.keyboardFocus: win.visible ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+
+        // menu de janela (clique direito num cartão); a ação fecha o seletor
+        WindowMenu { id: menu; onDone: root.close() }
 
         Rectangle {
             anchors.fill: parent
@@ -223,8 +230,16 @@ Scope {
                     MouseArea {
                         anchors.fill: parent
                         hoverEnabled: true
-                        onEntered: root.index = card.index
-                        onClicked: mouse => { root.index = card.index; root.commit(mouse.modifiers & Qt.ShiftModifier) }
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        onEntered: if (!menu.visible) root.index = card.index
+                        onClicked: mouse => {
+                            root.index = card.index
+                            if (mouse.button === Qt.RightButton) {
+                                const m = card.modelData
+                                menu.show(card, mouse.x, mouse.y, { address: m.address, title: m.title, ws: m.wsName,
+                                    floating: m.floating, pinned: m.pinned, minimized: m.ws === "Minimized" })
+                            } else root.commit(mouse.modifiers & Qt.ShiftModifier)
+                        }
                     }
 
                     Item {

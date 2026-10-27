@@ -150,8 +150,45 @@ ShellRoot {
         transform: Translate { x: oled.shiftX; y: oled.shiftY }
 
         Island {
+          id: wsIsland
           padding: 6
           spacing: 5
+
+          // apps abertos em cada workspace: id → [classes] (sem repetir), para os ícones
+          property var apps: ({})
+          function iconFor(cls) {
+            const e = DesktopEntries.heuristicLookup ? DesktopEntries.heuristicLookup(cls) : null
+            return Quickshell.iconPath(e && e.icon ? e.icon : (cls || "").toLowerCase(), "application-x-executable")
+          }
+          Process {
+            id: wsAppsProc
+            command: ["hyprctl", "clients", "-j"]
+            running: true
+            stdout: StdioCollector {
+              onStreamFinished: {
+                let list = []
+                try { list = JSON.parse(text) } catch (e) { return }
+                const m = {}
+                for (const c of list) {
+                  if (!c.workspace || c.workspace.id <= 0 || !c.class) continue
+                  const k = c.workspace.id
+                  if (!m[k]) m[k] = []
+                  if (!m[k].includes(c.class)) m[k].push(c.class)
+                }
+                wsIsland.apps = m
+              }
+            }
+          }
+          Timer { id: wsAppsLater; interval: 120; onTriggered: wsAppsProc.running = true }
+          Connections {
+            target: Hyprland
+            function onRawEvent(event) {
+              const n = event.name
+              if (n === "openwindow" || n === "closewindow" || n === "movewindow" || n === "movewindowv2"
+                  || n === "windowtitle" || n === "createworkspace" || n === "destroyworkspace")
+                wsAppsLater.restart()
+            }
+          }
 
           Repeater {
             model: Hyprland.workspaces
@@ -159,9 +196,11 @@ ShellRoot {
             Rectangle {
               id: ws
               required property var modelData
+              readonly property var classes: wsIsland.apps[modelData.id] || []
+              readonly property int maxIcons: 4
               visible: modelData.id > 0          // esconde workspaces especiais
               implicitHeight: 20
-              implicitWidth: modelData.focused ? 38 : 20
+              implicitWidth: Math.max(modelData.focused ? 38 : 20, wsRow.implicitWidth + 14)
               radius: 10
               // workspace ativo em contorno (a pílula preenchida era o maior bloco fixo da barra)
               color: wsMouse.containsMouse ? Theme.surface : "transparent"
@@ -171,12 +210,36 @@ ShellRoot {
               Behavior on implicitWidth { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
               Behavior on color { ColorAnimation { duration: 150 } }
 
-              Label {
+              Row {
+                id: wsRow
                 anchors.centerIn: parent
-                text: ws.modelData.name
-                color: ws.modelData.focused ? Theme.accent : Theme.subtext
-                font.pixelSize: 11
-                font.bold: ws.modelData.focused
+                spacing: 4
+
+                Label {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: ws.modelData.name
+                  color: ws.modelData.focused ? Theme.accent : Theme.subtext
+                  font.pixelSize: 11
+                  font.bold: ws.modelData.focused
+                }
+                // ícones dos apps abertos neste workspace (até 4, depois "+n")
+                Repeater {
+                  model: ws.classes.slice(0, ws.maxIcons)
+                  IconImage {
+                    required property var modelData
+                    anchors.verticalCenter: parent.verticalCenter
+                    implicitSize: 13
+                    source: wsIsland.iconFor(modelData)
+                    opacity: ws.modelData.focused ? 1 : 0.6
+                  }
+                }
+                Label {
+                  visible: ws.classes.length > ws.maxIcons
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "+" + (ws.classes.length - ws.maxIcons)
+                  color: Theme.subtext
+                  font.pixelSize: 10
+                }
               }
 
               MouseArea {

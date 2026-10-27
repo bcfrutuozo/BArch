@@ -36,6 +36,18 @@ Singleton {
 
     function minimizeActive() { activeProc.running = true }
 
+    // minimiza uma janela qualquer, lembrando o workspace dela (nome: "3", "special:magic"…)
+    function minimize(address, wsName) {
+        if (wsName === special) return
+        const a = strip(address)
+        const o = Object.assign({}, origins)
+        o[a] = wsName
+        origins = o
+        saveOrigins()
+        dispatch('hl.dsp.window.move({ workspace = "' + special + '", follow = false, window = ' + sel(a) + ' })')
+        refreshSoon.restart()
+    }
+
     function restore(address) {
         const a = strip(address)
         const ws = origins[a]
@@ -71,14 +83,7 @@ Singleton {
                 let w
                 try { w = JSON.parse(text) } catch (e) { return }
                 if (!w || !w.address || !w.workspace) return
-                if (w.workspace.name === root.special) return
-                const a = root.strip(w.address)
-                const o = Object.assign({}, root.origins)
-                o[a] = w.workspace.name              // nome cobre normais ("3") e especiais ("special:magic")
-                root.origins = o
-                root.saveOrigins()
-                root.dispatch('hl.dsp.window.move({ workspace = "' + root.special + '", follow = false, window = ' + root.sel(a) + ' })')
-                refreshSoon.restart()
+                root.minimize(w.address, w.workspace.name)
             }
         }
     }

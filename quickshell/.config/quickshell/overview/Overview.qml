@@ -5,6 +5,7 @@
 //   clique numa janela      foca a janela
 //   clique no workspace     vai para ele
 //   arrastar uma janela     manda para outro workspace (sem sair da visão geral)
+//   clique direito          menu da janela (minimizar, por cima, tela cheia, mover, fechar)
 //   Esc ou Super+Tab        fecha
 // Abre com:  qs ipc call overview toggle
 // As miniaturas usam o protocolo de captura de janelas do Hyprland (ScreencopyView).
@@ -17,6 +18,7 @@ import Quickshell.Wayland
 import Quickshell.Widgets
 import Quickshell.Hyprland
 import "../theme"
+import "../windowmenu"
 
 Scope {
     id: root
@@ -145,6 +147,9 @@ Scope {
         WlrLayershell.namespace: "qs-overview"
         WlrLayershell.keyboardFocus: win.visible ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
+        // menu de janela (clique direito numa miniatura); depois da ação, atualiza a visão geral
+        WindowMenu { id: menu; onDone: refreshLater.restart() }
+
         Rectangle {
             anchors.fill: parent
             color: Qt.rgba(0, 0, 0, root.shown ? 0.35 : 0)
@@ -261,9 +266,17 @@ Scope {
                                         hoverEnabled: true
                                         cursorShape: root.dragging ? Qt.ClosedHandCursor : Qt.PointingHandCursor
                                         property point start
-                                        onPressed: ev => start = Qt.point(ev.x, ev.y)
+                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                        onPressed: ev => {
+                                            start = Qt.point(ev.x, ev.y)
+                                            if (ev.button === Qt.RightButton) {
+                                                const c = wnd.modelData
+                                                menu.show(wnd, ev.x, ev.y, { address: c.address, title: c.title || c.class,
+                                                    ws: c.workspace.name, floating: c.floating, pinned: c.pinned, minimized: false })
+                                            }
+                                        }
                                         onPositionChanged: ev => {
-                                            if (!pressed) return
+                                            if (!pressed || !(pressedButtons & Qt.LeftButton)) return
                                             if (!root.dragging && Math.hypot(ev.x - start.x, ev.y - start.y) > 6)
                                                 root.dragging = wnd.modelData
                                             if (root.dragging) {
@@ -275,6 +288,7 @@ Scope {
                                             }
                                         }
                                         onReleased: ev => {
+                                            if (ev.button === Qt.RightButton) return
                                             const c = root.dragging
                                             if (!c) { root.focusWindow(wnd.modelData); return }
                                             root.dragging = null

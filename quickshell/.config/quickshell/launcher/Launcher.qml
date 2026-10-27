@@ -4,13 +4,15 @@
 //   (nada)   apps: nome, nome genérico, palavras-chave e descrição; os mais usados sobem.
 //            Contas simples (2^10, 1500*0,15) resolvem na hora. Lock, Reboot etc. também aparecem.
 //   w ...    janelas abertas (mais recentes primeiro); Enter foca a janela.
-//   c ...    histórico do clipboard (cliphist); Enter copia de volta.
+//   c ...    histórico do clipboard (cliphist), com miniatura das imagens; Enter copia de volta.
+//   p ...    projetos (repositórios git em projectRoots); Enter abre no Neovim, Shift+Enter no Thunar.
+//   / ...    arquivos da pasta pessoal pelo nome (fd); Enter abre, Shift+Enter abre a pasta.
 //   : ...    emojis; Enter copia, Shift+Enter digita no app (precisa do wtype).
 //   ? ...    pesquisa na web (ou abre o endereço, se for um link).
 //   = ...    calculadora qalc (unidades e conversões: "= 5 km to mi"); Enter copia.
 //   > ...    roda um comando; Shift+Enter roda no terminal e mantém aberto.
 // Teclas: ↑/↓, Tab/Shift+Tab ou Ctrl+J/K navegam · PgUp/PgDn · Enter · Esc fecha.
-// Depende de: wl-clipboard; opcionais: qalc (libqalculate), cliphist, wtype; foot (terminal).
+// Depende de: wl-clipboard; opcionais: qalc (libqalculate), cliphist, wtype, fd; foot (terminal).
 
 import QtQuick
 import QtQuick.Layouts
@@ -84,13 +86,16 @@ Scope {
         if (t.startsWith("?")) return "web"
         if (/^w\s/.test(t)) return "windows"
         if (/^c\s/.test(t)) return "clip"
+        if (/^p\s/.test(t)) return "projects"
+        if (t.startsWith("/")) return "files"
         return "apps"
     }
     // texto depois do prefixo
     readonly property string arg: {
         switch (mode) {
         case "run": case "qalc": case "emoji": case "web": return lead.slice(1).trim()
-        case "windows": case "clip": return lead.slice(1).trim()
+        case "windows": case "clip": case "projects": return lead.slice(1).trim()
+        case "files": return lead.slice(1).trim()
         default: return trimmed
         }
     }
@@ -104,12 +109,15 @@ Scope {
         emoji:   { label: "Emoji",     glyph: 0xF01F2 },
         web:     { label: "Web",       glyph: 0xF059F },
         windows: { label: "Windows",   glyph: 0xF10AC },
-        clip:    { label: "Clipboard", glyph: 0xF0A38 }
+        clip:    { label: "Clipboard", glyph: 0xF0A38 },
+        projects:{ label: "Projects",  glyph: 0xF0CCF },
+        files:   { label: "Files",     glyph: 0xF0224 }
     })
 
     onModeChanged: {
         if (mode === "windows") winProc.running = true
         if (mode === "clip") clipProc.running = true
+        if (mode === "projects") projProc.running = true
     }
 
     // ---------- calculadora ----------
@@ -129,6 +137,7 @@ Scope {
     onQueryChanged: {
         qalcResult = ""
         if (qalcMode && hasQalc && arg.length > 0) qalcDebounce.restart()
+        if (mode === "files") filesDebounce.restart()
     }
 
     Timer {
@@ -214,6 +223,80 @@ Scope {
     function thumbFor(line) {
         const m = line.match(/^(\d+)\t\[\[ binary data.* (png|jpeg|jpg|bmp|webp|gif) /)
         return m ? thumbDir + "/" + m[1] + "." + m[2] : ""
+    }
+
+    // ---------- projetos ----------
+    // repositórios git até 3 níveis dentro de cada pasta (mais as pastas listadas sozinhas)
+    property var projectRoots: ["~/Projects", "~/Source", "~/BArch"]
+    property var projects: []           // [{ name, path, parent }]
+    Process {
+        id: projProc
+        command: ["bash", "-c", `
+            for r in "$@"; do
+                r="\${r/#\~/$HOME}"; [[ -d "$r" ]] || continue
+                [[ -d "$r/.git" ]] && echo "$r"
+                find "$r" -mindepth 2 -maxdepth 4 -name .git -not -path "*/node_modules/*" -printf '%h\n' 2>/dev/null
+            done | sort -u`, "bash"].concat(root.projectRoots)
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const home = Quickshell.env("HOME")
+                root.projects = text.split("\n").filter(l => l.trim() !== "").map(p => {
+                    const parts = p.split("/")
+                    return { name: parts[parts.length - 1], path: p,
+                             parent: parts.slice(0, -1).join("/").replace(home, "~") }
+                })
+            }
+        }
+    }
+
+    function projectResults(q) {
+        const out = []
+        for (const p of projects) {
+            const hay = (p.name + " " + p.parent).toLowerCase()
+            if (q && !hay.includes(q)) continue
+            const used = usage["proj:" + p.path] || 0
+            out.push({ kind: "project", title: p.name, subtitle: p.parent, glyph: 0xF0CCF, path: p.path,
+                       score: (q && p.name.toLowerCase().startsWith(q) ? 100 : 0) + used })
+        }
+        out.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
+        return out.slice(0, 50)
+    }
+
+    // ---------- arquivos ----------
+    property var files: []
+    property bool hasFd: true
+    Timer { id: filesDebounce; interval: 160; onTriggered: if (root.mode === "files") filesProc.running = true }
+    Process {
+        id: filesProc
+        command: ["bash", "-c", `
+            command -v fd >/dev/null || { echo __missing__; exit; }
+            q="$1"; [[ -n "$q" ]] || exit 0
+            cd "$HOME" && fd --hidden --follow --max-results 60 --color never \
+              --exclude .git --exclude node_modules --exclude .cache --exclude Games \
+              --exclude .local/share/Steam --exclude .steam --exclude .wine --exclude .cargo \
+              --exclude .nuget --exclude .npm --exclude .local/share/Trash -- "$q" 2>/dev/null`,
+            "bash", root.arg]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (text.trim() === "__missing__") { root.hasFd = false; root.files = []; return }
+                root.hasFd = true
+                root.files = text.split("\n").filter(l => l !== "")
+            }
+        }
+    }
+
+    function fileResults(q) {
+        if (!hasFd) return [{ kind: "info", title: "fd Not Installed", subtitle: "sudo pacman -S fd", glyph: 0xF0224 }]
+        if (!q) return []
+        const home = Quickshell.env("HOME")
+        return files.map(f => {
+            const dir = f.endsWith("/")
+            const clean = f.replace(/\/$/, "")
+            const i = clean.lastIndexOf("/")
+            return { kind: "file", title: clean.slice(i + 1), subtitle: "~/" + (i >= 0 ? clean.slice(0, i) : ""),
+                     glyph: dir ? 0xF0256 : 0xF0224, path: home + "/" + clean, dir: dir }
+        }).sort((a, b) => (a.title.toLowerCase().startsWith(q) ? 0 : 1) - (b.title.toLowerCase().startsWith(q) ? 0 : 1)
+                          || a.subtitle.length - b.subtitle.length)
     }
 
     // ---------- emojis ----------
@@ -382,6 +465,8 @@ Scope {
             return qalcResult ? [{ kind: "calc", title: qalcResult, subtitle: arg + "  ·  Enter to Copy", glyph: 0xF00EC }] : []
         case "windows": return windowResults(q)
         case "clip":    return clipResults(q)
+        case "projects": return projectResults(q)
+        case "files":   return fileResults(q)
         case "emoji":   return emojiResults(q)
         case "web":     return webResults(arg)
         default:        return appResults(q)
@@ -424,6 +509,14 @@ Scope {
         case "web":
             Quickshell.execDetached(["xdg-open", r.url])
             break
+        case "project":
+            bump("proj:" + r.path)
+            if (shift) Quickshell.execDetached(["thunar", r.path])
+            else Quickshell.execDetached([terminal, "-D", r.path, "nvim", "."])
+            break
+        case "file":
+            Quickshell.execDetached(["xdg-open", shift && !r.dir ? r.path.slice(0, r.path.lastIndexOf("/")) : r.path])
+            break
         }
         close()
     }
@@ -441,13 +534,15 @@ Scope {
 
     readonly property string footer: {
         if (query === "")
-            return "w Windows   ·   c Clipboard   ·   : Emoji   ·   ? Web   ·   = Calc   ·   > Run"
+            return "w Windows   ·   c Clipboard   ·   p Projects   ·   / Files   ·   : Emoji   ·   ? Web   ·   = Calc   ·   > Run"
         switch (mode) {
         case "run":     return "↵ Run   ·   ⇧↵ Run in Terminal   ·   Esc Close"
         case "emoji":   return hasWtype ? "↵ Copy   ·   ⇧↵ Type It   ·   Esc Close" : "↵ Copy   ·   Esc Close"
         case "clip":    return "↵ Copy   ·   Esc Close"
         case "qalc":    return "↵ Copy Result   ·   Esc Close"
         case "windows": return "↵ Focus Window   ·   Esc Close"
+        case "projects": return "↵ Open in Neovim   ·   ⇧↵ Open in Thunar   ·   Esc Close"
+        case "files":   return "↵ Open   ·   ⇧↵ Open Folder   ·   Esc Close"
         case "web":     return "↵ Open in Browser   ·   Esc Close"
         default:        return "↑↓ Navigate   ·   ↵ Open   ·   Esc Close"
         }
@@ -729,6 +824,8 @@ Scope {
                         case "web":     return "Type something to search…"
                         case "windows": return root.arg ? "No matching windows" : "No open windows"
                         case "clip":    return root.arg ? "No matches" : "Clipboard history is empty"
+                        case "projects": return root.arg ? "No matching projects" : "No git projects found in " + root.projectRoots.join(", ")
+                        case "files":   return root.arg ? "No files found" : "Type part of a file name…"
                         default:        return "No results"
                         }
                     }

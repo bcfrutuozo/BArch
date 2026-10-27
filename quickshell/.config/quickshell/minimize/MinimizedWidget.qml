@@ -1,11 +1,12 @@
 // MinimizedWidget.qml — janelas minimizadas na barra (Super+M minimiza).
 // Um ícone por janela; clique devolve a janela ao workspace de onde ela saiu.
-// Passar o mouse mostra o título. Some quando não há nada minimizado.
+// Passar o mouse mostra o título; clique direito abre o menu da janela. Some quando não há nada minimizado.
 
 import QtQuick
 import Quickshell
 import Quickshell.Widgets
 import "../theme"
+import "../windowmenu"
 
 Item {
     id: root
@@ -17,6 +18,8 @@ Item {
         const e = DesktopEntries.heuristicLookup ? DesktopEntries.heuristicLookup(cls) : null
         return Quickshell.iconPath(e && e.icon ? e.icon : (cls || "").toLowerCase(), "application-x-executable")
     }
+
+    WindowMenu { id: menu }
 
     Row {
         id: row
@@ -47,12 +50,18 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Minimized.restore(item.modelData.address)
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    onClicked: ev => {
+                        if (ev.button === Qt.RightButton)
+                            menu.show(item, ev.x, item.height + 10, { address: item.modelData.address, title: item.modelData.title,
+                                ws: item.modelData.ws, floating: false, pinned: false, minimized: true })
+                        else Minimized.restore(item.modelData.address)
+                    }
                 }
 
                 // título ao passar o mouse
                 PopupWindow {
-                    visible: mouse.containsMouse
+                    visible: mouse.containsMouse && !menu.visible
                     anchor.item: item
                     anchor.rect.x: item.width / 2
                     anchor.rect.y: item.height + 12
