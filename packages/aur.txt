@@ -18,3 +18,4 @@ paru
 paru-debug
 rasdaemon
 ttf-mac-fonts
+zoom

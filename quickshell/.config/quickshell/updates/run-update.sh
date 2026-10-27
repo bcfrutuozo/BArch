@@ -3,6 +3,8 @@
 # Uso: run-update.sh <all|kernel|news> <script-do-kernel> <kernel-pendente: 1|0>
 # Antes do paru, mostra as notícias do Arch não lidas (archnews); o hook do pacman
 # bloqueia a atualização enquanto houver alguma.
+# Depois do paru, atualiza o Claude Code (auto-update dele fica desligado via
+# DISABLE_AUTOUPDATER no ~/.claude/settings.json).
 mode="$1"
 kernel_script="$2"
 kernel_pending="$3"
@@ -41,6 +43,10 @@ else
   fi
   step "paru -Syu"
   paru -Syu || status=$?
+  if [[ $status -eq 0 ]] && command -v claude >/dev/null; then
+    step "Claude Code"
+    claude update || printf '%sclaude update failed (continuing).%s\n' "$red" "$reset"
+  fi
   if [[ $status -eq 0 && "$kernel_pending" == "1" ]]; then
     run_kernel || status=$?
   elif [[ $status -eq 0 ]]; then
