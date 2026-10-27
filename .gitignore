@@ -22,3 +22,6 @@ __pycache__/
 **/credentials*
 .smbcredentials
 .env
+
+# Claude Code: per-machine project settings
+.claude/settings.local.json
