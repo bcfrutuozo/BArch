@@ -37,6 +37,7 @@ foot
 fwupd
 fzf
 gamemode
+gamescope
 gimp
 git
 github-cli

@@ -417,6 +417,8 @@ Scope {
         function toggle(): void { root.toggle() }
         function open(): void { root.open() }
         function close(): void { root.close() }
+        // abre já num modo: qs ipc call launcher openWith "c " (clipboard), ": " (emoji)…
+        function openWith(prefix: string): void { root.open(); search.text = prefix; search.cursorPosition = prefix.length }
     }
 
     Timer { id: hideTimer; interval: 140; onTriggered: win.visible = false }

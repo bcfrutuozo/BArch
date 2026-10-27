@@ -27,6 +27,7 @@ import "media"
 import "vms"
 import "updates"
 import "launcher"
+import "keys"
 import "privacy"
 import "notifications"
 import "replay"
@@ -39,6 +40,7 @@ ShellRoot {
 
   // Launcher de apps (Super): qs ipc call launcher toggle
   Launcher {}
+  Keybinds {}
 
   // Balões de notificação (servidor próprio, no lugar do swaync)
   NotificationPopups {}

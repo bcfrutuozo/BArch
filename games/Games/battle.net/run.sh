@@ -7,7 +7,7 @@ export WINEPREFIX="$DIR/prefix"
 export PROTONPATH="$DIR/proton/current"
 export GAMEID=umu-battlenet STORE=battlenet
 export PROTON_SET_GAME_DRIVE=0
-export PROTON_ENABLE_WAYLAND=1
+export PROTON_ENABLE_WAYLAND=${PROTON_ENABLE_WAYLAND-1}
 export PROTON_USE_NTSYNC=1
 export __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1
 
