@@ -1,0 +1,10 @@
+[Unit]
+Description=Mount the NAS shares in the background after login
+
+[Service]
+# exec, not oneshot: default.target must not wait for the NAS
+Type=exec
+ExecStart=%h/.local/bin/nas-mount
+
+[Install]
+WantedBy=default.target

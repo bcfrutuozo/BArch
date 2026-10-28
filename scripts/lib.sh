@@ -17,7 +17,7 @@ declare -A PACKAGES=(
   [environment]=".config/environment.d"
   [systemd]=".config/systemd/user"
   [games]="Games/battle.net/run.sh .config/gamemode.ini .local/share/applications/steam.desktop"
-  [bin]=".local/bin/kernel-update .local/bin/theme-auto .local/bin/wallpaper-mode .local/bin/apps-theme .local/bin/papirus-accent .local/bin/barch"
+  [bin]=".local/bin/kernel-update .local/bin/theme-auto .local/bin/wallpaper-mode .local/bin/apps-theme .local/bin/papirus-accent .local/bin/barch .local/bin/nas-mount"
   [calendar]=".config/khal .config/vdirsyncer/config"
 )
 

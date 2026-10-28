@@ -29,8 +29,8 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
 | `mpv/` | `~/.config/mpv` | Video player (HDR, NVDEC) |
 | `uwsm/`, `environment/` | `~/.config/uwsm`, `~/.config/environment.d` | Session environment (Qt theme, cursor) |
-| `systemd/` | `~/.config/systemd/user` | User services (cliphist, replay) |
-| `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `wallpaper-mode`, `apps-theme`, `papirus-accent` |
+| `systemd/` | `~/.config/systemd/user` | User services (cliphist, replay, NAS mount) |
+| `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `wallpaper-mode`, `apps-theme`, `papirus-accent`, `nas-mount` |
 | `games/` | `~/Games/battle.net/run.sh`, `~/.config/gamemode.ini`, `~/.local/share/applications/steam.desktop` | Battle.net launcher (umu + Proton-GE), gamemode rules, Steam launcher without `GDK_SCALE` (Steam would scale twice) |
 | `calendar/` | `~/.config/khal`, `~/.config/vdirsyncer/config` | iCloud calendar sync (the app password stays out of the repo) |
 | `agent/` | — | Scheduled agent tasks (`tasks/`), the failure ignore list and the upstream watch list; used by `barch` |
@@ -171,7 +171,9 @@ True for this machine only; review before using the repo elsewhere.
 - **Games:** Battle.net in its own prefix at `~/Games/battle.net` (games on drive `G:`).
   WoW has no native HDR; gamescope's inverse tone mapping didn't work nested in Hyprland
   (gamescope 3.17, Hyprland 0.56) — use the SDR brightness slider instead.
-- **NAS shares** are mounted at boot; credentials are **not** in this repo.
+- **NAS shares** are `x-systemd.automount` entries in `fstab`; `nas-mount.service` mounts them in the
+  background after login (waits up to 60 s for the NAS, then leaves them to mount on first access).
+  Credentials are **not** in this repo.
 
 ## Not stored here
 

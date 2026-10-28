@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# ~/.local/bin/nas-mount — mounts the network shares from /etc/fstab in the background after login.
+# Run by nas-mount.service. The shares use x-systemd.automount, so on their own they only mount on
+# first access. This waits up to NAS_WAIT seconds (default 60) and touches every mount point so the
+# automount fires, retrying the ones that fail (the NAS may still be waking up).
+# Server never answers -> gives up quietly (the automount stays armed for later access).
+# Server answers but a share still won't mount -> exits 1, so barch failure reports it.
+
+deadline=$(( SECONDS + ${NAS_WAIT:-60} ))
+
+# "mountpoint host port" for every automounted cifs/nfs entry
+mapfile -t shares < <(awk '
+  $1 !~ /^#/ && $3 ~ /^(cifs|nfs4?)$/ && $4 ~ /x-systemd\.automount/ {
+    if ($3 == "cifs") { split($1, p, "/"); print $2, p[3], 445 }
+    else              { split($1, p, ":"); print $2, p[1], 2049 }
+  }' /etc/fstab)
+(( ${#shares[@]} )) || exit 0
+
+reachable() { timeout 3 bash -c "</dev/tcp/$1/$2" 2>/dev/null; }
+mounted()   { findmnt -n -t cifs,nfs,nfs4 --mountpoint "$1" >/dev/null; }
+
+answered=0
+while :; do
+  pending=()
+  for s in "${shares[@]}"; do
+    read -r mp host port <<<"$s"
+    mounted "$mp" && continue
+    pending+=("$mp")
+    if reachable "$host" "$port"; then
+      answered=1
+      # listing the folder triggers the automount (bounded by x-systemd.mount-timeout)
+      timeout 30 ls -- "$mp/" >/dev/null 2>&1 &
+    fi
+  done
+  wait
+  (( ${#pending[@]} )) || { echo "all ${#shares[@]} shares mounted"; exit 0; }
+  if (( SECONDS >= deadline )); then
+    if (( answered )); then
+      echo "server answered but these did not mount: ${pending[*]}" >&2
+      exit 1
+    fi
+    echo "server did not answer in ${NAS_WAIT:-60}s; leaving the automounts armed"
+    exit 0
+  fi
+  sleep 5
+done

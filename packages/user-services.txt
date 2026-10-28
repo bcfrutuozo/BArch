@@ -9,5 +9,6 @@ gsr-replay.service
 hyprpaper.service
 hyprsunset.service
 librepods.service
+nas-mount.service
 theme-auto.timer
 vdirsyncer.timer
