@@ -19,6 +19,9 @@ section() { printf '\n## %s\n\n```\n' "$1"; shift; "$@" 2>&1; printf '```\n'; }
   section "Errors in the journal since yesterday (count by unit)" sh -c \
     "journalctl -p err --since yesterday -o json --no-pager | jq -r '._SYSTEMD_UNIT // .SYSLOG_IDENTIFIER // \"?\"' | sort | uniq -c | sort -rn | head -20"
   section "Agent reports in the last 24 h" sh -c \
-    "find '$BARCH_STATE_ROOT/reports' -name '*.json' -mtime -1 -exec jq -r '\"\(.time) \(.task): [\(.status)] \(.title)\"' {} + 2>/dev/null | sort"
+    "find '$BARCH_STATE_ROOT/reports' -name '2*.json' -mtime -1 -exec jq -r '\"\(.time) \(.task): [\(.status)] \(.title)\"' {} + 2>/dev/null | sort"
+  section "Crashes since yesterday (coredumpctl)" coredumpctl list --since yesterday --no-pager --no-legend
+  section "Network shares (fstab cifs/nfs entries and what is mounted now)" sh -c \
+    "grep -E '^[^#].*[[:space:]](cifs|nfs4?)[[:space:]]' /etc/fstab | awk '{print \$2, \$3}'; echo '--- mounted:'; findmnt -t cifs,nfs,nfs4 -o TARGET,SOURCE,FSTYPE --noheadings"
   section "Disk space" df -h / /home
 } >"$out"
