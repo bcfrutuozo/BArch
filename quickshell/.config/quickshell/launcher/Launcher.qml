@@ -9,6 +9,8 @@
 //   / ...    arquivos da pasta pessoal pelo nome (fd); Enter abre, Shift+Enter abre a pasta.
 //   : ...    emojis; Enter copia, Shift+Enter digita no app (precisa do wtype).
 //   ? ...    pesquisa na web (ou abre o endereço, se for um link).
+//   a ...    fala com o Claude (barch agent ask): Enter abre uma conversa nova no ~/BArch já com o
+//            texto; Shift+Enter continua a última conversa de lá.
 //   = ...    calculadora qalc (unidades e conversões: "= 5 km to mi"); Enter copia.
 //   > ...    roda um comando; Shift+Enter roda no terminal e mantém aberto.
 // Teclas: ↑/↓, Tab/Shift+Tab ou Ctrl+J/K navegam · PgUp/PgDn · Enter · Esc fecha.
@@ -87,6 +89,7 @@ Scope {
         if (/^w\s/.test(t)) return "windows"
         if (/^c\s/.test(t)) return "clip"
         if (/^p\s/.test(t)) return "projects"
+        if (/^a\s/.test(t)) return "agent"
         if (t.startsWith("/")) return "files"
         return "apps"
     }
@@ -94,7 +97,7 @@ Scope {
     readonly property string arg: {
         switch (mode) {
         case "run": case "qalc": case "emoji": case "web": return lead.slice(1).trim()
-        case "windows": case "clip": case "projects": return lead.slice(1).trim()
+        case "windows": case "clip": case "projects": case "agent": return lead.slice(1).trim()
         case "files": return lead.slice(1).trim()
         default: return trimmed
         }
@@ -111,7 +114,8 @@ Scope {
         windows: { label: "Windows",   glyph: 0xF10AC },
         clip:    { label: "Clipboard", glyph: 0xF0A38 },
         projects:{ label: "Projects",  glyph: 0xF0CCF },
-        files:   { label: "Files",     glyph: 0xF0224 }
+        files:   { label: "Files",     glyph: 0xF0224 },
+        agent:   { label: "Claude",    glyph: 0xF06A9 }
     })
 
     onModeChanged: {
@@ -469,6 +473,11 @@ Scope {
         case "files":   return fileResults(q)
         case "emoji":   return emojiResults(q)
         case "web":     return webResults(arg)
+        case "agent":
+            return [
+                { kind: "agent", title: arg || "New Conversation", subtitle: arg ? "Ask Claude" : "Open Claude in ~/BArch", glyph: 0xF06A9 },
+                { kind: "agent", title: arg || "Last Conversation", subtitle: "Continue the Last Conversation  ·  Shift+Enter", glyph: 0xF02DA, resume: true }
+            ]
         default:        return appResults(q)
         }
     }
@@ -517,6 +526,9 @@ Scope {
         case "file":
             Quickshell.execDetached(["xdg-open", shift && !r.dir ? r.path.slice(0, r.path.lastIndexOf("/")) : r.path])
             break
+        case "agent":
+            Quickshell.execDetached(["barch", "agent", "ask"].concat(shift || r.resume ? ["--continue"] : [], arg ? [arg] : []))
+            break
         }
         close()
     }
@@ -534,7 +546,7 @@ Scope {
 
     readonly property string footer: {
         if (query === "")
-            return "w Windows   ·   c Clipboard   ·   p Projects   ·   / Files   ·   : Emoji   ·   ? Web   ·   = Calc   ·   > Run"
+            return "a Claude   ·   w Windows   ·   c Clipboard   ·   p Projects   ·   / Files   ·   : Emoji   ·   ? Web   ·   = Calc   ·   > Run"
         switch (mode) {
         case "run":     return "↵ Run   ·   ⇧↵ Run in Terminal   ·   Esc Close"
         case "emoji":   return hasWtype ? "↵ Copy   ·   ⇧↵ Type It   ·   Esc Close" : "↵ Copy   ·   Esc Close"
@@ -544,6 +556,7 @@ Scope {
         case "projects": return "↵ Open in Neovim   ·   ⇧↵ Open in Thunar   ·   Esc Close"
         case "files":   return "↵ Open   ·   ⇧↵ Open Folder   ·   Esc Close"
         case "web":     return "↵ Open in Browser   ·   Esc Close"
+        case "agent":   return "↵ Ask in a New Conversation   ·   ⇧↵ Continue the Last One   ·   Esc Close"
         default:        return "↑↓ Navigate   ·   ↵ Open   ·   Esc Close"
         }
     }

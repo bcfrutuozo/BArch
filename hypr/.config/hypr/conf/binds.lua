@@ -19,6 +19,7 @@ hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("qs ipc call launcher toggle"), {
 hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("qs ipc call launcher openWith 'c '"), { description = "Apps|Clipboard History" })
 hl.bind(mainMod .. " + N", hl.dsp.exec_cmd("qs ipc call notes toggle"), { description = "Apps|Quick Notes" })
 hl.bind(mainMod .. " + period", hl.dsp.exec_cmd("qs ipc call launcher openWith ': '"), { description = "Apps|Emoji" })
+hl.bind(mainMod .. " + A", hl.dsp.exec_cmd("qs ipc call launcher openWith 'a '"), { description = "Apps|Ask Claude" })
 
 local closeWindowBind = hl.bind(mainMod .. " + C", hl.dsp.window.close(), { description = "Windows|Close" })
 -- closeWindowBind:set_enabled(false)

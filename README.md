@@ -49,7 +49,8 @@ The main pieces:
   Alt swaps the chosen window into the current one's place; Space only focuses); **Super+Tab** or the
   top-right corner of the main monitor opens the workspace overview (drag windows between workspaces).
 - **Launcher** (Super+Space): apps, `w` windows, `c` clipboard with image thumbnails (Super+V),
-  `p` git projects, `/` files, `:` emoji, `?` web, `=` calculator, `>` run; OCR, color picker, QR.
+  `p` git projects, `/` files, `:` emoji, `?` web, `=` calculator, `>` run, `a` Claude (Super+A;
+  asks in a new session in `~/BArch`, Shift+Enter continues the last one); OCR, color picker, QR.
 - **Window tools:** minimize (Super+M, comes back to its own workspace), always on top
   (Super+Shift+P), right-click menu on any window preview, swap/resize with Super+Shift/Ctrl+arrows.
 - **Control Center:** Light / Dark / Auto, Display (HDR, SDR brightness, side monitor on/off),
@@ -73,6 +74,7 @@ barch hdr on|off|status            barch sdr <nits>|status
 barch monitor side on|off|status   barch caffeine on|off|status
 barch nightlight on|off|status     barch dnd on|off|status
 barch health [--refresh]           # .pacnew, failed services, TPM, cleanup
+barch agent ask "why is X slow?"   # Claude in a terminal in ~/BArch (the launcher's "a ")
 ```
 
 Every command takes `--json`. Exit codes: `0` ok, `1` the bar refused, `2` usage, `3` bar not reachable.

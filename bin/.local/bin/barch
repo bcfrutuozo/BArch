@@ -50,6 +50,9 @@ Agent:
   agent run <task> [--quiet]  run a task now (read-only; --quiet: no notification)
   agent report <task>         print the last report of a task
   agent continue <session>    open a task's session in Claude to talk about it
+  agent ask [text] [--continue]
+                              open Claude in a terminal in the repo, starting with TEXT if given
+                              (--continue: resume the last session there; the launcher's "a ")
   agent investigate <log>     open Claude on a saved failure log (the "Investigate" button)
   aur review                  review the PKGBUILD changes of pending AUR updates, print the
                               verdicts (exit 4 if something needs a look)
@@ -558,6 +561,21 @@ agent_continue() {
   setsid -f foot -D "$REPO" -T "Claude" claude --resume "$1" >/dev/null 2>&1
 }
 
+agent_ask() {
+  local args=() text=()
+  while (($#)); do
+    case $1 in
+      --continue) args+=(--continue) ;;
+      *) text+=("$1") ;;
+    esac
+    shift
+  done
+  need foot
+  need claude
+  ((${#text[@]})) && args+=("${text[*]}")
+  setsid -f foot -D "$REPO" -T "Claude" claude "${args[@]}" >/dev/null 2>&1
+}
+
 agent_investigate() {
   local log=${1:-} unit
   [[ -r $log ]] || usage_error "agent investigate <failure log>"
@@ -579,8 +597,9 @@ cmd_agent() {
       [[ -n ${1:-} && -r $STATE/reports/$1/latest.md ]] || die 1 "no report for '${1:-}'"
       cat "$STATE/reports/$1/latest.md" ;;
     continue) agent_continue "$@" ;;
+    ask) agent_ask "$@" ;;
     investigate) agent_investigate "$@" ;;
-    *) usage_error "agent list|run|report|continue|investigate" ;;
+    *) usage_error "agent list|run|report|continue|ask|investigate" ;;
   esac
 }
 
