@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "properties": {
+    "status": { "type": "string", "enum": ["ok", "warn", "alert"] },
+    "title": { "type": "string" },
+    "summary": { "type": "string" },
+    "report": { "type": "string" },
+    "packages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "base": { "type": "string" },
+          "status": { "type": "string", "enum": ["ok", "warn", "alert"] },
+          "summary": { "type": "string" }
+        },
+        "required": ["base", "status", "summary"]
+      }
+    }
+  },
+  "required": ["status", "title", "summary", "report", "packages"]
+}

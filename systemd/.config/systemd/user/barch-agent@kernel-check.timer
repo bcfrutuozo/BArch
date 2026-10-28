@@ -1,0 +1,8 @@
+[Unit]
+Description=BArch agent task: kernel-check (after login, when the kernel changed)
+
+[Timer]
+OnStartupSec=3min
+
+[Install]
+WantedBy=timers.target

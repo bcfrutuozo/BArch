@@ -16,7 +16,7 @@ pragma Singleton
 // notificação aberta, a entrada também guarda a original (notif) para a imagem e os botões;
 // quando o app a fecha, a cópia continua no histórico.
 //
-// IPC:  qs ipc call notifs dnd | clear | test | dndSet <bool> | dndStatus | post <title> <body> <urgency> <app>
+// IPC:  qs ipc call notifs dnd | clear | test | dndSet <bool> | dndStatus | post <title> <body> <urgency> <app> <{actions: [...]}>
 //       (as que respondem JSON são usadas pelo barch, em ~/.local/bin)
 
 import QtQuick
@@ -61,6 +61,7 @@ Singleton {
             property bool low: false
             property real expireTimeout: 0
             property real time: Date.now()
+            property var actions: []          // botões próprios (barch notify --action): [{text, cmd}]
         }
     }
 
@@ -69,7 +70,7 @@ Singleton {
     function serialize() {
         return JSON.stringify(list.map(e => ({
             appName: e.appName, appIcon: e.appIcon, desktopEntry: e.desktopEntry,
-            summary: e.summary, body: e.body, critical: e.critical, time: e.time
+            summary: e.summary, body: e.body, critical: e.critical, time: e.time, actions: e.actions
         })))
     }
     Timer { id: saveTimer; interval: 800; onTriggered: root.writeFile(root.historyPath, root.serialize()) }
@@ -210,8 +211,10 @@ Singleton {
         return ""
     }
 
+    // botões: os próprios da entrada (comandos, valem também no histórico) e os do app, enquanto
+    // ele mantém a notificação aberta
     function actionsOf(e) {
-        const out = []
+        const out = (e.actions || []).slice()
         if (!e.notif) return out
         for (let i = 0; i < e.notif.actions.length; i++) {
             const a = e.notif.actions[i]
@@ -233,8 +236,12 @@ Singleton {
     }
 
     function invokeAction(e, action) {
-        action.invoke()
         hidePopup(e)
+        if (action.cmd) {                     // botão próprio: roda o comando
+            Quickshell.execDetached(["sh", "-c", action.cmd])
+            return
+        }
+        action.invoke()
         focusApp(e)
     }
 
@@ -290,12 +297,20 @@ Singleton {
         function dndSet(on: bool): string { root.setDnd(on); return JSON.stringify({ ok: true, dnd: root.dnd }) }
         function dndStatus(): string { return JSON.stringify({ ok: true, dnd: root.dnd }) }
         // notificação da própria barra, sem passar pelo DBus (barch notify). urgency: low | normal | critical
-        function post(summary: string, body: string, urgency: string, app: string): string {
+        // actions: JSON {"actions": [{"text": "Investigate", "cmd": "comando de shell"}]} ("" = nenhum botão).
+        // Vai dentro de um objeto porque o "qs ipc call" tira os colchetes de um argumento "[...]".
+        function post(summary: string, body: string, urgency: string, app: string, actions: string): string {
             if (summary === "") return JSON.stringify({ ok: false, error: "empty title" })
             if (urgency !== "low" && urgency !== "normal" && urgency !== "critical")
                 return JSON.stringify({ ok: false, error: "urgency must be low, normal or critical" })
+            let acts = []
+            try { acts = actions ? JSON.parse(actions).actions : [] } catch (err) {
+                return JSON.stringify({ ok: false, error: "actions: invalid JSON" })
+            }
+            if (!Array.isArray(acts) || acts.some(a => !a || typeof a.text !== "string" || typeof a.cmd !== "string"))
+                return JSON.stringify({ ok: false, error: "actions: expected {\"actions\": [{text, cmd}]}" })
             root.post(root.makeEntry({
-                appName: app || "barch", summary: summary, body: body,
+                appName: app || "barch", summary: summary, body: body, actions: acts,
                 critical: urgency === "critical", low: urgency === "low", time: Date.now()
             }), false, {})
             return JSON.stringify({ ok: true, dnd: root.dnd })

@@ -1,0 +1,11 @@
+// Lets wheel users start the Claude safety-snapshot unit, and only that unit, without a
+// password (barch snapshot hook → barch-agent-snapshot@<pre|post>-<session>.service).
+polkit.addRule(function (action, subject) {
+    if (action.id === "org.freedesktop.systemd1.manage-units" &&
+        subject.isInGroup("wheel") &&
+        action.lookup("verb") === "start" &&
+        /^barch-agent-snapshot@(pre|post)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.service$/
+            .test(action.lookup("unit"))) {
+        return polkit.Result.YES;
+    }
+});

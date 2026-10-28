@@ -1,0 +1,10 @@
+[Unit]
+Description=BArch agent task: aur-review (every 6 hours, when there are AUR updates)
+
+[Timer]
+OnCalendar=*-*-* 00/6:00:00
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

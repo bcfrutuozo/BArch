@@ -58,6 +58,9 @@ SYSTEM_FILES=(
   /usr/local/bin/smartd-alert
   /usr/local/bin/btrfs-scrub-report
   /usr/local/bin/archnews
+  /usr/local/bin/barch-agent-snapshot
+  /usr/local/bin/barch-failure-relay
+  /etc/polkit-1/rules.d/50-barch-agent-snapshot.rules
   "/etc/pacman.d/hooks/*"
   "/etc/modprobe.d/*"
   "/etc/sysctl.d/*"
@@ -65,6 +68,7 @@ SYSTEM_FILES=(
   "/etc/systemd/system/*.service"
   "/etc/systemd/system/*.timer"
   "/etc/systemd/system/*.service.d/*"
+  "/etc/systemd/system/service.d/*"
   "/etc/systemd/system/*.mount"
   "/etc/systemd/system/*.automount"
   "/etc/systemd/logind.conf.d/*"

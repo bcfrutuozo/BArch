@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# /usr/local/bin/barch-failure-relay <unit> — OnFailure handler of every system service
+# (barch-failure@.service, via the service.d/barch-onfailure.conf drop-in).
+# Hands the failure to `barch failure --system` of each logged-in user, which saves the log and
+# notifies with an "Investigate" button. Without barch, falls back to desktop-notify.
+unit=${1:?usage: barch-failure-relay <unit>}
+
+for bus in /run/user/*/bus; do
+  [[ -S "$bus" ]] || continue
+  uid=$(stat -c %u "$bus")
+  user=$(id -nu "$uid" 2>/dev/null) || continue
+  home=$(getent passwd "$user" | cut -d: -f6)
+  if [[ -x "$home/.local/bin/barch" ]]; then
+    runuser -u "$user" -- env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" \
+      DBUS_SESSION_BUS_ADDRESS="unix:path=$bus" PATH="$home/.local/bin:/usr/local/bin:/usr/bin" \
+      MONITOR_SERVICE_RESULT="${MONITOR_SERVICE_RESULT:-}" MONITOR_EXIT_CODE="${MONITOR_EXIT_CODE:-}" \
+      MONITOR_EXIT_STATUS="${MONITOR_EXIT_STATUS:-}" MONITOR_INVOCATION_ID="${MONITOR_INVOCATION_ID:-}" \
+      "$home/.local/bin/barch" failure --system "$unit" || true
+  elif command -v desktop-notify >/dev/null; then
+    desktop-notify critical "$unit failed" "${MONITOR_SERVICE_RESULT:-failed}: journalctl -b -u $unit" || true
+  fi
+done

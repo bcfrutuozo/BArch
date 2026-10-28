@@ -1,24 +1,40 @@
 #!/usr/bin/env bash
 # barch — stable command line for the BArch desktop, for scripts and agents.
 #
-# A thin client: every command is an IPC call into the Quickshell bar (qs ipc call <target> <fn>),
-# which does the actual work with the same functions as the Control Center. Nothing is
-# reimplemented here. The IPC functions answer JSON: {"ok":true,...} or {"ok":false,"error":"..."}.
+# Desktop commands are thin IPC calls into the Quickshell bar (qs ipc call <target> <fn>), which
+# does the actual work with the same functions as the Control Center. Nothing is reimplemented
+# here. The IPC functions answer JSON: {"ok":true,...} or {"ok":false,"error":"..."}.
 #
-# Exit codes: 0 ok, 1 the bar refused or failed, 2 usage error, 3 the bar is not reachable.
-# Needs: qs (quickshell), jq.
+# Agent commands:
+#   snapshot   safety snapshots of / around Claude sessions in ~/BArch (Claude hooks →
+#              barch-agent-snapshot@.service, allowed by polkit; see system/files)
+#   failure    OnFailure handler of every service: saves the log, notifies with "Investigate"
+#   agent      read-only scheduled tasks (agent/tasks/<task>.md, timers barch-agent@<task>.timer)
+#   aur        review of the PKGBUILD changes of pending AUR updates (Update All runs it)
+# State: ~/.local/state/barch (failures/, reports/, agent/).
+#
+# Exit codes: 0 ok, 1 the bar or the task refused or failed, 2 usage error, 3 the bar is not
+# reachable, 4 (aur review) something needs a look before updating.
+# Needs: qs (quickshell), jq; claude and foot for the agent commands.
 
 set -uo pipefail
 
 PROG=${0##*/}
 JSON=0
+SELF=$(readlink -f "${BASH_SOURCE[0]}")
+REPO=$(cd "$(dirname "$SELF")/../../.." && pwd)        # bin/.local/bin/barch inside the repo
+STATE=${XDG_STATE_HOME:-$HOME/.local/state}/barch
+BARCH="$HOME/.local/bin/barch"                         # how actions in notifications call back
+export PATH="$HOME/.local/bin:$PATH"                   # systemd units and hooks have a short PATH
 
 usage() {
   cat <<EOF
 Usage: $PROG [--json] <command> [args]
 
-  notify <title> [body] [--critical|--low] [--app NAME]
-                              notification through the bar's own server
+Desktop (through the bar):
+  notify <title> [body] [--critical|--low] [--app NAME] [--action LABEL=COMMAND]...
+                              notification through the bar's own server; each --action is a
+                              button that runs COMMAND (sh -c)
   theme light|dark|auto|status
                               appearance (Auto follows the theme-auto schedule)
   hdr on|off|status           HDR on the main monitor
@@ -28,35 +44,64 @@ Usage: $PROG [--json] <command> [args]
   nightlight on|off|status    night light (hyprsunset)
   dnd on|off|status           Do Not Disturb
   health [--refresh]          system health summary (.pacnew, failed services, TPM, cleanup)
+
+Agent:
+  agent list                  scheduled tasks, last result and next run
+  agent run <task> [--quiet]  run a task now (read-only; --quiet: no notification)
+  agent report <task>         print the last report of a task
+  agent continue <session>    open a task's session in Claude to talk about it
+  agent investigate <log>     open Claude on a saved failure log (the "Investigate" button)
+  aur review                  review the PKGBUILD changes of pending AUR updates, print the
+                              verdicts (exit 4 if something needs a look)
+  snapshot list               safety snapshots taken around Claude sessions in ~/BArch
+  snapshot hook               Claude Code SessionStart/SessionEnd hook (reads JSON on stdin)
+  failure <unit> [--system]   OnFailure handler: save the log and notify (used by systemd)
+
   help                        this text
 
-  --json   print the bar's JSON instead of text (every command)
+  --json   machine-readable output (desktop commands, agent list/run, aur review, snapshot list)
 
-Exit codes: 0 ok, 1 the bar refused or failed, 2 usage error, 3 the bar is not reachable.
+Exit codes: 0 ok, 1 refused or failed, 2 usage error, 3 the bar is not reachable,
+4 (aur review) something needs a look before updating.
 EOF
 }
 
 die() { echo "$PROG: $2" >&2; exit "$1"; }
 usage_error() { echo "$PROG: $1" >&2; echo "Try '$PROG help'." >&2; exit 2; }
+need() { command -v "$1" >/dev/null || die 3 "$1 not found"; }
 
-command -v qs >/dev/null || die 3 "qs (quickshell) not found"
-command -v jq >/dev/null || die 3 "jq not found"
+need jq
 
-# ipc <target> <function> [args...] → the JSON answer in $OUT; exits on any failure.
-# (A global instead of $(ipc ...), so that die exits the script and not a subshell.)
-# qs ipc call exits 0 even for "Target not found.", so the answer itself is checked.
-OUT=""
-ipc() {
+# ---------------------------------------------------------------- bar IPC
+
+# ipc_try <target> <function> [args...] → JSON answer in $OUT, error text in $ERR.
+# Returns 0 ok, 1 refused by the bar, 3 bar not reachable. qs ipc call exits 0 even for
+# "Target not found.", so the answer itself is checked.
+OUT="" ERR=""
+ipc_try() {
   local out
-  out=$(qs ipc call "$@" 2>&1) || die 3 "the bar is not reachable: ${out:-qs ipc failed}"
+  OUT="" ERR=""
+  command -v qs >/dev/null || { ERR="qs (quickshell) not found"; return 3; }
+  out=$(qs ipc call "$@" 2>&1) || { ERR="the bar is not reachable: ${out:-qs ipc failed}"; return 3; }
   if ! jq -e 'type == "object" and has("ok")' >/dev/null 2>&1 <<<"$out"; then
-    die 3 "the bar is not reachable (qs ipc call $1 $2): ${out:-no answer}"
-  fi
-  if [[ $(jq -r '.ok' <<<"$out") != true ]]; then
-    [[ $JSON == 1 ]] && jq . <<<"$out"
-    die 1 "$(jq -r '.error // "unknown error"' <<<"$out")"
+    ERR="the bar is not reachable (qs ipc call $1 $2): ${out:-no answer}"
+    return 3
   fi
   OUT=$out
+  if [[ $(jq -r '.ok' <<<"$out") != true ]]; then
+    ERR=$(jq -r '.error // "unknown error"' <<<"$out")
+    return 1
+  fi
+}
+
+# ipc: like ipc_try, but exits on failure. (A global $OUT instead of $(ipc ...), so that die
+# exits the script and not a subshell.)
+ipc() {
+  local rc=0
+  ipc_try "$@" || rc=$?
+  ((rc == 0)) && return
+  [[ $rc == 1 && $JSON == 1 ]] && jq . <<<"$OUT"
+  die "$rc" "$ERR"
 }
 
 # show <json> <jq filter for the text output>
@@ -79,14 +124,40 @@ toggle() {
 
 onoff_text='if . then "on" else "off" end'
 
+# post <title> <body> <urgency> <app> [<actions: JSON array>]: notification for internal use.
+# Never exits: without the bar it falls back to notify-send (no buttons there).
+post() {
+  ipc_try notifs post "$1" "$2" "$3" "$4" "$(actions_arg "${5:-}")" && return 0
+  command -v notify-send >/dev/null && notify-send -u "$3" -a "$4" "$1" "$2" 2>/dev/null
+  return 0
+}
+
+# the bar takes the buttons as {"actions": [...]}: qs ipc call strips the brackets of an
+# argument that is a bare "[...]"
+actions_arg() { [[ -z $1 || $1 == '[]' ]] || jq -c '{actions: .}' <<<"$1"; }
+
+# action <label> <command words...> → {"text","cmd"} for a notification button
+action() {
+  local label=$1 cmd
+  shift
+  printf -v cmd '%q ' "$@"
+  jq -nc --arg t "$label" --arg c "${cmd% }" '{text: $t, cmd: $c}'
+}
+
+# ---------------------------------------------------------------- desktop commands
+
 cmd_notify() {
-  local title="" body="" urgency=normal app=barch
+  local title="" body="" urgency=normal app=barch actions='[]'
   local -a pos=()
   while (($#)); do
     case $1 in
       --critical) urgency=critical ;;
       --low) urgency=low ;;
       --app) [[ $# -ge 2 ]] || usage_error "--app needs a name"; app=$2; shift ;;
+      --action)
+        [[ $# -ge 2 && $2 == ?*=?* ]] || usage_error "--action needs LABEL=COMMAND"
+        actions=$(jq -c --arg t "${2%%=*}" --arg c "${2#*=}" '. + [{text: $t, cmd: $c}]' <<<"$actions")
+        shift ;;
       --) shift; pos+=("$@"); break ;;
       -*) usage_error "notify: unknown option '$1'" ;;
       *) pos+=("$1") ;;
@@ -97,7 +168,7 @@ cmd_notify() {
   title=${pos[0]}
   body=${pos[1]:-}
   [[ -n $title ]] || usage_error "notify: empty title"
-  ipc notifs post "$title" "$body" "$urgency" "$app"
+  ipc notifs post "$title" "$body" "$urgency" "$app" "$(actions_arg "$actions")"
   show "$OUT" \
     'if .dnd then "sent (Do Not Disturb is on: history only)" else "sent" end'
 }
@@ -175,6 +246,371 @@ cmd_health() {
     end'
 }
 
+# ---------------------------------------------------------------- snapshot
+
+SNAP_RUN=/run/barch-agent-snapshot
+SNAP_LOG=/var/log/barch-agent-snapshots.log
+uuid_re='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+# Claude Code hook (SessionStart and SessionEnd, see claude/.claude/settings.json). Only sessions
+# whose folder is ~/BArch (or inside it); never the scheduled tasks (read-only, BARCH_AGENT_TASK).
+# SessionStart's output goes into Claude's context, so the agent knows the snapshot numbers.
+# Always exits 0: a failed snapshot must not block the session, it is reported instead.
+snapshot_hook() {
+  local input event sid cwd source out num
+  input=$(cat)
+  [[ -n ${BARCH_AGENT_TASK:-} ]] && return 0
+  event=$(jq -r '.hook_event_name // ""' <<<"$input")
+  sid=$(jq -r '.session_id // ""' <<<"$input")
+  cwd=$(jq -r '.cwd // ""' <<<"$input")
+  source=$(jq -r '.source // ""' <<<"$input")
+  cwd=$(readlink -f "$cwd" 2>/dev/null) || return 0
+  [[ $cwd == "$REPO" || $cwd == "$REPO"/* ]] || return 0
+  [[ $sid =~ $uuid_re ]] || return 0
+
+  case $event in
+    SessionStart)
+      [[ $source == startup || $source == resume ]] || return 0
+      if out=$(systemctl start --no-ask-password "barch-agent-snapshot@pre-$sid.service" 2>&1); then
+        num=$(cat "$SNAP_RUN/$sid.pre" 2>/dev/null)
+        echo "Safety net: snapper snapshot #${num:-?} (pre) of / was taken before this session; a post"
+        echo "snapshot is taken when it ends. What the session changed outside the repo:"
+        echo "\`sudo snapper -c root status ${num:-N}..<post>\`; undo: \`sudo snapper -c root undochange ${num:-N}..<post>\`"
+        echo "(\`barch snapshot list\` shows the post number). /home is not in the snapshot; the repo is covered by git."
+      else
+        echo "WARNING: the safety snapshot before this session failed: ${out:-unknown error}"
+        echo "Tell Bruno before changing anything outside the repo (/etc, /boot, /usr/local, packages)."
+      fi
+      ;;
+    SessionEnd)
+      # no-block: SessionEnd hooks get little time; the snapshot finishes on its own
+      [[ -r $SNAP_RUN/$sid.pre ]] &&
+        systemctl start --no-block --no-ask-password "barch-agent-snapshot@post-$sid.service" >/dev/null 2>&1
+      ;;
+  esac
+  return 0
+}
+
+snapshot_list() {
+  local data
+  [[ -r $SNAP_LOG ]] || { [[ $JSON == 1 ]] && echo '[]' || echo "No safety snapshots yet."; return 0; }
+  # log lines: <iso time> <pre|post> <number> <session>
+  data=$(jq -Rn '[inputs | split(" ") | {time: .[0], type: .[1], number: (.[2] | tonumber), session: .[3]}]
+                 | group_by(.session) | map({session: .[0].session, time: (map(select(.type == "pre")) | last | .time // .[0].time),
+                   pre: (map(select(.type == "pre")) | last | .number), post: (map(select(.type == "post")) | last | .number)})
+                 | sort_by(.time)' "$SNAP_LOG")
+  show "$data" '
+    if length == 0 then "No safety snapshots yet." else
+      (.[] | "\(.time[0:16] | sub("T"; " "))  #\(.pre // "?")..\(.post // "(open)")  session \(.session[0:8])"),
+      "",
+      "What a session changed:  sudo snapper -c root status <pre>..<post>",
+      "Undo it:                 sudo snapper -c root undochange <pre>..<post>"
+    end'
+}
+
+cmd_snapshot() {
+  case ${1:-} in
+    hook) snapshot_hook ;;
+    list) snapshot_list ;;
+    *) usage_error "snapshot list|hook" ;;
+  esac
+}
+
+# ---------------------------------------------------------------- failure
+
+# failure <unit> [--system]: OnFailure handler (user: barch-failure@.service; system:
+# barch-failure-relay). systemd passes MONITOR_* about the failed run. Saves status and journal
+# to ~/.local/state/barch/failures/ (every failure) and notifies with Investigate / Show log. At
+# most one notification per unit every 30 min: failures inside that window are counted in the
+# mark file (.last/<scope>-<unit>, whose mtime is the last notification) and the next notification
+# says how many there were. agent/failure-ignore lists units to skip.
+cmd_failure() {
+  local unit="" scope=--user glob
+  while (($#)); do
+    case $1 in
+      --system) scope=--system ;;
+      -*) usage_error "failure: unknown option '$1'" ;;
+      *) unit=$1 ;;
+    esac
+    shift
+  done
+  [[ -n $unit ]] || usage_error "failure <unit> [--system]"
+  [[ $unit == *.* ]] || unit+=.service
+
+  if [[ -r $REPO/agent/failure-ignore ]]; then
+    while read -r glob; do
+      [[ -z $glob || $glob == \#* ]] && continue
+      # shellcheck disable=SC2053  # glob match on purpose
+      [[ $unit == $glob ]] && return 0
+    done <"$REPO/agent/failure-ignore"
+  fi
+
+  local dir=$STATE/failures stamp log mark quiet=0 count=0
+  mkdir -p "$dir/.last"
+  mark=$dir/.last/${scope#--}-$unit
+  if [[ -e $mark ]]; then
+    count=$(<"$mark")
+    [[ $count =~ ^[0-9]+$ ]] || count=0
+    [[ -n $(find "$mark" -mmin -30 2>/dev/null) ]] && quiet=1
+  fi
+
+  stamp=$(date +%Y%m%d-%H%M%S)
+  log=$dir/${unit}-$stamp.log
+  local result=${MONITOR_SERVICE_RESULT:-failed} code=${MONITOR_EXIT_CODE:-} status=${MONITOR_EXIT_STATUS:-}
+  local inv=${MONITOR_INVOCATION_ID:-} jscope=() lines
+  [[ $scope == --user ]] && jscope=(--user)
+  {
+    echo "Unit: $unit (${scope#--} service)"
+    echo "Failed: $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "Result: $result${code:+, $code}${status:+ $status}"
+    echo "Invocation: ${inv:-unknown}"
+    echo
+    echo "=== systemctl ${scope#--} status"
+    systemctl "$scope" status "$unit" --no-pager -l -n 0 2>&1
+    echo
+    echo "=== journal of the failed run"
+    if [[ -n $inv ]] && lines=$(journalctl "${jscope[@]}" "_SYSTEMD_INVOCATION_ID=$inv" -o short-iso --no-pager 2>&1) && [[ -n $lines && $lines != "-- No entries --" ]]; then
+      echo "$lines"
+    elif [[ $scope == --user ]]; then
+      journalctl --user -u "$unit" -b -n 300 -o short-iso --no-pager 2>&1
+    else
+      journalctl -u "$unit" -b -n 300 -o short-iso --no-pager 2>&1
+    fi
+  } >"$log"
+  # keep the last 50 logs
+  find "$dir" -maxdepth 1 -name '*.log' -printf '%T@ %p\n' | sort -rn | tail -n +51 | cut -d' ' -f2- | xargs -r rm -f
+
+  if ((quiet)); then
+    # inside the window: count it, keeping the mark's mtime (time of the last notification)
+    echo $((count + 1)) >"$mark.new" && touch -r "$mark" "$mark.new" && mv "$mark.new" "$mark"
+    echo "$log"
+    return 0
+  fi
+
+  local last body acts title="$unit failed"
+  ((count > 0)) && title+=" ($((count + 1))× since $(date -r "$mark" +%H:%M))"
+  echo 0 >"$mark"
+  last=$(grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}T' "$log" | tail -1 | cut -d' ' -f3- | cut -c1-160)
+  body="$result${status:+ ($code $status)}${last:+ — $last}"
+  acts=$(jq -sc . <(action "Investigate" "$BARCH" agent investigate "$log") \
+                  <(action "Show log" foot -T "$unit" -e less +G "$log"))
+  post "$title" "$body" critical "System" "$acts"
+  echo "$log"
+}
+
+# ---------------------------------------------------------------- agent
+
+# frontmatter field of a task file: task_field <file> <key>
+task_field() { awk -v k="$2" 'NR == 1 && $0 == "---" {f = 1; next} f && $0 == "---" {exit}
+                              f && index($0, k ":") == 1 {sub(/^[^:]*:[ \t]*/, ""); print; exit}' "$1"; }
+task_body() { awk 'NR == 1 && $0 == "---" {f = 1; next} f == 1 && $0 == "---" {f = 2; next} f != 1' "$1"; }
+
+# split "Read Bash(git log *) WebFetch(domain:x)" into words, keeping the parentheses whole
+split_tools() {
+  local s=$1 re='^[[:space:]]*([^[:space:](]+(\([^)]*\))?)'
+  TOOLS=()
+  while [[ $s =~ $re ]]; do
+    TOOLS+=("${BASH_REMATCH[1]}")
+    s=${s:${#BASH_REMATCH[0]}}
+  done
+}
+
+default_schema='{"type":"object","properties":{
+  "status":{"type":"string","enum":["ok","warn","alert"]},
+  "title":{"type":"string"},"summary":{"type":"string"},"report":{"type":"string"}},
+  "required":["status","title","summary","report"]}'
+
+agent_footer() {
+  cat <<EOF
+
+---
+
+## How this run works
+
+You are running unattended and read-only, started by a timer: there is nobody to answer
+questions. Tools outside the allowed list are denied; do not try to work around a denial, mention
+it in the report instead. The facts for this run are in $1 (start with context.md); those files
+and the files of this repository are the sources to use.
+
+Write in Brazilian Portuguese (code, paths and commands stay as they are). Fill:
+- \`status\`: \`ok\` (nothing needs attention), \`warn\` (worth a look soon), \`alert\` (needs action now);
+- \`title\`: one line for the notification title, under 70 characters;
+- \`summary\`: one or two sentences for the notification body;
+- \`report\`: the full report in Markdown, starting with the conclusion.
+
+Today is $(date '+%A, %Y-%m-%d %H:%M %Z').
+EOF
+}
+
+# agent_fail <task> <message> <log>: notify and exit 1
+agent_fail() {
+  post "Agent task $1 failed" "$2" normal "Agent" "[$(action "Show log" foot -T "$1" -e less "$3")]"
+  die 1 "$1: $2 (log: $3)"
+}
+
+agent_run() {
+  local task="" quiet=0
+  while (($#)); do
+    case $1 in
+      --quiet) quiet=1 ;;
+      -*) usage_error "agent run: unknown option '$1'" ;;
+      *) task=$1 ;;
+    esac
+    shift
+  done
+  local file=$REPO/agent/tasks/$task.md helper=$REPO/agent/tasks/$task.sh
+  [[ -n $task && -r $file ]] || usage_error "agent run <task> (tasks: $(agent_names | paste -sd' '))"
+  need claude
+
+  local tstate=$STATE/agent/$task stamp rundir rc=0
+  mkdir -p "$tstate/runs" "$STATE/reports/$task"
+  exec 9>"$tstate/lock"
+  flock -n 9 || die 1 "$task is already running"
+  stamp=$(date +%Y%m%d-%H%M%S)
+  rundir=$tstate/runs/$stamp
+  mkdir -p "$rundir"
+  export BARCH_REPO=$REPO BARCH_STATE=$tstate BARCH_STATE_ROOT=$STATE
+
+  # prepare: the task's script collects the facts (exit 75 = nothing to do this time)
+  if [[ -f $helper ]]; then
+    bash "$helper" prepare "$rundir" >"$rundir/prepare.log" 2>&1 || rc=$?
+    if ((rc == 75)); then
+      rm -rf "$rundir"
+      if [[ $JSON == 1 ]]; then jq -n --arg t "$task" '{ok: true, task: $t, skipped: true}'
+      else echo "$task: nothing to do"; fi
+      return 0
+    fi
+    ((rc == 0)) || agent_fail "$task" "preparing the facts failed" "$rundir/prepare.log"
+  fi
+
+  local schema=$default_schema model
+  [[ -r $REPO/agent/tasks/$task.schema.json ]] && schema=$(jq -c . "$REPO/agent/tasks/$task.schema.json")
+  model=$(task_field "$file" model)
+  split_tools "$(task_field "$file" tools)"
+  { task_body "$file"; agent_footer "$rundir"; } >"$rundir/prompt.md"
+
+  local -a args=(-p --output-format json --permission-mode dontAsk --strict-mcp-config
+    --add-dir "$rundir" --json-schema "$schema")
+  [[ -n $model ]] && args+=(--model "$model")
+  args+=(--disallowedTools Edit Write NotebookEdit --allowedTools "${TOOLS[@]}")
+  (cd "$REPO" && BARCH_AGENT_TASK=$task timeout 35m claude "${args[@]}" \
+    <"$rundir/prompt.md" >"$rundir/result.json" 2>"$rundir/claude.log") || rc=$?
+  if ! jq -e '.subtype == "success" and (.is_error | not) and (.structured_output | type == "object")' \
+      "$rundir/result.json" >/dev/null 2>&1; then
+    { echo "exit code: $rc"; cat "$rundir/claude.log"; jq -r '.result // empty' "$rundir/result.json" 2>/dev/null; } >>"$rundir/error.log"
+    agent_fail "$task" "Claude did not finish the task (exit $rc)" "$rundir/error.log"
+  fi
+
+  local out=$STATE/reports/$task report meta
+  report=$out/$stamp.md
+  meta=$out/$stamp.json
+  jq -r --arg task "$task" --arg when "$(date '+%Y-%m-%d %H:%M')" '
+    .structured_output as $o
+    | "# \($o.title)\n\n_\($task) · \($when) · \($o.status)_\n\n\($o.report)\n\n---\n\nSession `\(.session_id)`: `barch agent continue \(.session_id)`\n"' \
+    "$rundir/result.json" >"$report"
+  jq --arg task "$task" --arg time "$(date -Is)" --arg report "$report" '
+    {ok: true, task: $task, time: $time, status: .structured_output.status, title: .structured_output.title,
+     summary: .structured_output.summary, session: .session_id, cost: .total_cost_usd, report: $report}' \
+    "$rundir/result.json" >"$meta"
+  ln -sfn "$stamp.md" "$out/latest.md"
+  ln -sfn "$stamp.json" "$out/latest.json"
+
+  [[ -f $helper ]] && { bash "$helper" finish "$rundir" "$rundir/result.json" "$report" >>"$rundir/prepare.log" 2>&1 ||
+    echo "$PROG: $task: finish step failed (see $rundir/prepare.log)" >&2; }
+
+  # keep the last 10 runs (facts) and 60 reports
+  find "$tstate/runs" -mindepth 1 -maxdepth 1 -type d | sort -r | tail -n +11 | xargs -r rm -rf
+  find "$out" -maxdepth 1 -name '2*' | sort -r | tail -n +121 | xargs -r rm -f
+
+  local status notify urgency
+  status=$(jq -r .status "$meta")
+  notify=$(task_field "$file" notify)
+  if ((quiet == 0)) && [[ $notify != never && ($notify != issues || $status != ok) ]]; then
+    case $status in alert) urgency=critical ;; warn) urgency=normal ;; *) urgency=low ;; esac
+    post "$(jq -r .title "$meta")" "$(jq -r .summary "$meta")" "$urgency" "Agent" \
+      "$(jq -sc . <(action "Open report" foot -T "$task" -e nvim -R "$report") \
+                  <(action "Continue" "$BARCH" agent continue "$(jq -r .session "$meta")"))"
+  fi
+  show "$(cat "$meta")" '"[\(.status)] \(.title)\n\(.summary)\nreport: \(.report)"'
+}
+
+agent_names() { find "$REPO/agent/tasks" -maxdepth 1 -name '*.md' -printf '%f\n' | sed 's/\.md$//' | sort; }
+
+agent_list() {
+  local t file last next enabled rows=()
+  while read -r t; do
+    file=$REPO/agent/tasks/$t.md
+    last=$(cat "$STATE/reports/$t/latest.json" 2>/dev/null || echo null)
+    enabled=$(systemctl --user is-enabled "barch-agent@$t.timer" 2>/dev/null)
+    next=$(systemctl --user show "barch-agent@$t.timer" -p NextElapseUSecRealtime --value 2>/dev/null)
+    rows+=("$(jq -nc --arg t "$t" --arg d "$(task_field "$file" description)" --argjson last "$last" \
+      --arg en "${enabled:-not installed}" --arg next "$next" \
+      '{task: $t, description: $d, timer: $en, next: $next, last: $last}')")
+  done < <(agent_names)
+  show "$(printf '%s\n' "${rows[@]}" | jq -s .)" '.[] |
+    "\(.task) — \(.description)\n  timer: \(.timer)\(if .next != "" then ", next \(.next)" else "" end)\n  last: "
+    + (if .last == null then "never" else "\(.last.time[0:16] | sub("T"; " ")) [\(.last.status)] \(.last.title)" end)'
+}
+
+agent_continue() {
+  [[ ${1:-} =~ $uuid_re ]] || usage_error "agent continue <session id>"
+  need foot
+  setsid -f foot -D "$REPO" -T "Claude" claude --resume "$1" >/dev/null 2>&1
+}
+
+agent_investigate() {
+  local log=${1:-} unit
+  [[ -r $log ]] || usage_error "agent investigate <failure log>"
+  need foot
+  need claude
+  unit=$(sed -n 's/^Unit: //p' "$log" | head -1)
+  setsid -f foot -D "$REPO" -T "Investigate: $unit" claude \
+    "The service $unit failed. Its status and the journal of the failed run are in $log. Read it, find the cause (check more of the journal, the unit and its config as needed) and explain it to me. Propose the fix and wait for my go-ahead before changing anything." \
+    >/dev/null 2>&1
+}
+
+cmd_agent() {
+  local sub=${1:-}
+  (($#)) && shift
+  case $sub in
+    list) agent_list ;;
+    run) agent_run "$@" ;;
+    report)
+      [[ -n ${1:-} && -r $STATE/reports/$1/latest.md ]] || die 1 "no report for '${1:-}'"
+      cat "$STATE/reports/$1/latest.md" ;;
+    continue) agent_continue "$@" ;;
+    investigate) agent_investigate "$@" ;;
+    *) usage_error "agent list|run|report|continue|investigate" ;;
+  esac
+}
+
+# ---------------------------------------------------------------- aur
+
+# aur review: runs the aur-review task for changes not reviewed yet, then prints the verdict of
+# every pending AUR update. Exit 0 all ok (or nothing pending), 4 something to look at or not
+# reviewed, 1 the review could not run. run-update.sh asks before paru -Syu when it is not 0.
+cmd_aur() {
+  [[ ${1:-} == review ]] || usage_error "aur review"
+  local rc=0 data
+  export BARCH_REPO=$REPO BARCH_STATE=$STATE/agent/aur-review BARCH_STATE_ROOT=$STATE
+  mkdir -p "$BARCH_STATE"
+  [[ $JSON == 1 ]] || echo "Checking the pending AUR updates (new changes are reviewed by Claude, ~1–2 min)…" >&2
+  (JSON=0 agent_run aur-review --quiet >&2) || rc=$?
+  data=$(bash "$REPO/agent/tasks/aur-review.sh" status) || die 1 "could not list the pending AUR updates"
+  show "$data" '
+    def tag: {"ok": "ok   ", "warn": "WARN ", "alert": "ALERT"}[.] // "?    ";
+    if length == 0 then "No pending AUR updates." else
+      (.[] | "\(.verdict.status // "none" | tag)  \(.name) \(.old) → \(.new)"
+             + (if .verdict then "\n         \(.verdict.summary)" else "\n         not reviewed" end)
+             + (if (.verdict.flags // []) | length > 0 then "\n         flags: \(.verdict.flags | join("; "))" else "" end)),
+      (if any(.[]; .verdict.report) then "\nReport: \([.[] | .verdict.report // empty] | unique | join(" "))" else empty end)
+    end'
+  ((rc == 0)) || return 1
+  jq -e 'all(.[]; .verdict.status == "ok")' >/dev/null <<<"$data" || return 4
+}
+
+# ---------------------------------------------------------------- main
+
 # --json may come anywhere
 args=()
 for a in "$@"; do
@@ -197,6 +633,10 @@ case $cmd in
   nightlight | night-light) cmd_nightlight "$@" ;;
   dnd) cmd_dnd "$@" ;;
   health) cmd_health "$@" ;;
+  snapshot) cmd_snapshot "$@" ;;
+  failure) cmd_failure "$@" ;;
+  agent) cmd_agent "$@" ;;
+  aur) cmd_aur "$@" ;;
   help | -h | --help) usage ;;
   *) usage_error "unknown command '$cmd'" ;;
 esac

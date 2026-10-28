@@ -12,7 +12,8 @@ cd ~/BArch && ./scripts/sync.sh "what changed"     # never with sudo; it asks wh
 
 Refreshes the package lists and the system snapshot (`system/files`), commits and pushes.
 Updates are done from the bar (**Update All**), not by hand: it shows unread Arch news first,
-runs `paru -Syu` and then `kernel-update` when there is a new CachyOS kernel.
+has Claude review the PKGBUILD changes of the AUR updates (and asks before going on if anything
+looks suspicious), runs `paru -Syu` and then `kernel-update` when there is a new CachyOS kernel.
 
 ## What's inside
 
@@ -32,6 +33,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `wallpaper-mode`, `apps-theme`, `papirus-accent` |
 | `games/` | `~/Games/battle.net/run.sh`, `~/.config/gamemode.ini` | Battle.net launcher (umu + Proton-GE) and gamemode rules |
 | `calendar/` | `~/.config/khal`, `~/.config/vdirsyncer/config` | iCloud calendar sync (the app password stays out of the repo) |
+| `agent/` | — | Scheduled agent tasks (`tasks/`), the failure ignore list and the upstream watch list; used by `barch` |
 | `tools/` | — | Generators: wallpapers (`make_wallpapers.py`), Limine theme (`limine-theme.py`) |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
 | `packages/` | — | Explicitly installed packages (`pacman.txt`, `aur.txt`, `aur-ignore.txt`) |
@@ -65,7 +67,7 @@ The main pieces:
 IPC, so it does exactly what the Control Center does; the bar has to be running.
 
 ```bash
-barch notify "Backup" "Finished in 4 min" [--critical|--low] [--app NAME]   # through the bar's server
+barch notify "Backup" "Finished in 4 min" [--critical|--low] [--app NAME] [--action "Label=command"]
 barch theme light|dark|auto|status
 barch hdr on|off|status            barch sdr <nits>|status
 barch monitor side on|off|status   barch caffeine on|off|status
@@ -75,6 +77,47 @@ barch health [--refresh]           # .pacnew, failed services, TPM, cleanup
 
 Every command takes `--json`. Exit codes: `0` ok, `1` the bar refused, `2` usage, `3` bar not reachable.
 On the QML side these are the `IpcHandler`s `control`, `theme`, `notifs` and `health` (`qs ipc show`).
+
+## Agent
+
+Claude Code works on this machine on its own, read-only unless you are in the session:
+
+- **Failure → agent.** Every service that fails (system or user, through an `OnFailure=` drop-in
+  in `service.d/`) is handed to `barch failure`: it saves the status and the journal of the failed
+  run to `~/.local/state/barch/failures/` and notifies with **Investigate** (opens Claude in a
+  terminal, already reading the log) and **Show log**. Every failure's log is kept, but a unit
+  notifies at most once every 30 min; repeats inside that window are counted and the next
+  notification says so ("failed (4× since 21:16)"). `agent/failure-ignore` skips units (apps
+  launched by uwsm, barch's own).
+- **Safety snapshot.** Every Claude session started in `~/BArch` takes a snapper pre snapshot of
+  `/` when it starts and a post one when it ends (hooks in `claude/.claude/settings.json` →
+  `barch-agent-snapshot@.service`, which polkit lets you start without a password). The agent is
+  told the number. `barch snapshot list` shows the pairs; `sudo snapper -c root status pre..post`
+  shows what a session changed outside the repo and `undochange` reverts it. `/home` is not in the
+  snapshot (the repo has git); sessions in other folders take none.
+- **Scheduled tasks.** `agent/tasks/<task>.md` (prompt + allowed tools) and an optional
+  `<task>.sh` that collects the facts, run by `barch-agent@<task>.timer` with `claude -p` in
+  `dontAsk` mode: only the listed read-only tools work, and edits are denied. The report goes to
+  `~/.local/state/barch/reports/` and a notification with **Open report** and **Continue** (resume
+  the session to talk about it).
+
+| Task | When | What |
+|---|---|---|
+| `aur-review` | every 6 h, and in Update All | Reads the PKGBUILD diff of each pending AUR update (source moved, new install script, downloads run at build time, obfuscation, new committer); heuristic flags plus Claude's verdict, cached per AUR commit |
+| `kernel-check` | first login with a new kernel | NVIDIA module built and loaded, NTSYNC, BORE, new kernel errors vs. the previous boot |
+| `morning` | weekdays 08:00 | Agenda, updates and Arch news, health, overnight failures, disk |
+| `weekly-review` | Sundays 18:00 | Recurring journal errors, failures, snapshots, unsaved BArch changes |
+| `upstream-watch` | Mondays 09:30 | Hyprland, Quickshell, gamescope and NVIDIA release notes against this config and `agent/watchlist.md` |
+| `barch-audit` | monthly | README/CLAUDE.md vs code, unused scripts, package lists, `user-services.txt`, `SYSTEM_FILES` |
+
+```bash
+barch agent list                       # tasks, last result, next run
+barch agent run morning                # run one now
+barch agent report kernel-check        # last report
+barch aur review                       # what Update All shows before paru -Syu
+```
+
+Each run uses Claude like a conversation would (a task costs roughly what a short session does).
 
 ## Theme
 

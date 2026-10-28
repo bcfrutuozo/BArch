@@ -1,0 +1,6 @@
+# Units whose failures `barch failure` does not report (shell globs, one per line).
+# Apps launched through uwsm run as app-*.service units: a non-zero exit is not a system problem.
+app-*
+# barch's own units: a failed agent task already notifies by itself.
+barch-agent@*
+barch-failure@*

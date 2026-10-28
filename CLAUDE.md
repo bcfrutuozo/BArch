@@ -27,10 +27,26 @@ and commit messages stay in English, like the rest of the repo.
 
 Prefer `barch` (`bin/.local/bin/barch`, see `barch help`) over editing state files, calling
 `hyprctl`/`gsettings` or `notify-send` whenever a subcommand exists: notifications, theme, HDR and
-SDR brightness, side monitor, caffeine, night light, Do Not Disturb, system health. Use `--json` to
+SDR brightness, side monitor, caffeine, night light, Do Not Disturb, system health, agent tasks,
+AUR review, safety snapshots. Use `--json` to
 read state and check the exit code (`3` = the bar is not running). A new bar feature that scripts
 should reach gets an `IpcHandler` function answering JSON (`{"ok": ...}`) plus a `barch` subcommand,
 reusing the widget's own functions.
+
+## Agent infrastructure
+
+- **Safety snapshot:** sessions started in `~/BArch` get a snapper pre/post pair of `/` (the
+  SessionStart hook tells you the pre number). If the hook reports that the snapshot failed, say
+  so before touching anything outside the repo.
+- **Failures:** `barch failure` saves logs to `~/.local/state/barch/failures/`. A session opened
+  from **Investigate** starts with one of those logs: diagnose, then propose the fix and wait.
+- **Scheduled tasks** live in `agent/tasks/`: `<task>.md` (frontmatter `description`, `tools`,
+  `notify: always|issues|never`, optional `model`; the body is the prompt), an optional
+  `<task>.sh` (`prepare <rundir>` writes `context.md`, exit 75 = nothing to do; `finish <rundir>
+  <result.json> <report>`), an optional `<task>.schema.json`, and a timer
+  `systemd/.config/systemd/user/barch-agent@<task>.timer` listed in `packages/user-services.txt`.
+  Tasks are read-only (`dontAsk` + an allow list): gather facts in the `.sh`, not by widening
+  `tools`. Reports: `barch agent report <task>`.
 
 ## How the repo works
 

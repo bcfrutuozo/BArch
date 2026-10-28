@@ -1,0 +1,10 @@
+# Scheduled agent task: agent/tasks/%i.md in ~/BArch, run read-only by `barch agent run`.
+# Each task has its own timer (barch-agent@<task>.timer).
+[Unit]
+Description=BArch agent task: %i
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/barch agent run %i
+Nice=10
+TimeoutStartSec=40min

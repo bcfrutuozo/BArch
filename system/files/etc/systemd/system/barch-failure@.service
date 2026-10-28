@@ -1,0 +1,7 @@
+# OnFailure handler for system services (see service.d/barch-onfailure.conf).
+[Unit]
+Description=Report the failure of %i to the desktop
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/barch-failure-relay %i

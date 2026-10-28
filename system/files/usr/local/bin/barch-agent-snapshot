@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# /usr/local/bin/barch-agent-snapshot <pre|post>-<session-id> — safety snapshot of / around a
+# Claude Code session in ~/BArch. Run as root by barch-agent-snapshot@.service, which the user
+# may start without a password (polkit: 50-barch-agent-snapshot.rules); the session hook is
+# `barch snapshot hook`. The pre/post pair shows what the session changed:
+#   snapper -c root status <pre>..<post>     snapper -c root undochange <pre>..<post>
+# Numbers go to /run/barch-agent-snapshot/<session>.<pre|post> (for the hook) and to
+# /var/log/barch-agent-snapshots.log (for `barch snapshot list`).
+set -euo pipefail
+
+arg=${1:-}
+type=${arg%%-*}
+sid=${arg#*-}
+[[ $type == pre || $type == post ]] || { echo "usage: $0 <pre|post>-<session-id>" >&2; exit 2; }
+[[ $sid =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || { echo "invalid session id" >&2; exit 2; }
+command -v snapper >/dev/null || { echo "snapper is not installed" >&2; exit 1; }
+
+state=/run/barch-agent-snapshot
+log=/var/log/barch-agent-snapshots.log
+install -d -m 755 "$state"
+desc="claude session ${sid:0:8}"
+
+if [[ $type == pre ]]; then
+  num=$(snapper -c root create -t pre -c number -d "$desc" -u "agent=claude,session=$sid" -p)
+else
+  pre=$(cat "$state/$sid.pre" 2>/dev/null) || { echo "no pre snapshot for this session" >&2; exit 0; }
+  num=$(snapper -c root create -t post --pre-number "$pre" -c number -d "$desc" -u "agent=claude,session=$sid" -p)
+fi
+
+echo "$num" >"$state/$sid.$type"
+chmod 644 "$state/$sid.$type"
+printf '%s %s %s %s\n' "$(date -Is)" "$type" "$num" "$sid" >>"$log"
+chmod 644 "$log"
+echo "$type snapshot #$num"

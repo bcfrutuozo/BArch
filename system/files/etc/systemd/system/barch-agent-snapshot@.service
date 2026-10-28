@@ -1,0 +1,8 @@
+# Safety snapshot of / before (pre-<session>) and after (post-<session>) a Claude Code session in
+# ~/BArch. Started by `barch snapshot hook`; polkit lets wheel users start it without a password.
+[Unit]
+Description=Safety snapshot for a Claude session (%i)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/barch-agent-snapshot %i

@@ -32,5 +32,30 @@
       "**Trusted repo**: /home/bcfrutuozo/Source (no remotes configured) and /home/bcfrutuozo/BArch (the user's desktop configuration, private GitHub remote bcfrutuozo/BArch)",
       "**Org-specific CLIs**: None configured"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.local/bin/barch\" snapshot hook",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.local/bin/barch\" snapshot hook",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
   }
 }

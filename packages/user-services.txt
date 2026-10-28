@@ -1,3 +1,9 @@
+barch-agent@aur-review.timer
+barch-agent@barch-audit.timer
+barch-agent@kernel-check.timer
+barch-agent@morning.timer
+barch-agent@upstream-watch.timer
+barch-agent@weekly-review.timer
 cliphist.service
 gsr-replay.service
 hyprpaper.service
