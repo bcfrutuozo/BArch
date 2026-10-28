@@ -78,6 +78,9 @@ barch nightlight on|off|status     barch dnd on|off|status
 barch health [--refresh]           # .pacnew, failed services, TPM, cleanup
 barch agent ask "why is X slow?"   # Claude in a terminal in ~/BArch (the launcher's "a ")
 barch finance import [--dry-run]   # C6 Bank statements → Firefly (see Finance)
+barch replay share [file] [--from 12 --to 40]
+                                   # newest replay (or FILE) → <name>-share.mp4 for WhatsApp status:
+                                   # H.264 ≤1080p30, HDR tone mapped to SDR, at most 60 s
 ```
 
 Every command takes `--json`. Exit codes: `0` ok, `1` the bar refused, `2` usage, `3` bar not reachable.
