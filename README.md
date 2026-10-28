@@ -57,7 +57,8 @@ The main pieces:
   Bluetooth, Caffeine, Night Light, Do Not Disturb, Game HDR, Game HUD (MangoHud), Screenshot,
   screen Recording (full screen or region).
 - **Own notification server** with history, DND, sounds and app actions; privacy indicator
-  (mic, camera, screen sharing); ShadowPlay-style replay (Alt+F10); weather with rain alerts;
+  (mic, camera, screen sharing); ShadowPlay-style replay (off at login,
+  Super+Alt+R turns it on, Alt+F10 saves); weather with rain alerts;
   iCloud agenda in the clock's calendar; quick notes (Super+N); session restore at login.
 - **System health:** `.pacnew` files, failed services, TPM fallback warning and a monthly cleanup.
 - **Updates:** pending packages, unread Arch news (also enforced by a pacman hook) and the kernel.

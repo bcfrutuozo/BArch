@@ -22,7 +22,7 @@ declare -A PACKAGES=(
 )
 
 # User services to enable on a fresh install
-USER_SERVICES=(cliphist.service gsr-replay.service)
+USER_SERVICES=(cliphist.service)
 
 # System services and timers to enable on a fresh install (apply-system.sh asks first)
 SYSTEM_SERVICES=(earlyoom.service smartd.service paccache.timer btrfs-scrub@-.timer setvtrgb.service)
