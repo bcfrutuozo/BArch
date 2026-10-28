@@ -99,5 +99,5 @@ hl.bind(mainMod .. " + Print", hl.dsp.exec_cmd([[grim -g "$(slurp)" - | satty --
 hl.bind("SHIFT + Print", hl.dsp.exec_cmd([[grim ~/Pictures/Screenshots/$(date +%F_%H-%M-%S).png]]), { description = "Screenshots|Full Screen to File" })
 
 -- Replay (estilo ShadowPlay)
-hl.bind("ALT + F10", hl.dsp.exec_cmd("qs ipc call replay save || systemctl --user kill -s SIGUSR1 gsr-replay"), { description = "Replay|Save Last 30 Seconds" })
+hl.bind("ALT + F10", hl.dsp.exec_cmd("qs ipc call replay save || systemctl --user kill --kill-whom=main -s SIGUSR1 gsr-replay"), { description = "Replay|Save Last 30 Seconds" })
 hl.bind("SUPER + ALT + R", hl.dsp.exec_cmd("qs ipc call replay toggle"), { description = "Replay|Turn Replay On / Off" })

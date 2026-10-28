@@ -1,7 +1,7 @@
 # ~/.config/systemd/user/gsr-replay.service
 # Replay estilo ShadowPlay: mantém sempre os últimos 30 s do monitor principal na memória,
 # gravados pelo encoder da RTX (NVENC). Nada vai para o disco até você salvar.
-#   salvar:          systemctl --user kill -s SIGUSR1 gsr-replay   (atalho Alt+F10)
+#   salvar:          systemctl --user kill --kill-whom=main -s SIGUSR1 gsr-replay   (atalho Alt+F10)
 #   ligar/desligar:  systemctl --user start|stop gsr-replay         (atalho Super+Alt+R)
 # Os vídeos vão para ~/Videos/Replays; ao salvar, aparece uma notificação com "Open".
 
