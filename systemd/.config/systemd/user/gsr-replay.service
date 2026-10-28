@@ -15,13 +15,13 @@ ExecStartPre=/usr/bin/mkdir -p %h/Videos/Replays
 # -w        monitor gravado (o AW3225QF)
 # -k        hevc_hdr grava em HDR (o monitor está em HDR); troque por "hevc" se os vídeos
 #           forem para lugares sem suporte a HDR
-# -a        som do sistema e microfone em faixas separadas (dá para tirar o mic na edição)
+# -a        som do sistema e microfone misturados numa faixa só (todo player toca os dois)
 # -replay-storage ram   o buffer fica na RAM (uns poucos centos de MB), sem gastar o SSD
 ExecStart=/usr/bin/gpu-screen-recorder \
     -w HDMI-A-2 -f 60 \
     -c mkv -k hevc_hdr -q very_high \
     -r 30 -replay-storage ram \
-    -a default_output -a default_input \
+    -a "default_output|default_input" \
     -o %h/Videos/Replays \
     -sc %h/.local/bin/gsr-replay-saved
 # no modo replay, SIGINT encerra sem salvar
