@@ -100,6 +100,7 @@ pipewire-alsa
 pipewire-pulse
 playerctl
 plymouth
+poppler
 qemu-full
 qt5-wayland
 qt6-connectivity

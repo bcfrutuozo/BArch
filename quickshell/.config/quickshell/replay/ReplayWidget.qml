@@ -23,7 +23,7 @@ Item {
 
     function save() {
         if (!active || busy) return
-        Quickshell.execDetached(["systemctl", "--user", "kill", "-s", "SIGUSR1", unit])
+        Quickshell.execDetached(["systemctl", "--user", "kill", "--kill-whom=main", "-s", "SIGUSR1", unit])
         flash = true
         flashTimer.restart()
     }

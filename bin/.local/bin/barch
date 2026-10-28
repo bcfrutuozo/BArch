@@ -11,6 +11,8 @@
 #   failure    OnFailure handler of every service: saves the log, notifies with "Investigate"
 #   agent      read-only scheduled tasks (agent/tasks/<task>.md, timers barch-agent@<task>.timer)
 #   aur        review of the PKGBUILD changes of pending AUR updates (Update All runs it)
+#
+# finance import: C6 Bank statements → Firefly III (finance/import.py; data in ~/.config/firefly).
 # State: ~/.local/state/barch (failures/, reports/, agent/).
 #
 # Exit codes: 0 ok, 1 the bar or the task refused or failed, 2 usage error, 3 the bar is not
@@ -59,6 +61,13 @@ Agent:
   snapshot list               safety snapshots taken around Claude sessions in ~/BArch
   snapshot hook               Claude Code SessionStart/SessionEnd hook (reads JSON on stdin)
   failure <unit> [--system]   OnFailure handler: save the log and notify (used by systemd)
+
+Finance:
+  finance import [--dry-run] [--keep] [--yes] [--dir DIR] [--seed]
+                              consolidate the C6 Bank files in ~/.config/firefly/learning (CSV,
+                              invoice PDFs, screenshots of the open invoice) into Firefly: asks
+                              what it does not know, skips what is already there, then moves the
+                              files to processed/ (--seed: mark the inbox as done, import nothing)
 
   help                        this text
 
@@ -628,6 +637,15 @@ cmd_aur() {
   jq -e 'all(.[]; .verdict.status == "ok")' >/dev/null <<<"$data" || return 4
 }
 
+# ---------------------------------------------------------------- finance
+
+cmd_finance() {
+  [[ ${1:-} == import ]] || usage_error "finance import [--dry-run] [--keep] [--yes] [--dir DIR] [--seed]"
+  shift
+  need python3
+  exec python3 "$REPO/finance/import.py" "$@"
+}
+
 # ---------------------------------------------------------------- main
 
 # --json may come anywhere
@@ -656,6 +674,7 @@ case $cmd in
   failure) cmd_failure "$@" ;;
   agent) cmd_agent "$@" ;;
   aur) cmd_aur "$@" ;;
+  finance) cmd_finance "$@" ;;
   help | -h | --help) usage ;;
   *) usage_error "unknown command '$cmd'" ;;
 esac
