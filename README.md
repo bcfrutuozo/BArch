@@ -31,7 +31,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `uwsm/`, `environment/` | `~/.config/uwsm`, `~/.config/environment.d` | Session environment (Qt theme, cursor) |
 | `systemd/` | `~/.config/systemd/user` | User services (cliphist, replay) |
 | `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `wallpaper-mode`, `apps-theme`, `papirus-accent` |
-| `games/` | `~/Games/battle.net/run.sh`, `~/.config/gamemode.ini` | Battle.net launcher (umu + Proton-GE) and gamemode rules |
+| `games/` | `~/Games/battle.net/run.sh`, `~/.config/gamemode.ini`, `~/.local/share/applications/steam.desktop` | Battle.net launcher (umu + Proton-GE), gamemode rules, Steam launcher without `GDK_SCALE` (Steam would scale twice) |
 | `calendar/` | `~/.config/khal`, `~/.config/vdirsyncer/config` | iCloud calendar sync (the app password stays out of the repo) |
 | `agent/` | — | Scheduled agent tasks (`tasks/`), the failure ignore list and the upstream watch list; used by `barch` |
 | `tools/` | — | Generators: wallpapers (`make_wallpapers.py`), Limine theme (`limine-theme.py`) |

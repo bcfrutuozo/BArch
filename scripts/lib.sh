@@ -16,7 +16,7 @@ declare -A PACKAGES=(
   [uwsm]=".config/uwsm"
   [environment]=".config/environment.d"
   [systemd]=".config/systemd/user"
-  [games]="Games/battle.net/run.sh .config/gamemode.ini"
+  [games]="Games/battle.net/run.sh .config/gamemode.ini .local/share/applications/steam.desktop"
   [bin]=".local/bin/kernel-update .local/bin/theme-auto .local/bin/wallpaper-mode .local/bin/apps-theme .local/bin/papirus-accent .local/bin/barch"
   [calendar]=".config/khal .config/vdirsyncer/config"
 )
