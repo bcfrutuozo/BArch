@@ -11,12 +11,16 @@ pacnew=$(find /etc \( -name '*.pacnew' -o -name '*.pacsave' \) 2>/dev/null | sor
 failed_sys=$(systemctl --failed --plain --no-legend 2>/dev/null | awk '{print $1}' | jq -R . | jq -s 'map(select(length>0))')
 failed_usr=$(systemctl --user --failed --plain --no-legend 2>/dev/null | awk '{print $1}' | jq -R . | jq -s 'map(select(length>0))')
 
-# TPM: o systemd-cryptsetup do initramfs registra quando o TPM não destrava
+# TPM: o systemd-cryptsetup do initramfs só escreve no journal quando o TPM não destrava; quando
+# destrava, fica quieto. Então: mensagem de falha = failed; disco aberto neste boot sem falha = ok;
+# nenhum dos dois (sem LUKS, ou o journal do initramfs não chegou) = unknown.
 tpm_log=$(journalctl -b -o cat --no-pager -t systemd-cryptsetup 2>/dev/null)
-tpm=ok
+unlocked=$(journalctl -b -o cat --no-pager -u 'systemd-cryptsetup@*' -g '^Finished ' 2>/dev/null)
 if grep -qiE "Failed to unseal|unsealing.*failed|TPM2 operation failed|No TPM2 metadata matching|policy.*does not match|PCR.*mismatch" <<<"$tpm_log"; then
   tpm=failed
-elif [[ -z "$tpm_log" ]]; then
+elif [[ -n "$unlocked" ]]; then
+  tpm=ok
+else
   tpm=unknown
 fi
 
