@@ -2,5 +2,6 @@
   "BraveP3AEnabled": false,
   "BraveStatsPingEnabled": false,
   "BraveWebDiscoveryEnabled": false,
-  "MetricsReportingEnabled": false
+  "MetricsReportingEnabled": false,
+  "WebRtcIPHandling": "default_public_interface_only"
 }

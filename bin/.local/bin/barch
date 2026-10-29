@@ -45,8 +45,12 @@ Desktop (through the bar):
   caffeine on|off|status      keep the screen from idling, locking and suspending
   nightlight on|off|status    night light (hyprsunset)
   dnd on|off|status           Do Not Disturb
+  anon on [region]|off|toggle|status
+                              Anonymous Mode (the Control Center tile): the VPN plus Mullvad
+                              Browser as the default browser and the hostname out of DHCP;
+                              status also lists what the mode cannot cover right now
   vpn on [region]|off|toggle|status
-                              PIA over WireGuard (the Control Center's VPN tile)
+                              the VPN alone: PIA over WireGuard (what Anonymous Mode uses)
   vpn regions                 regions, fastest first; vpn region <id>|auto picks the one to use
   health [--refresh]          system health summary (.pacnew, failed services, TPM, cleanup)
 
@@ -248,6 +252,22 @@ cmd_vpn() {
       text='.preferred as $p | .regions[] | "\(if .id == $p then "* " else "  " end)\(.id)\t\(.name)\t\(.country)\t\(if .latency then "\(.latency * 1000 | floor) ms" else "" end)"' ;;
     region) [[ -n ${2:-} ]] || usage_error "vpn region <id>|auto"; ipc vpn region "$2" ;;
     *) usage_error "vpn on [region]|off|toggle|status|regions|region <id>|auto" ;;
+  esac
+  show "$OUT" "$text"
+}
+
+cmd_anon() {
+  local text='"anonymous mode: \(.state)"
+              + (if .vpn.name != "" then " (\(.vpn.name)\(if .vpn.ip != "" then ", " + .vpn.ip else "" end))" else "" end)
+              + " · browser: \(.browser)"
+              + (if (.missing | length) > 0 then " · not covered: " + (.missing | join("; ")) else "" end)
+              + (if .error != "" then " · error: \(.error)" else "" end)'
+  case ${1:-status} in
+    on) ipc anon on "${2:-}" ;;
+    off) ipc anon off ;;
+    toggle) ipc anon toggle ;;
+    status) ipc anon status ;;
+    *) usage_error "anon on [region]|off|toggle|status" ;;
   esac
   show "$OUT" "$text"
 }
@@ -784,6 +804,7 @@ case $cmd in
   caffeine) cmd_caffeine "$@" ;;
   nightlight | night-light) cmd_nightlight "$@" ;;
   dnd) cmd_dnd "$@" ;;
+  anon) cmd_anon "$@" ;;
   vpn) cmd_vpn "$@" ;;
   health) cmd_health "$@" ;;
   snapshot) cmd_snapshot "$@" ;;

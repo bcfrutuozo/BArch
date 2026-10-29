@@ -44,6 +44,7 @@ import "notifications"
 import "replay"
 import "weather"
 import "vpn"
+import "anon"
 import "wallpaper"
 import "polkit"
 

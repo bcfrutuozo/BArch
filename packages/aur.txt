@@ -8,6 +8,7 @@ limine-snapper-sync
 linux-cachyos
 linux-cachyos-headers
 modprobed-db
+mullvad-browser-bin
 nvflash
 otf-apple-sf-mono
 otf-apple-sf-pro

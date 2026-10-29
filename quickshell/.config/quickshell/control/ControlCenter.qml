@@ -18,6 +18,7 @@ import "../notifications"
 import "../audio"
 import "../record"
 import "../vpn"
+import "../anon"
 
 Item {
     id: root
@@ -35,7 +36,7 @@ Item {
     property string screenshotDir: Quickshell.env("HOME") + "/Pictures/Screenshots"
 
     // ---------- estado ----------
-    // VPN (PIA): escolha da região aberta no painel; o filtro precisa do teclado (shell.qml)
+    // VPN (PIA, usada pelo Anonymous Mode): escolha da região aberta no painel; o filtro precisa do teclado (shell.qml)
     property bool chooseRegion: false
     property string regionFilter: ""
     readonly property bool wantsKeyboard: chooseRegion && popup.visible
@@ -569,16 +570,21 @@ Item {
                         onClicked: Theme.setGameHud(!Theme.gameHud)
                     }
 
+                    // Anonymous Mode (singleton Anon): a VPN mais Mullvad Browser como padrão e hostname
+                    // fora do DHCP; desligado, mostra o que ainda falta para o modo cobrir tudo
                     Tile {
-                        icon: Vpn.connected ? root.glyph(0xF099D) : root.glyph(0xF09E0)   // shield_lock / shield_off_outline
-                        label: "VPN"
-                        sublabel: !Vpn.available ? "No PIA credentials"
-                                : Vpn.connecting ? "Connecting to " + (Vpn.regionName || root.cap(Vpn.preferred)) + "…"
-                                : Vpn.connected ? Vpn.regionName + (Vpn.ip ? "  ·  " + Vpn.ip : "")
-                                : Vpn.error !== "" ? Vpn.error : "Off"
-                        active: Vpn.active
-                        available: Vpn.available
-                        onClicked: Vpn.toggle()
+                        icon: Anon.on ? root.glyph(0xF05F9) : root.glyph(0xF0075)   // incognito / incognito_off
+                        label: "Anonymous Mode"
+                        sublabel: !Anon.available ? "No PIA credentials"
+                                : Anon.connecting ? "Connecting to " + (Vpn.regionName || root.cap(Vpn.preferred)) + "…"
+                                : Anon.degraded ? "VPN dropped  ·  traffic exposed"
+                                : Anon.on ? Vpn.regionName + (Vpn.ip ? "  ·  " + Vpn.ip : "") + (Anon.mullvad ? "  ·  Mullvad" : "")
+                                : Anon.error !== "" ? Anon.error
+                                : Vpn.connected ? "Off  ·  VPN only (" + Vpn.regionName + ")"
+                                : Anon.missing.length > 0 ? "Off  ·  " + Anon.missing[0] : "Off"
+                        active: Anon.on
+                        available: Anon.available
+                        onClicked: Anon.toggle()
                     }
 
                     Tile {
