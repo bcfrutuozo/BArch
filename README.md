@@ -30,7 +30,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `mpv/` | `~/.config/mpv` | Video player (HDR, NVDEC) |
 | `uwsm/`, `environment/` | `~/.config/uwsm`, `~/.config/environment.d` | Session environment (Qt theme, cursor) |
 | `systemd/` | `~/.config/systemd/user` | User services (cliphist, replay, NAS mount) |
-| `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `wallpaper-mode`, `apps-theme`, `papirus-accent`, `nas-mount` |
+| `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `wallpaper-mode`, `apps-theme`, `papirus-accent`, `nas-mount`, `keyring-wait` |
 | `games/` | `~/Games/battle.net/run.sh`, `~/.config/gamemode.ini`, `~/.local/share/applications/steam.desktop` | Battle.net launcher (umu + Proton-GE), gamemode rules, Steam launcher without `GDK_SCALE` (Steam would scale twice) |
 | `calendar/` | `~/.config/khal`, `~/.config/vdirsyncer/config` | iCloud calendar sync (the app password stays out of the repo) |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
@@ -69,7 +69,10 @@ The main pieces:
   to one try every 10 s after three quick failures; **Super+Ctrl+Alt+L** kills and relaunches it by
   hand (works while locked, for a red/black or frozen screen). An instance that is still around
   without securing the session (`qs ... ipc call lock state`) is replaced by the next lock.
-  PAM: `/etc/pam.d/barch-lock` (in `system/`; the plain `login` stack until it is installed).
+  PAM: `/etc/pam.d/barch-lock` (in `system/`; the plain `login` stack until it is installed). It also
+  unlocks the GNOME keyring (`pam_gnome_keyring`): with autologin nothing else does, so apps that
+  need a secret at startup are held until then with `keyring-wait` (Nextcloud: drop-in in `systemd/`)
+  instead of asking for the keyring password at every login.
   To look at it without locking: `lock/preview.sh` (a normal window with its own Shell ID).
 - **System health:** `.pacnew` files, failed services, TPM fallback warning and a monthly cleanup.
 - **Updates:** pending packages, unread Arch news (also enforced by a pacman hook) and the kernel.
