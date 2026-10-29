@@ -665,7 +665,9 @@ ShellRoot {
             Repeater {
               model: [
                 { key: "lock",    icon: "\uDB80\uDF3E", label: "Lock",      cmd: ["loginctl", "lock-session"], confirm: false },
-                { key: "suspend", icon: "\uDB82\uDD04", label: "Suspend",   cmd: ["systemctl", "suspend"],     confirm: false },
+                // -i: a clicked Suspend is the user's decision, so sleep inhibitors (a Claude session
+                // wrapped in systemd-inhibit, a backup) do not refuse it; idle suspend (hypridle) still respects them
+                { key: "suspend", icon: "\uDB82\uDD04", label: "Suspend",   cmd: ["systemctl", "suspend", "-i"], confirm: false },
                 { key: "reboot",  icon: "\uDB81\uDF09", label: "Reboot",    cmd: ["systemctl", "reboot"],      confirm: true },
                 { key: "off",     icon: "\uDB81\uDC25", label: "Shut Down", cmd: ["systemctl", "poweroff"],    confirm: true }
               ]
