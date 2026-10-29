@@ -162,8 +162,13 @@ Scope {
         WlSessionLock {
             id: lock
             locked: true
-            // false again only after our own unlock (the compositor acknowledged it): leave
-            onLockStateChanged: if (!locked) Qt.quit()
+            // Leave as soon as the session is no longer ours to protect. Both signals go through
+            // checkLock on the next event loop turn: Quickshell 0.3.2 never emits lockStateChanged
+            // on unlock (fixed upstream), and when secureStateChanged fires `locked` still reads
+            // true for a moment. Not leaving meant a lock that stayed alive after the unlock,
+            // and `qs -n` then refused to start the next one (2026-10-28).
+            onSecureStateChanged: Qt.callLater(root.checkLock)
+            onLockStateChanged: Qt.callLater(root.checkLock)
 
             WlSessionLockSurface {
                 id: surface
@@ -173,15 +178,34 @@ Scope {
             }
         }
     }
-    // Hyprland sends `locked` once every monitor has drawn a lock frame (5 s at most). If that
-    // never happens (lock denied, no compositor support, nothing rendered) this process is not
-    // protecting anything: leave with an error so lock.sh falls back to hyprlock.
+    function checkLock() {
+        const l = lockLoader.item
+        if (!l || l.locked || l.secure) return         // still locking, or locked
+        if (root.unlocking) { Qt.quit(); return }       // our own unlock: done, exit 0
+        console.error("lock: the compositor ended the session lock before the unlock; exiting so hyprlock can take over")
+        Qt.exit(1)
+    }
+    // Hyprland sends `locked` (-> secure) once every monitor has drawn a lock frame (5 s at
+    // most). If that never happens (lock denied, no compositor support, nothing rendered) this
+    // process is not protecting anything: leave with an error so lock.sh falls back to hyprlock.
     Timer {
         running: !root.preview
         interval: 15000
-        onTriggered: if (!lockLoader.item || !lockLoader.item.locked) {
+        onTriggered: if (!lockLoader.item || !lockLoader.item.secure) {
             console.error("lock: session lock not acquired after 15 s, exiting so hyprlock can take over")
             Qt.exit(1)
+        }
+    }
+
+    // `qs -p ~/.config/quickshell/lock ipc call lock state` -> {"locked":..,"secure":..,"unlocking":..}
+    // lock.sh asks this before `qs -n`: an instance that answers secure=false is not protecting
+    // the session and gets replaced instead of blocking the next lock.
+    IpcHandler {
+        target: "lock"
+        function state(): string {
+            const l = lockLoader.item
+            return JSON.stringify({ locked: !!(l && l.locked), secure: !!(l && l.secure),
+                                    unlocking: root.unlocking, preview: root.preview })
         }
     }
 

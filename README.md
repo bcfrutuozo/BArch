@@ -65,7 +65,9 @@ The main pieces:
   date and weather, notifications that arrived while away, music playing; follows the theme live
   through `~/.local/state/quickshell/theme.json`. It runs as its own Quickshell process
   (`scripts/lock.sh`), so it does not fall with the bar; if it dies or shows nothing, the script
-  starts hyprlock in its place, and **Super+Ctrl+Alt+L** does the same by hand (works while locked).
+  starts hyprlock in its place, and **Super+Ctrl+Alt+L** does the same by hand (works while locked);
+  an instance that is still around without securing the session (`qs ... ipc call lock state`) is
+  replaced by the next lock.
   To look at it without locking: `lock/preview.sh` (a normal window with its own Shell ID).
 - **System health:** `.pacnew` files, failed services, TPM fallback warning and a monthly cleanup.
 - **Updates:** pending packages, unread Arch news (also enforced by a pacman hook) and the kernel.
