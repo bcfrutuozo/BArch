@@ -143,19 +143,17 @@ ShellRoot {
   Variants {
     id: bars
     // Barra só no monitor principal; se ele estiver desconectado, volta a aparecer em todos.
-    // Screens.list, não Quickshell.screens: a lista direta muda no meio da criação das janelas
-    // (boot, resume) e derruba o quickshell (ver screens/Screens.qml).
-    model: {
-      const s = Screens.list.filter(s => s.name === "HDMI-A-2")
-      return s.length > 0 ? s : Screens.list
-    }
+    // O model são nomes (Screens.names), não os objetos de Quickshell.screens: a lista direta
+    // muda no meio da criação das janelas (boot, resume, hotplug) e derruba o quickshell
+    // (ver screens/Screens.qml).
+    model: Screens.names.includes("HDMI-A-2") ? ["HDMI-A-2"] : Screens.names
 
     PanelWindow {
       id: bar
-      required property var modelData
+      required property string modelData       // nome do monitor
       // só a primeira barra responde ao IPC dos widgets que existem uma vez por barra
       readonly property bool primary: modelData === bars.model[0]
-      screen: modelData
+      screen: Screens.byName(modelData)
       anchors { top: true; left: true; right: true }
       implicitHeight: Theme.islandHeight + Theme.gap
       color: "transparent"

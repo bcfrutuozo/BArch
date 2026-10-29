@@ -34,7 +34,8 @@
 644 /etc/systemd/system/barch-killswitch@.service
 644 /etc/systemd/system/btrfs-scrub@.service.d/report.conf
 644 /etc/systemd/system/getty@tty1.service.d/autologin.conf
-777 /etc/systemd/system/numlock.service
+644 /etc/systemd/system/nftables.service.d/remain.conf
+664 /etc/systemd/system/numlock.service
 644 /etc/systemd/system/paccache.service.d/override.conf
 644 /etc/systemd/system/service.d/barch-onfailure.conf
 644 /etc/systemd/system/setvtrgb.service

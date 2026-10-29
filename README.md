@@ -297,6 +297,9 @@ True for this machine only; review before using the repo elsewhere.
 - **Monitors:** AW3225QF on `HDMI-A-2` (4K 240 Hz, 10-bit, HDR, scale 2, the bar lives here);
   P2723QE on `HDMI-A-1`, portrait, to the left. Values in `hypr/.config/hypr/conf/monitors.lua`
   (`BArch.monitors`); the bar changes HDR/SDR brightness through `BArch.set_monitor(...)`.
+  After a resume the driver can refuse every mode above 60 Hz on the AW without logging anything;
+  `hypr/scripts/hdr-kick.sh` (run by hypridle after sleep) checks the refresh rate it got and, when it
+  is low, disables and re-enables the output, which renegotiates the link. It notifies if even that fails.
 - **Games:** Battle.net in its own prefix at `~/Games/battle.net` (games on drive `G:`).
   WoW has no native HDR; gamescope's inverse tone mapping didn't work nested in Hyprland
   (gamescope 3.17, Hyprland 0.56) — use the SDR brightness slider instead.

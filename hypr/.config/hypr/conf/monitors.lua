@@ -51,6 +51,7 @@ BArch.monitor_overrides = BArch.monitor_overrides or {}
 function BArch.apply_monitor(name)
     local t = {}
     for k, v in pairs(BArch.monitors[name] or {}) do t[k] = v end
+    t.disabled = false   -- re-enables an output turned off by hl.monitor({ disabled = true }); an override wins
     for k, v in pairs(BArch.monitor_overrides[name] or {}) do t[k] = v end
     hl.monitor(t)
 end

@@ -13,19 +13,19 @@ Scope {
     id: root
 
     Variants {
-        model: Screens.list      // assentada; a lista direta derruba o quickshell (screens/Screens.qml)
+        model: Screens.names     // nomes, assentados; a lista direta derruba o quickshell (screens/Screens.qml)
 
         PanelWindow {
             id: win
-            required property var modelData
-            screen: modelData
+            required property string modelData   // nome do monitor
+            screen: Screens.byName(modelData)
             WlrLayershell.layer: WlrLayer.Background
             WlrLayershell.namespace: "barch-wallpaper"
             exclusionMode: ExclusionMode.Ignore
             anchors { top: true; bottom: true; left: true; right: true }
             color: Theme.base
 
-            readonly property string file: Wallpapers.path(modelData.name)
+            readonly property string file: Wallpapers.path(modelData)
             property Item shown: null           // a imagem visível
             property Item pending: null         // a que está carregando para substituí-la
 
