@@ -2,6 +2,7 @@
 700 /boot/limine/wallpaper.png
 644 /etc/bluetooth/main.conf
 644 /etc/brave/policies/managed/barch-privacy.json
+644 /etc/chromium/policies/managed/barch-webrtc.json
 600 /etc/crypttab
 644 /etc/default/earlyoom
 644 /etc/default/limine

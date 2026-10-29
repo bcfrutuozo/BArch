@@ -55,6 +55,7 @@ SYSTEM_FILES=(
   /etc/default/earlyoom
   /etc/smartd.conf
   "/etc/brave/policies/managed/*"
+  "/etc/chromium/policies/managed/*"
   /usr/local/bin/desktop-notify
   /usr/local/bin/smartd-alert
   /usr/local/bin/btrfs-scrub-report

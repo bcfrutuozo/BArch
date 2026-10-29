@@ -55,10 +55,23 @@ The main pieces:
 - **Window tools:** minimize (Super+M, comes back to its own workspace), always on top
   (Super+Shift+P), right-click menu on any window preview, swap/resize with Super+Shift/Ctrl+arrows.
 - **Control Center:** Light / Dark / Auto, Display (HDR, SDR brightness, side monitor on/off),
-  Bluetooth, Caffeine, Night Light, Do Not Disturb, VPN and VPN Region (below), Game HDR, Game HUD
-  (MangoHud), Screenshot, screen Recording (full screen or region).
-- **VPN** (`quickshell/vpn/`): Private Internet Access over WireGuard, without root. `pia.sh` gets a
-  token from the PIA API, registers a fresh key pair on the chosen server and writes the answer into
+  Bluetooth, Caffeine, Night Light, Do Not Disturb, Anonymous Mode and VPN Region (below), Game HDR,
+  Game HUD (MangoHud), Screenshot, screen Recording (full screen or region).
+- **Anonymous Mode** (`quickshell/anon/`): one tile for the VPN plus what would still give the machine
+  away. On: Mullvad Browser (the Tor Browser protections without Tor: one User-Agent for everyone,
+  Windows platform, letterboxed window, canvas blocked, WebRTC off, UTC) becomes the default browser
+  so links from other apps open there, every Ethernet and Wi-Fi profile stops sending the hostname
+  over DHCP, then the VPN comes up; off brings the previous browser back. The WebRTC policy of the
+  Chromium browsers (Brave, Chromium: `WebRtcIPHandling` in `/etc/brave` and `/etc/chromium`
+  `policies/managed`, in `system/`) is static: they only ever expose the address of the default
+  route, which is the tunnel's while connected. The tile and `barch anon status` say what the mode
+  cannot cover right now (Mullvad Browser missing, policy missing); if the tunnel drops while the
+  mode is on the bar's shield turns red ("VPN dropped"). Not covered by design: accounts you are
+  logged into, apps that send the device name, the trust in PIA itself. Hostname stays
+  `DSKbcfrutuozo` (changing it live is fragile); there is no kill switch yet.
+- **VPN** (`quickshell/vpn/`, what Anonymous Mode uses; `barch vpn` drives it alone): Private
+  Internet Access over WireGuard, without root. `pia.sh` gets a token from the PIA API, registers a
+  fresh key pair on the chosen server and writes the answer into
   a NetworkManager profile owned by the user (`connection.permissions`), so `nmcli` brings it up
   with the session's polkit rights. Region "Auto" is the lowest latency measured at that moment;
   the VPN Region tile lists them all with a filter, fastest first. DNS is exclusive and IPv6 is
@@ -106,6 +119,7 @@ barch theme light|dark|auto|status
 barch hdr on|off|status            barch sdr <nits>|status
 barch monitor side on|off|status   barch caffeine on|off|status
 barch nightlight on|off|status     barch dnd on|off|status
+barch anon on [region]|off|toggle|status   # Anonymous Mode: VPN + Mullvad Browser as default + hostname out of DHCP
 barch vpn on [region]|off|toggle|status|regions|region <id>|auto
 barch health [--refresh]           # .pacnew, failed services, TPM, cleanup
 barch agent ask "why is X slow?"   # Claude in a terminal in ~/BArch (the launcher's "a ")
@@ -116,7 +130,7 @@ barch replay share [file] [--from 12 --to 40]
 ```
 
 Every command takes `--json`. Exit codes: `0` ok, `1` the bar refused, `2` usage, `3` bar not reachable.
-On the QML side these are the `IpcHandler`s `control`, `theme`, `notifs`, `health` and `vpn` (`qs ipc show`).
+On the QML side these are the `IpcHandler`s `control`, `theme`, `notifs`, `health`, `vpn` and `anon` (`qs ipc show`).
 
 ## Agent
 
