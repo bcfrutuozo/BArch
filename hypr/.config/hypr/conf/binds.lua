@@ -31,13 +31,18 @@ hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("qs ipc call minimize window"), { des
 hl.bind(mainMod .. " + SHIFT + M", hl.dsp.exec_cmd("qs ipc call minimize restoreLast"), { description = "Windows|Restore Last Minimized" })
 hl.bind(mainMod .. " + SHIFT + P", hl.dsp.exec_cmd("qs ipc call pin toggle"), { description = "Windows|Always on Top" })
 
--- Trocar de janela (Alt+Tab com prévia) e visão geral dos workspaces
-hl.bind("ALT + Tab",         hl.dsp.exec_cmd("qs ipc call switcher next"), { description = "Windows|Switch Windows" })
-hl.bind("ALT + SHIFT + Tab", hl.dsp.exec_cmd("qs ipc call switcher prev"), { description = "Windows|Switch Windows Backwards" })
+-- Trocar de janela (Alt+Tab com prévia) e visão geral dos workspaces.
+-- Passam por scripts/passthrough.sh: se a janela em foco é um app X11 segurando o teclado
+-- (Parsec em modo imersivo), o atalho vai pra ela em vez de agir no Hyprland.
+local function passthrough(mods, key, cmd)
+    return hl.dsp.exec_cmd("~/.config/hypr/scripts/passthrough.sh '" .. mods .. "' " .. key .. " -- " .. cmd)
+end
+hl.bind("ALT + Tab",         passthrough("ALT", "Tab", "qs ipc call switcher next"), { description = "Windows|Switch Windows" })
+hl.bind("ALT + SHIFT + Tab", passthrough("ALT SHIFT", "Tab", "qs ipc call switcher prev"), { description = "Windows|Switch Windows Backwards" })
 -- soltar o Alt confirma a escolha (só age com o seletor aberto)
 hl.bind("ALT + Alt_L",         hl.dsp.exec_cmd("qs ipc call switcher commit"), { release = true, description = "Hidden|Switcher commit" })
 hl.bind("ALT + SHIFT + Alt_L", hl.dsp.exec_cmd("qs ipc call switcher commit"), { release = true, description = "Hidden|Switcher commit" })
-hl.bind(mainMod .. " + Tab", hl.dsp.exec_cmd("qs ipc call overview toggle"), { description = "Workspaces|Overview" })
+hl.bind(mainMod .. " + Tab", passthrough(mainMod, "Tab", "qs ipc call overview toggle"), { description = "Workspaces|Overview" })
 
 -- Foco com mainMod + setas
 hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }),  { description = "Windows|Focus Left" })

@@ -56,6 +56,9 @@ The main pieces:
   asks in a new session in `~/BArch`, Shift+Enter continues the last one); OCR, color picker, QR.
 - **Window tools:** minimize (Super+M, comes back to its own workspace), always on top
   (Super+Shift+P), right-click menu on any window preview, swap/resize with Super+Shift/Ctrl+arrows.
+  Alt+Tab and Super+Tab reach the remote machine when Parsec's immersive mode is on
+  (`hypr/scripts/passthrough.sh`: an X11 window holding the keyboard gets the shortcut instead of
+  Hyprland, since Xwayland's grab never reaches the compositor).
 - **Control Center:** Light / Dark / Auto, Display (HDR, SDR brightness, side monitor on/off),
   Bluetooth, Caffeine, Night Light, Do Not Disturb, Anonymous Mode and VPN Region (below), Game HDR,
   Game HUD (MangoHud), Screenshot, screen Recording (full screen or region).
