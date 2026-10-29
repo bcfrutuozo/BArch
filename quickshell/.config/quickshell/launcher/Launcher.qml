@@ -351,7 +351,7 @@ Scope {
 
     readonly property var actions: [
         { title: "Lock",       glyph: 0xF0341, keywords: "lock screen",        cmd: ["loginctl", "lock-session"] },
-        { title: "Suspend",    glyph: 0xF04B2, keywords: "sleep",              cmd: ["systemctl", "suspend"] },
+        { title: "Suspend",    glyph: 0xF04B2, keywords: "sleep",              cmd: ["systemctl", "suspend", "-i"] },  // -i: ignore sleep inhibitors, like the power menu
         { title: "Reboot",     glyph: 0xF0709, keywords: "restart",            cmd: ["systemctl", "reboot"] },
         { title: "Shut Down",  glyph: 0xF0425, keywords: "power off poweroff", cmd: ["systemctl", "poweroff"] },
         { title: "Light Mode", glyph: 0xF05A8, keywords: "theme appearance",   cmd: ["qs", "ipc", "call", "theme", "mode", "light"] },
