@@ -51,7 +51,6 @@ gvfs-mtp
 gvfs-smb
 hypridle
 hyprland
-hyprlauncher
 hyprpicker
 hyprsunset
 inter-font
