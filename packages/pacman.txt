@@ -19,6 +19,7 @@ chromium
 cliphist
 cmake
 cryptsetup
+ddcutil
 discord
 dnsmasq
 docker

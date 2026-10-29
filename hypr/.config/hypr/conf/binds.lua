@@ -76,6 +76,8 @@ hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }), { descr
 
 -- Sistema
 hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("loginctl lock-session"), { description = "System|Lock Screen" })
+-- Works while locked: if the Quickshell lock dies or shows nothing (red/black screen), replaces it with hyprlock
+hl.bind(mainMod .. " + CTRL + ALT + L", hl.dsp.exec_cmd("~/.config/hypr/scripts/lock.sh --fallback"), { locked = true, description = "System|Lock Screen: Fallback to hyprlock" })
 hl.bind(mainMod .. " + slash", hl.dsp.exec_cmd("qs ipc call keys toggle"), { description = "System|Keyboard Shortcuts" })
 hl.bind(mainMod .. " + ALT + F4", hl.dsp.exec_cmd("command -v hyprshutdown >/dev/null 2>&1 && hyprshutdown || hyprctl dispatch 'hl.dsp.exit()'"), { description = "System|Log Out" })
 
