@@ -6,16 +6,19 @@
 # - câmera: processos com /dev/video* aberto (navegadores e apps que não passam pelo PipeWire)
 #   e câmeras do PipeWire em uso;
 # - tela: compartilhamentos ativos pelo portal do Hyprland (xdg-desktop-portal-hyprland).
-# Depende de: pipewire (pw-dump), jq.
+# Depende de: pipewire (pw-dump), jq, psmisc (fuser).
 
 IGNORE='pavucontrol|PulseAudio Volume Control|cava|easyeffects|quickshell|wireplumber'
 
 pw=$(timeout 3 pw-dump 2>/dev/null || echo '[]')
 
-# processos com a câmera aberta (só os do seu usuário são visíveis, o que basta)
+# processos com a câmera aberta (só os do seu usuário são visíveis, o que basta).
+# fuser em vez de find em /proc/*/fd: o find aborta (SIGABRT) quando um processo some no
+# meio da varredura, e isto roda a cada 3 s. Sem /dev/video* o glob fica literal e fuser
+# só falha em silêncio.
 cam_procs=$(
-  find /proc/[0-9]*/fd -maxdepth 1 -lname '/dev/video*' 2>/dev/null \
-    | cut -d/ -f3 | sort -u \
+  { fuser /dev/video[0-9]* 2>/dev/null || true; } \
+    | tr ' ' '\n' | grep -E '^[0-9]+$' | sort -u \
     | while read -r pid; do cat "/proc/$pid/comm" 2>/dev/null; done \
     | sort -u | jq -R -s 'split("\n") | map(select(length > 0))'
 )
