@@ -17,6 +17,7 @@
 644 /etc/mkinitcpio.d/linux.preset
 644 /etc/modprobe.d/kvm.conf
 644 /etc/modprobe.d/nvidia.conf
+644 /etc/nftables.conf
 644 /etc/pacman.conf
 644 /etc/pacman.d/hooks/00-archnews.hook
 644 /etc/pacman.d/hooks/05-uki-prev.hook
@@ -25,10 +26,12 @@
 644 /etc/pam.d/barch-lock
 644 /etc/plymouth/plymouthd.conf
 644 /etc/polkit-1/rules.d/50-barch-agent-snapshot.rules
+644 /etc/polkit-1/rules.d/50-barch-killswitch.rules
 644 /etc/smartd.conf
 644 /etc/systemd/system/barch-agent-snapshot@.service
 644 /etc/systemd/system/barch-failure@.service
 644 /etc/systemd/system/barch-failure@.service.d/zz-no-onfailure.conf
+644 /etc/systemd/system/barch-killswitch@.service
 644 /etc/systemd/system/btrfs-scrub@.service.d/report.conf
 644 /etc/systemd/system/getty@tty1.service.d/autologin.conf
 777 /etc/systemd/system/numlock.service
@@ -40,6 +43,7 @@
 755 /usr/local/bin/archnews
 755 /usr/local/bin/barch-agent-snapshot
 755 /usr/local/bin/barch-failure-relay
+755 /usr/local/bin/barch-killswitch
 755 /usr/local/bin/btrfs-scrub-report
 755 /usr/local/bin/desktop-notify
 755 /usr/local/bin/smartd-alert

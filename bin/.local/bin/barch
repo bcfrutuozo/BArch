@@ -46,9 +46,9 @@ Desktop (through the bar):
   nightlight on|off|status    night light (hyprsunset)
   dnd on|off|status           Do Not Disturb
   anon on [region]|off|toggle|status
-                              Anonymous Mode (the Control Center tile): the VPN plus Mullvad
-                              Browser as the default browser and the hostname out of DHCP;
-                              status also lists what the mode cannot cover right now
+                              Anonymous Mode (the Control Center tile): the VPN with a kill
+                              switch, Mullvad Browser as the default browser and the hostname
+                              out of DHCP; status also lists what the mode cannot cover
   vpn on [region]|off|toggle|status
                               the VPN alone: PIA over WireGuard (what Anonymous Mode uses)
   vpn regions                 regions, fastest first; vpn region <id>|auto picks the one to use
@@ -260,6 +260,7 @@ cmd_anon() {
   local text='"anonymous mode: \(.state)"
               + (if .vpn.name != "" then " (\(.vpn.name)\(if .vpn.ip != "" then ", " + .vpn.ip else "" end))" else "" end)
               + " · browser: \(.browser)"
+              + " · kill switch: \(if .killswitch.armed then "armed (\(.killswitch.endpoint))" elif .killswitch.installed then "off" else "not installed" end)"
               + (if (.missing | length) > 0 then " · not covered: " + (.missing | join("; ")) else "" end)
               + (if .error != "" then " · error: \(.error)" else "" end)'
   case ${1:-status} in

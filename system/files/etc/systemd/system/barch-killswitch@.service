@@ -1,0 +1,9 @@
+# Anonymous Mode kill switch: on_<ip>_<port> arms it for the tunnel to that PIA server, off removes
+# it. Started by quickshell/anon/anon.sh (and vpn/pia.sh on a region change); polkit lets wheel
+# users start it without a password (50-barch-killswitch.rules). Only its own nftables table.
+[Unit]
+Description=Anonymous Mode kill switch (%I)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/barch-killswitch %I

@@ -2,7 +2,8 @@
 // o Anonymous Mode ligado, com o escudo e o país; o clique abre um painel com região, IP, há
 // quanto tempo, o navegador e o botão para desligar. O estado e as ações estão nos singletons
 // Vpn (pia.sh) e Anon (anon.sh); a região se escolhe no Control Center. Com o modo ligado e o
-// túnel caído, o escudo fica vermelho: o tráfego está saindo pelo IP real.
+// túnel caído, o escudo avisa: laranja se o kill switch está segurando o tráfego, vermelho se
+// não há kill switch e o tráfego está saindo pelo IP real.
 
 import QtQuick
 import QtQuick.Layouts
@@ -42,8 +43,8 @@ Item {
         spacing: 5
         Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: Vpn.connected ? root.glyph(0xF099D) : Anon.degraded ? root.glyph(0xF099E) : root.glyph(0xF0499)     // shield_lock / shield_off / shield_outline
-            color: Vpn.connected ? Theme.good : Anon.degraded ? Theme.red : Theme.warn
+            text: Vpn.connected ? root.glyph(0xF099D) : Anon.holding ? root.glyph(0xF0ECC) : Anon.exposed ? root.glyph(0xF099E) : root.glyph(0xF0499)     // shield_lock / shield_alert / shield_off / shield_outline
+            color: Vpn.connected ? Theme.good : Anon.exposed ? Theme.red : Theme.warn
             font.family: Theme.iconFont
             font.pixelSize: Theme.fontSize + 2
             SequentialAnimation on opacity {
@@ -104,15 +105,16 @@ Item {
                 RowLayout {
                     spacing: 10
                     Text {
-                        text: Vpn.connected ? root.glyph(0xF099D) : Anon.degraded ? root.glyph(0xF099E) : root.glyph(0xF0499)
-                        color: Vpn.connected ? Theme.good : Anon.degraded ? Theme.red : Theme.warn
+                        text: Vpn.connected ? root.glyph(0xF099D) : Anon.holding ? root.glyph(0xF0ECC) : Anon.exposed ? root.glyph(0xF099E) : root.glyph(0xF0499)
+                        color: Vpn.connected ? Theme.good : Anon.exposed ? Theme.red : Theme.warn
                         font.family: Theme.iconFont; font.pixelSize: Theme.fontSize + 6
                     }
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 1
                         Text {
-                            text: Anon.degraded ? "VPN dropped: traffic exposed"
+                            text: Anon.holding ? "VPN dropped: kill switch holding"
+                                : Anon.exposed ? "VPN dropped: traffic exposed"
                                 : Vpn.connected ? (Anon.on ? "Anonymous mode" : "VPN connected") : "Connecting…"
                             color: Theme.fg; font.family: Theme.font; font.pixelSize: Theme.fontSize; font.bold: true
                         }
@@ -127,7 +129,8 @@ Item {
                         { k: "IP", v: Vpn.ip || "…" },
                         { k: "Since", v: root.tick, w: root.ago(Vpn.since) },
                         { k: "Server", v: Vpn.region },
-                        { k: "Browser", v: Anon.on ? (Anon.mullvad ? "Mullvad Browser" : "Mullvad Browser not installed") : "", hide: !Anon.on }
+                        { k: "Browser", v: Anon.on ? (Anon.mullvad ? "Mullvad Browser" : "Mullvad Browser not installed") : "", hide: !Anon.on },
+                        { k: "Guard", v: Anon.killswitch ? "kill switch armed" : Anon.killswitchInstalled ? "kill switch not armed" : "no kill switch", hide: !Anon.on }
                     ]
                     RowLayout {
                         required property var modelData

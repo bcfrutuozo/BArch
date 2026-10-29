@@ -570,15 +570,17 @@ Item {
                         onClicked: Theme.setGameHud(!Theme.gameHud)
                     }
 
-                    // Anonymous Mode (singleton Anon): a VPN mais Mullvad Browser como padrão e hostname
-                    // fora do DHCP; desligado, mostra o que ainda falta para o modo cobrir tudo
+                    // Anonymous Mode (singleton Anon): a VPN mais kill switch, Mullvad Browser como padrão
+                    // e hostname fora do DHCP; desligado, mostra o que ainda falta para o modo cobrir tudo
                     Tile {
                         icon: Anon.on ? root.glyph(0xF05F9) : root.glyph(0xF0075)   // incognito / incognito_off
                         label: "Anonymous Mode"
                         sublabel: !Anon.available ? "No PIA credentials"
                                 : Anon.connecting ? "Connecting to " + (Vpn.regionName || root.cap(Vpn.preferred)) + "…"
-                                : Anon.degraded ? "VPN dropped  ·  traffic exposed"
-                                : Anon.on ? Vpn.regionName + (Vpn.ip ? "  ·  " + Vpn.ip : "") + (Anon.mullvad ? "  ·  Mullvad" : "")
+                                : Anon.holding ? "VPN dropped  ·  kill switch holding"
+                                : Anon.exposed ? "VPN dropped  ·  traffic exposed"
+                                : Anon.on ? Vpn.regionName + (Vpn.ip ? "  ·  " + Vpn.ip : "")
+                                            + (!Anon.killswitch ? "  ·  no kill switch" : Anon.mullvad ? "  ·  Mullvad" : "")
                                 : Anon.error !== "" ? Anon.error
                                 : Vpn.connected ? "Off  ·  VPN only (" + Vpn.regionName + ")"
                                 : Anon.missing.length > 0 ? "Off  ·  " + Anon.missing[0] : "Off"

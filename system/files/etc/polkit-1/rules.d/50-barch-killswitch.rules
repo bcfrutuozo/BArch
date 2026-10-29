@@ -1,0 +1,11 @@
+// Lets wheel users arm and disarm the Anonymous Mode kill switch, and nothing else, without a
+// password (anon.sh → barch-killswitch@on_<ip>_<port>.service / barch-killswitch@off.service).
+polkit.addRule(function (action, subject) {
+    if (action.id === "org.freedesktop.systemd1.manage-units" &&
+        subject.isInGroup("wheel") &&
+        action.lookup("verb") === "start" &&
+        /^barch-killswitch@(on_[0-9]{1,3}(\.[0-9]{1,3}){3}_[0-9]{1,5}|off)\.service$/
+            .test(action.lookup("unit"))) {
+        return polkit.Result.YES;
+    }
+});

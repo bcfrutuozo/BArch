@@ -2,29 +2,40 @@
 # anon.sh — Anonymous Mode: the VPN plus what else on this machine would still give it away.
 #
 #   anon.sh on [REGION|auto]   mode on: Mullvad Browser becomes the default browser, no network
-#                              profile sends the hostname over DHCP, then the VPN comes up
-#                              (vpn/pia.sh connect). If the tunnel fails everything is rolled back.
-#   anon.sh off                VPN down, the previous default browser back
+#                              profile sends the hostname over DHCP, the VPN comes up (vpn/pia.sh
+#                              connect) and the kill switch is armed for its server. If the tunnel
+#                              fails everything is rolled back.
+#   anon.sh off                kill switch off, VPN down, the previous default browser back
 #   anon.sh status             JSON: on, browser (current default), previous, mullvad (installed),
 #                              webrtc (policy in place), dhcpHostname (some profile still sends it),
-#                              missing (what the mode cannot cover right now), error
+#                              killswitch (installed, armed, endpoint), missing (what the mode
+#                              cannot cover right now), error
 #
-# What it covers: the public IP and DNS (the tunnel), browser fingerprint, User-Agent platform and
-# WebRTC (Mullvad Browser: the Tor Browser protections without Tor, made for VPN use), the hostname
-# on the local network (DHCP). The WebRTC policy of the Chromium browsers (Brave, Chromium) is
+# What it covers: the public IP and DNS (the tunnel), a dropped tunnel (the kill switch:
+# /usr/local/bin/barch-killswitch through barch-killswitch@.service, which polkit lets this user
+# start; while armed nothing but the tunnel and the local networks leaves the machine, so a
+# dropped tunnel means no traffic instead of exposed traffic), browser fingerprint, User-Agent
+# platform and WebRTC (Mullvad Browser: the Tor Browser protections without Tor, made for VPN
+# use), the hostname on the local network (DHCP). The WebRTC policy of the Chromium browsers (Brave, Chromium) is
 # static and lives in system/ (/etc/brave and /etc/chromium policies/managed): with the tunnel up
 # they only expose the tunnel's address, never a LAN one. What it cannot cover: accounts you are
 # logged into, apps that send the device name, and the trust in PIA itself.
 # The VPN state is pia.sh's; this script only adds the browser and the DHCP bit around it.
 #
-# Files: ~/.local/state/barch/anon/ (state, browser.prev, error).
-# Needs: xdg-settings (xdg-utils), nmcli, jq, and vpn/pia.sh next to this folder.
+# Files: ~/.local/state/barch/anon/ (state, browser.prev, error), $XDG_RUNTIME_DIR/barch-anon
+#        (marks the session that turned the mode on: after a logout or boot the mode is found
+#        "on" without it and is turned off, kill switch included, instead of blocking everything).
+# Needs: xdg-settings (xdg-utils), nmcli, jq, systemctl, and vpn/pia.sh next to this folder.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 pia="$here/../vpn/pia.sh"
 state="${XDG_STATE_HOME:-$HOME/.local/state}/barch/anon"
 webrtc_policy=default_public_interface_only
+session_mark="${XDG_RUNTIME_DIR:-/run/user/$UID}/barch-anon"
+ks_state=/run/barch-killswitch/state.json
+ks_unit=/etc/systemd/system/barch-killswitch@.service
+pia_state="${XDG_STATE_HOME:-$HOME/.local/state}/barch/pia"
 umask 077
 mkdir -p "$state"
 
@@ -98,42 +109,79 @@ webrtc_ok() {   # the Chromium browsers only use the default route's address for
     | jq -es --arg p "$webrtc_policy" 'map(.WebRtcIPHandling // empty) | index($p) != null' >/dev/null 2>&1
 }
 
+# ---------------------------------------------------------------- kill switch (root helper)
+ks_installed() { [[ -x /usr/local/bin/barch-killswitch && -f $ks_unit ]]; }
+ks_armed() { jq -e '.armed == true' "$ks_state" >/dev/null 2>&1; }
+ks_endpoint() { jq -r '.endpoint // ""' "$ks_state" 2>/dev/null || true; }
+ks_on() {   # for the tunnel pia.sh just brought up (server_ip/server_port in its current.json)
+  local ip port
+  ks_installed || { log "kill switch not installed (system/files): the tunnel is not guarded"; return 0; }
+  ip=$(jq -r '.server_ip // empty' "$pia_state/current.json" 2>/dev/null || true)
+  port=$(jq -r '.server_port // empty' "$pia_state/current.json" 2>/dev/null || true)
+  [[ -n $ip && -n $port ]] || { log "no tunnel endpoint to arm the kill switch for"; return 0; }
+  if systemctl start --no-ask-password "barch-killswitch@on_${ip}_${port}.service" >/dev/null 2>&1; then
+    log "kill switch armed for $ip:$port"
+  else
+    log "could not arm the kill switch (barch-killswitch@on_${ip}_${port}.service)"
+  fi
+}
+ks_off() {
+  ks_armed || return 0
+  if systemctl start --no-ask-password barch-killswitch@off.service >/dev/null 2>&1; then
+    log "kill switch off"
+  else
+    log "could not remove the kill switch (barch-killswitch@off.service)"
+  fi
+}
+
 # ---------------------------------------------------------------- commands
 on() {
-  echo on > "$state/state"; rm -f "$state/error"
+  echo on > "$state/state"; rm -f "$state/error"; : > "$session_mark"
   log "on"
   browser_on
   dhcp_hostname_off
   if ! bash "$pia" connect "${1:-}"; then     # pia.sh already said why on stderr
-    browser_off; echo off > "$state/state"
+    ks_off; browser_off; echo off > "$state/state"; rm -f "$session_mark"
     log "off again: the tunnel did not come up"
     exit 1
   fi
+  ks_on
   echo "anonymous mode on"
 }
 
 off() {
+  ks_off                                     # first: pia.sh disconnect would leave everything blocked
   bash "$pia" disconnect >/dev/null || true
   browser_off
-  echo off > "$state/state"; rm -f "$state/error"
+  echo off > "$state/state"; rm -f "$state/error" "$session_mark"
   log "off"
   echo "anonymous mode off"
 }
 
 status() {
-  local on=false md missing=() dhcp=false webrtc=false
+  local on=false md missing=() dhcp=false webrtc=false ksi=false ksa=false
+  # "on" from a session that is gone (logout, boot): off, without the tunnel the kill switch would block everything
+  if is_on && [[ ! -e $session_mark ]]; then
+    log "on from a previous session: turning off"
+    off >/dev/null 2>&1 || true
+  fi
   is_on && on=true
+  ks_installed && ksi=true
+  ks_armed && ksa=true
   md=$(mullvad_desktop) || true
   dhcp_hostname_sent && dhcp=true
   webrtc_ok && webrtc=true
   [[ -n $md ]] || missing+=("Mullvad Browser not installed")
+  [[ $ksi == true ]] || missing+=("kill switch not installed (system/files: barch-killswitch, its service and polkit rule)")
+  [[ $on == false || $ksi == false || $ksa == true ]] || missing+=("kill switch not armed")
   [[ $webrtc == true ]] || missing+=("WebRTC policy missing (system/files/etc/*/policies)")
   [[ $dhcp == false ]] || missing+=("a network profile still sends the hostname over DHCP")
   jq -n --argjson on "$on" --arg browser "$(default_browser)" --arg previous "$(cat "$state/browser.prev" 2>/dev/null || true)" \
     --argjson mullvad "$([[ -n $md ]] && echo true || echo false)" --argjson webrtc "$webrtc" --argjson dhcp "$dhcp" \
+    --argjson ksi "$ksi" --argjson ksa "$ksa" --arg kse "$(ks_endpoint)" \
     --arg error "$(cat "$state/error" 2>/dev/null || true)" --args \
     '{on: $on, browser: $browser, previous: $previous, mullvad: $mullvad, webrtc: $webrtc, dhcpHostname: $dhcp,
-      missing: $ARGS.positional, error: $error}' "${missing[@]}"
+      killswitch: {installed: $ksi, armed: $ksa, endpoint: $kse}, missing: $ARGS.positional, error: $error}' "${missing[@]}"
 }
 
 case ${1:-} in
