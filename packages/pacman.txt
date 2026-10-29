@@ -98,6 +98,7 @@ pipewire-pulse
 playerctl
 plymouth
 poppler
+python-xlib
 qemu-full
 qt5-wayland
 qt6-connectivity
