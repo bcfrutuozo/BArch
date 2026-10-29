@@ -1,4 +1,4 @@
-// LockScreen.qml — o conteúdo de um monitor da tela de bloqueio: wallpaper desfocado, relógio,
+// LockScreen.qml — o conteúdo de um monitor da tela de bloqueio: wallpaper (já desfocado), relógio,
 // data + clima, campo de senha, notificações enquanto fora, música tocando e usuário.
 // Usado pelo WlSessionLockSurface (um por monitor) e pela janela de pré-visualização.
 // Todo o estado (senha digitada, PAM, tema, dados) fica em `ctl`, o Lock.qml (shell.qml e
@@ -14,26 +14,28 @@ Item {
     readonly property bool primary: screenName === ctl.mainScreen
     property bool shown: false
     Component.onCompleted: { shown = true; input.forceActiveFocus() }
+    // tudo (papel de parede e conteúdo) aparece num fade só, quando a imagem já está pronta;
+    // "pronta" inclui erro, para a tela nunca ficar sem o campo de senha por causa de um arquivo
+    readonly property bool ready: shown && wall.status !== Image.Loading
 
-    // ---- wallpaper desfocado ----
+    // ---- wallpaper (já desfocado) ----
+    // primary-lock.png / secondary-lock.png: 960x540 já com blur (tools/make_wallpapers.py), ligadas ao
+    // modo atual pelo wallpaper-mode. Decodificam em poucos ms, síncronas, então o primeiro frame da
+    // superfície já sai com o papel de parede; desfocar o PNG 4K aqui custava ~100 ms e entrava com um
+    // pulo. Sem a versão lock (instalação antiga), cai para a imagem grande.
     Image {
         id: wall
+        property bool fallback: false
         anchors.fill: parent
-        source: "file://" + ctl.home + "/Pictures/Wallpapers/" + (screenRoot.primary ? "primary.png" : "secondary.png")
+        source: "file://" + ctl.home + "/Pictures/Wallpapers/" + (screenRoot.primary ? "primary" : "secondary") + (fallback ? ".png" : "-lock.png")
         fillMode: Image.PreserveAspectCrop
-        asynchronous: true
         cache: false
-        visible: false
+        smooth: true
+        opacity: screenRoot.ready ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
+        onStatusChanged: if (status === Image.Error && !fallback) { console.warn("lock: no lock wallpaper, using the full-size one"); fallback = true }
     }
-    MultiEffect {
-        anchors.fill: wall
-        source: wall
-        blurEnabled: true
-        blur: 0.5
-        blurMax: 32
-        brightness: ctl.dark ? -0.1 : 0
-    }
-    // primary.png é um link que o wallpaper-mode troca junto com o tema: recarrega
+    // os links mudam junto com o tema (wallpaper-mode): recarrega
     Connections {
         target: ctl
         function onThemeChanged() { const s = wall.source; wall.source = ""; wall.source = s }
@@ -49,7 +51,7 @@ Item {
     Item {
         id: content
         anchors.fill: parent
-        opacity: screenRoot.shown && !ctl.unlocking ? 1 : 0
+        opacity: screenRoot.ready && !ctl.unlocking ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
 
         // ---- marca ----

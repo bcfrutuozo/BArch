@@ -2,7 +2,7 @@
 -- https://wiki.hypr.land/Configuring/Basics/Autostart/
 
 hl.on("hyprland.start", function ()
-    -- Screen lock (Quickshell; lock.sh restarts it if it dies) and idle
+    -- Screen lock (Quickshell, resident; lock.sh starts it, locks, and restarts it if it dies) and idle
     hl.exec_cmd("~/.config/hypr/scripts/lock.sh")
     hl.exec_cmd("hypridle")
 
