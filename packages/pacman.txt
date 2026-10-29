@@ -107,6 +107,7 @@ qt6ct
 quickshell
 retroarch
 ripgrep
+rtkit
 satty
 sbctl
 seahorse

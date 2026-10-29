@@ -188,7 +188,7 @@ ShellRoot {
                 try { list = JSON.parse(text) } catch (e) { return }
                 const m = {}
                 for (const c of list) {
-                  if (!c.workspace || c.workspace.id <= 0 || !c.class) continue
+                  if (!c.workspace || !(c.workspace.id > 0) || !c.class) continue   // specials have no id
                   const k = c.workspace.id
                   if (!m[k]) m[k] = []
                   if (!m[k].includes(c.class)) m[k].push(c.class)

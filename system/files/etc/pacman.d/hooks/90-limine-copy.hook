@@ -7,4 +7,4 @@ Target = limine
 [Action]
 Description = Copying Limine to ESP
 When = PostTransaction
-Exec = /usr/bin/bash -c 'cp /usr/share/limine/BOOTX64.EFI /boot/EFI/limine/BOOTX64.EFI; cp /usr/share/limine/BOOTX64.EFI /boot/EFI/BOOT/BOOTX64.EFI'
+Exec = /usr/bin/bash -c 'cp /boot/EFI/limine/limine_x64.efi /boot/EFI/limine/BOOTX64.EFI; cp /boot/EFI/limine/limine_x64.efi /boot/EFI/BOOT/BOOTX64.EFI'
