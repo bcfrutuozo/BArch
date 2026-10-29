@@ -23,7 +23,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 
 | Folder | Goes to | What it is |
 |---|---|---|
-| `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, hyprpaper, `scripts/lock.sh` (starts and supervises the lock) |
+| `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, hyprpaper, `scripts/lock.sh` (locks; starts and supervises the resident lock process) |
 | `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/Theme.qml` is the central theme |
 | `foot/` | `~/.config/foot` | Terminal |
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
@@ -63,12 +63,18 @@ The main pieces:
   iCloud agenda in the clock's calendar; quick notes (Super+N); session restore at login.
 - **Lock screen** (`quickshell/lock/`, Super+L, idle and login): blurred wallpaper per monitor, clock,
   date and weather, notifications that arrived while away, music playing; follows the theme live
-  through `~/.local/state/quickshell/theme.json`. It runs as its own Quickshell process
-  (`scripts/lock.sh`), so it does not fall with the bar, and it is the only locker: if it dies
-  while locked, `lock.sh` starts it again (Hyprland allows a new lock to take over), slowing down
-  to one try every 10 s after three quick failures; **Super+Ctrl+Alt+L** kills and relaunches it by
-  hand (works while locked, for a red/black or frozen screen). An instance that is still around
-  without securing the session (`qs ... ipc call lock state`) is replaced by the next lock.
+  through `~/.local/state/quickshell/theme.json`. It is its own Quickshell process, so it does not
+  fall with the bar, and it stays resident: `scripts/lock.sh` starts it at login and every lock
+  request (hypridle, Super+L) is just `ipc call lock lock`, so the screen is up as soon as each
+  monitor draws a frame instead of after a Quickshell start. The wallpapers it shows are small,
+  pre-blurred copies (`primary-lock.png`, `secondary-lock.png`, made by `make_wallpapers.py` and
+  switched by `wallpaper-mode`), and everything fades in together. It is the only locker: if the
+  process dies while locked, `lock.sh` starts it again and locks it again (Hyprland allows a new
+  lock to take over), slowing down to one try every 10 s after three quick failures;
+  **Super+Ctrl+Alt+L** kills and relaunches it by hand (works while locked, for a red/black or
+  frozen screen; while unlocked it is how an edit under `lock/` is applied, since the resident
+  process does not watch its files). `qs -p ~/.config/quickshell/lock ipc call lock state` shows
+  what it thinks.
   PAM: `/etc/pam.d/barch-lock` (in `system/`; the plain `login` stack until it is installed). It also
   unlocks the GNOME keyring (`pam_gnome_keyring`): with autologin nothing else does, so apps that
   need a secret at startup are held until then with `keyring-wait` (Nextcloud: drop-in in `systemd/`)

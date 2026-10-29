@@ -2,11 +2,12 @@
 # ~/.local/bin/wallpaper-mode — troca os papéis de parede para o modo claro/escuro.
 # Uso: wallpaper-mode dark|light        (o theme-auto chama isto ao trocar de modo)
 #
-# Espera em ~/Pictures/Wallpapers:
-#   primary-dark.png  primary-light.png      (monitor principal, paisagem)
-#   secondary-dark.png secondary-light.png   (monitor vertical, retrato)
-# e mantém os links primary.png / secondary.png apontando para o modo atual
-# (o hyprpaper.conf e a tela de bloqueio usam esses links, então o login também acerta).
+# Espera em ~/Pictures/Wallpapers (tools/make_wallpapers.py):
+#   primary-dark.png  primary-light.png            (monitor principal, paisagem)
+#   secondary-dark.png secondary-light.png         (monitor vertical, retrato)
+#   primary-lock-dark.png ... secondary-lock-light.png   (versões pequenas e já desfocadas)
+# e mantém os links primary.png / secondary.png (hyprpaper) e primary-lock.png /
+# secondary-lock.png (tela de bloqueio) apontando para o modo atual, então o login também acerta.
 
 mode="${1:-dark}"
 dir="$HOME/Pictures/Wallpapers"
@@ -28,6 +29,12 @@ for name in "${!monitors[@]}"; do
   file="$dir/$name-$mode.png"
   [[ -f "$file" ]] || { echo "missing: $file" >&2; continue; }
   ln -sfn "$name-$mode.png" "$dir/$name.png"
+  # a tela de bloqueio relê o link quando o tema muda (sem a versão lock ela usa a grande)
+  if [[ -f "$dir/$name-lock-$mode.png" ]]; then
+    ln -sfn "$name-lock-$mode.png" "$dir/$name-lock.png"
+  else
+    rm -f "$dir/$name-lock.png"
+  fi
   set_wallpaper "${monitors[$name]}" "$file" || failed=1
 done
 

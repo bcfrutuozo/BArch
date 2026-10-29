@@ -95,10 +95,14 @@ else
     warn "couldn't generate the wallpapers (run tools/make_wallpapers.py by hand to see why)"
   fi
 fi
-# links primary.png / secondary.png (hyprpaper e a tela de bloqueio usam estes; o wallpaper-mode troca depois)
-for n in primary secondary; do
+# links primary.png / secondary.png (hyprpaper) e primary-lock.png / secondary-lock.png (tela de
+# bloqueio, versões pequenas já desfocadas); o wallpaper-mode troca depois
+if ! compgen -G "$HOME/Pictures/Wallpapers/primary-lock-dark.png" >/dev/null && [[ -f "$HOME/Pictures/Wallpapers/primary-dark.png" ]]; then
+  python3 "$REPO/tools/make_wallpapers.py" "$HOME/Pictures/Wallpapers" lock || warn "couldn't generate the lock screen wallpapers"
+fi
+for n in primary secondary primary-lock secondary-lock; do
   f="$HOME/Pictures/Wallpapers/$n.png"
-  [[ -e "$f" ]] || ln -sfn "$n-dark.png" "$f"
+  [[ -e "$f" || ! -f "$HOME/Pictures/Wallpapers/$n-dark.png" ]] || ln -sfn "$n-dark.png" "$f"
 done
 
 step "User services"

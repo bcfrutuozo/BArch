@@ -77,11 +77,14 @@ reusing the widget's own functions.
   shortcut sheet (Super+/); group `Hidden` keeps it out.
 - When a user-visible feature changes, update `README.md` in the same change.
 - Lock screen: look at it only through `quickshell/lock/preview.sh` (own Shell ID). Never start,
-  kill or reload the real lock (`lock/shell.qml`): it may be what is holding the session.
+  kill or reload the real lock (`lock/shell.qml`): it is a resident process and may be what is
+  holding the session. It does not watch files, so an edit under `lock/` only applies after
+  `hypr/scripts/lock.sh --relaunch`, which Bruno runs (safe while unlocked).
 
 ## Machine
 
 Ryzen + 64 GB RAM, NVIDIA RTX 4080 (`nvidia-open-dkms`), Alienware AW3225QF (4K QD-OLED, HDR,
 DisplayPort) plus a side monitor, btrfs on LUKS2 with Snapper (`snap-pac`), zram, PipeWire,
 Hyprland under uwsm with autologin on tty1 and the Quickshell lock screen (`quickshell/lock/`) at
-session start (no other locker: `hypr/scripts/lock.sh` restarts it if it dies).
+session start (no other locker: `hypr/scripts/lock.sh` starts the resident lock process, tells it
+to lock and restarts it if it dies).

@@ -3,15 +3,21 @@
 
 Uso: make_wallpapers.py <pasta>         papéis de parede (claro/escuro, paisagem/retrato)
      make_wallpapers.py <pasta> boot    imagens da tela de boot (Limine e Plymouth)
+     make_wallpapers.py <pasta> lock    só as versões da tela de bloqueio (a partir das acima)
 
 Gera, para cada modo (dark = Dracula, light = Catppuccin Latte):
-  primary-<modo>.png    3840x2160 (paisagem, AW3225QF)
-  secondary-<modo>.png  2160x3840 (retrato, P2723QE)
+  primary-<modo>.png         3840x2160 (paisagem, AW3225QF)
+  secondary-<modo>.png       2160x3840 (retrato, P2723QE)
+  primary-lock-<modo>.png    960x540, já desfocada (e 10% mais escura no modo escuro)
+  secondary-lock-<modo>.png  540x960, idem
 A mesma cena nos dois modos: noite com lua e estrelas / dia com sol.
+As versões "lock" são o que a tela de bloqueio (quickshell/lock) mostra: desfocar o PNG 4K na
+hora custava ~100 ms de decodificação mais o blur na GPU a cada bloqueio, e o papel de parede
+entrava com um pulo; um PNG pequeno já desfocado decodifica em poucos milissegundos.
 """
 import sys
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter
 
 RNG_SEED = 7
 
@@ -164,13 +170,33 @@ def boot(out):
     print("ok boot")
 
 
+LOCK_SCALE = 4          # 3840x2160 -> 960x540
+LOCK_BLUR = 4           # raio gaussiano na imagem reduzida (~16 px em 4K, como o blur antigo da tela)
+
+
+def lock_variants(out):
+    """Versões da tela de bloqueio, derivadas dos papéis de parede já gerados."""
+    for mode in ("dark", "light"):
+        for name in ("primary", "secondary"):
+            img = Image.open(f"{out}/{name}-{mode}.png").convert("RGB")
+            img = img.resize((img.width // LOCK_SCALE, img.height // LOCK_SCALE), Image.LANCZOS)
+            img = img.filter(ImageFilter.GaussianBlur(LOCK_BLUR))
+            if mode == "dark":
+                img = ImageEnhance.Brightness(img).enhance(0.9)
+            img.save(f"{out}/{name}-lock-{mode}.png", optimize=True)
+    print("ok lock")
+
+
 def main(out):
     if len(sys.argv) > 2 and sys.argv[2] == "boot":
         return boot(out)
+    if len(sys.argv) > 2 and sys.argv[2] == "lock":
+        return lock_variants(out)
     for mode in ("dark", "light"):
         render(mode, 3840, 2160, False).save(f"{out}/primary-{mode}.png", optimize=True)
         render(mode, 2160, 3840, True).save(f"{out}/secondary-{mode}.png", optimize=True)
         print("ok", mode)
+    lock_variants(out)
 
 
 if __name__ == "__main__":
