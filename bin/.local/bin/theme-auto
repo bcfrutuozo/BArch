@@ -23,8 +23,7 @@ fi
 gsettings set org.gnome.desktop.interface color-scheme "$scheme"
 gsettings set org.gnome.desktop.interface gtk-theme "$gtk_theme"
 
-# Papéis de parede
-wallpaper-mode "$mode"
+# Apps (GTK, ícones, cursor, qt6ct). Os papéis de parede seguem o modo sozinhos (o bar os desenha)
 apps-theme "$mode"
 
 for dir in "$HOME/.config/gtk-3.0" "$HOME/.config/gtk-4.0"; do

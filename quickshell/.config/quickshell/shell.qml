@@ -43,6 +43,8 @@ import "privacy"
 import "notifications"
 import "replay"
 import "weather"
+import "wallpaper"
+import "polkit"
 
 ShellRoot {
   id: shell
@@ -61,6 +63,9 @@ ShellRoot {
 
   // Balões de notificação (servidor próprio, no lugar do swaync)
   NotificationPopups {}
+  // Papel de parede (no lugar do hyprpaper) e agente polkit (no lugar do hyprpolkitagent)
+  Wallpaper {}
+  PolkitDialog {}
 
   // ---- OLED: pixel shift ----
   // As ilhas percorrem uma grade de 25×13 pixels físicos em zigue-zague,
