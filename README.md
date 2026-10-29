@@ -23,14 +23,14 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 
 | Folder | Goes to | What it is |
 |---|---|---|
-| `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, hyprpaper, `scripts/lock.sh` (locks; starts and supervises the resident lock process) |
+| `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, `scripts/lock.sh` (locks; starts and supervises the resident lock process) |
 | `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/Theme.qml` is the central theme |
 | `foot/` | `~/.config/foot` | Terminal |
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
 | `mpv/` | `~/.config/mpv` | Video player (HDR, NVDEC) |
 | `uwsm/`, `environment/` | `~/.config/uwsm`, `~/.config/environment.d` | Session environment (Qt theme, cursor) |
 | `systemd/` | `~/.config/systemd/user` | User services (cliphist, replay, NAS mount) |
-| `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `wallpaper-mode`, `apps-theme`, `papirus-accent`, `nas-mount`, `keyring-wait` |
+| `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `apps-theme`, `papirus-accent`, `nas-mount`, `keyring-wait` |
 | `games/` | `~/Games/battle.net/run.sh`, `~/.config/gamemode.ini`, `~/.local/share/applications/steam.desktop` | Battle.net launcher (umu + Proton-GE), gamemode rules, Steam launcher without `GDK_SCALE` (Steam would scale twice) |
 | `calendar/` | `~/.config/khal`, `~/.config/vdirsyncer/config` | iCloud calendar sync (the app password stays out of the repo) |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
@@ -57,6 +57,10 @@ The main pieces:
 - **Control Center:** Light / Dark / Auto, Display (HDR, SDR brightness, side monitor on/off),
   Bluetooth, Caffeine, Night Light, Do Not Disturb, Game HDR, Game HUD (MangoHud), Screenshot,
   screen Recording (full screen or region).
+- **Wallpaper** on every monitor (a background layer, no hyprpaper): `primary-<mode>.png` on the main
+  one, `secondary-<mode>.png` on the portrait one, crossfading when the theme mode changes.
+- **Polkit agent** (`Quickshell.Services.Polkit`, no hyprpolkitagent): the password dialog apps get
+  when they ask for privileges (`pkexec`, GNOME Disks, …), in the bar's theme.
 - **Own notification server** with history, DND, sounds and app actions; privacy indicator
   (mic, camera, screen sharing); ShadowPlay-style replay (off at login,
   Super+Alt+R turns it on, Alt+F10 saves); weather with rain alerts;
@@ -67,8 +71,8 @@ The main pieces:
   fall with the bar, and it stays resident: `scripts/lock.sh` starts it at login and every lock
   request (hypridle, Super+L) is just `ipc call lock lock`, so the screen is up as soon as each
   monitor draws a frame instead of after a Quickshell start. The wallpapers it shows are small,
-  pre-blurred copies (`primary-lock.png`, `secondary-lock.png`, made by `make_wallpapers.py` and
-  switched by `wallpaper-mode`), and everything fades in together. It is the only locker: if the
+  pre-blurred copies (`primary-lock-<mode>.png`, `secondary-lock-<mode>.png`, made by
+  `make_wallpapers.py`), and everything fades in together. It is the only locker: if the
   process dies while locked, `lock.sh` starts it again and locks it again (Hyprland allows a new
   lock to take over), slowing down to one try every 10 s after three quick failures;
   **Super+Ctrl+Alt+L** kills and relaunches it by hand (works while locked, for a red/black or
@@ -173,7 +177,7 @@ the import logs (IDs of everything written) are in `~/.local/state/barch/finance
 `quickshell/.config/quickshell/theme/Theme.qml` is the single source. It generates the colors for
 foot, Neovim, the lock screen, the Hyprland borders, GTK 3 (`BArch-dark/light` themes over adw-gtk3),
 GTK 4/libadwaita, qt6ct, fontconfig and MangoHud. `theme-auto` switches the Hyprland theme,
-the wallpapers (`wallpaper-mode`) and the apps (`apps-theme`: GTK theme, Papirus icons, cursor).
+the apps (`apps-theme`: GTK theme, Papirus icons, cursor); the wallpapers follow `Theme.isDark` inside the bar.
 Generated files inside the repo are git-ignored.
 
 ## Fresh install

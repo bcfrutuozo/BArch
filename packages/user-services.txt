@@ -5,7 +5,6 @@ barch-agent@morning.timer
 barch-agent@upstream-watch.timer
 barch-agent@weekly-review.timer
 cliphist.service
-hyprpaper.service
 hyprsunset.service
 librepods.service
 nas-mount.service

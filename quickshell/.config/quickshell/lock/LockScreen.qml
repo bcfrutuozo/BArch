@@ -19,26 +19,22 @@ Item {
     readonly property bool ready: shown && wall.status !== Image.Loading
 
     // ---- wallpaper (já desfocado) ----
-    // primary-lock.png / secondary-lock.png: 960x540 já com blur (tools/make_wallpapers.py), ligadas ao
-    // modo atual pelo wallpaper-mode. Decodificam em poucos ms, síncronas, então o primeiro frame da
+    // primary-lock-<modo>.png / secondary-lock-<modo>.png: 960x540 já com blur (tools/make_wallpapers.py),
+    // o modo vem do theme.json do bar. Decodificam em poucos ms, síncronas, então o primeiro frame da
     // superfície já sai com o papel de parede; desfocar o PNG 4K aqui custava ~100 ms e entrava com um
     // pulo. Sem a versão lock (instalação antiga), cai para a imagem grande.
     Image {
         id: wall
         property bool fallback: false
         anchors.fill: parent
-        source: "file://" + ctl.home + "/Pictures/Wallpapers/" + (screenRoot.primary ? "primary" : "secondary") + (fallback ? ".png" : "-lock.png")
+        source: "file://" + ctl.home + "/Pictures/Wallpapers/" + (screenRoot.primary ? "primary" : "secondary")
+                + (fallback ? "" : "-lock") + (ctl.dark ? "-dark" : "-light") + ".png"
         fillMode: Image.PreserveAspectCrop
         cache: false
         smooth: true
         opacity: screenRoot.ready ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
         onStatusChanged: if (status === Image.Error && !fallback) { console.warn("lock: no lock wallpaper, using the full-size one"); fallback = true }
-    }
-    // os links mudam junto com o tema (wallpaper-mode): recarrega
-    Connections {
-        target: ctl
-        function onThemeChanged() { const s = wall.source; wall.source = ""; wall.source = s }
     }
 
     // esconde o cursor; clique devolve o foco ao campo

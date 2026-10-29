@@ -19,6 +19,7 @@ import Quickshell.Widgets
 import Quickshell.Hyprland
 import "../theme"
 import "../windowmenu"
+import "../wallpaper"
 
 Scope {
     id: root
@@ -26,12 +27,6 @@ Scope {
     property bool shown: false
     property int count: 10                      // workspaces mostrados (1..count)
     property int tileH: 170                     // altura de cada miniatura
-    // papel de parede de cada monitor (os links que o wallpaper-mode mantém)
-    property var wallpapers: ({
-        "HDMI-A-2": Quickshell.env("HOME") + "/Pictures/Wallpapers/primary.png",
-        "HDMI-A-1": Quickshell.env("HOME") + "/Pictures/Wallpapers/secondary.png"
-    })
-
     property var monitors: ({})                 // nome → { x, y, w, h (lógicos), active }
     property var wsMonitor: ({})                // id do workspace → nome do monitor
     property var clients: []
@@ -215,7 +210,7 @@ Scope {
                             Image {
                                 anchors.fill: parent
                                 anchors.margins: 1
-                                source: root.wallpapers[tile.monName] ? "file://" + root.wallpapers[tile.monName] : ""
+                                source: "file://" + Wallpapers.path(tile.monName)   // o mesmo que o fundo do monitor
                                 fillMode: Image.PreserveAspectCrop
                                 sourceSize: Qt.size(width * 2, height * 2)
                                 asynchronous: true
