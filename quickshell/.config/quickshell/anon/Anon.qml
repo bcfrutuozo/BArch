@@ -1,5 +1,6 @@
 // Anon.qml — Anonymous Mode (anon.sh nesta pasta): a VPN (singleton Vpn) mais o que ainda
-// entregaria esta máquina: Mullvad Browser como navegador padrão enquanto ligado, hostname fora
+// entregaria esta máquina: o kill switch (nftables, helper root barch-killswitch) que segura todo
+// o tráfego se o túnel cair, Mullvad Browser como navegador padrão enquanto ligado, hostname fora
 // do DHCP e, estático, a política de WebRTC dos navegadores Chromium. Usado pelo tile do Control
 // Center, pelo indicador da barra (VpnWidget) e pelo barch (IPC "anon"). O estado do túnel é o
 // do Vpn; aqui só se chama o script e se lê o que ele cobre.
@@ -20,17 +21,24 @@ Singleton {
     property bool mullvad: false            // Mullvad Browser instalado
     property bool webrtc: false             // política WebRTC dos navegadores Chromium no lugar
     property bool dhcpHostname: false       // algum perfil de rede ainda manda o hostname por DHCP
+    property bool killswitchInstalled: false
+    property bool killswitch: false         // kill switch armado (nada sai fora do túnel)
+    property string killswitchEndpoint: ""
     property var missing: []                // o que o modo não cobre agora (texto)
     property bool busy: false               // on/off rodando
     property string error: ""
 
     readonly property bool available: Vpn.available
-    // off | connecting | on | degraded (ligado, mas o túnel caiu: o tráfego está exposto)
+    // off | connecting | on | holding (ligado, túnel caiu, o kill switch segura o tráfego)
+    // | exposed (ligado, túnel caiu, sem kill switch: o tráfego sai pelo IP real)
     readonly property string state: !on ? "off"
                                   : Vpn.connected ? "on"
-                                  : (busy || Vpn.connecting) ? "connecting" : "degraded"
+                                  : (busy || Vpn.connecting) ? "connecting"
+                                  : killswitch ? "holding" : "exposed"
     readonly property bool connecting: state === "connecting"
-    readonly property bool degraded: state === "degraded"
+    readonly property bool holding: state === "holding"
+    readonly property bool exposed: state === "exposed"
+    readonly property bool degraded: holding || exposed
 
     function up(region) {
         if (busy) return
@@ -64,6 +72,9 @@ Singleton {
                 root.mullvad = s.mullvad === true
                 root.webrtc = s.webrtc === true
                 root.dhcpHostname = s.dhcpHostname === true
+                root.killswitchInstalled = s.killswitch ? s.killswitch.installed === true : false
+                root.killswitch = s.killswitch ? s.killswitch.armed === true : false
+                root.killswitchEndpoint = s.killswitch ? (s.killswitch.endpoint || "") : ""
                 root.missing = s.missing || []
                 if (s.error && !root.busy) root.error = s.error
             }
@@ -79,7 +90,9 @@ Singleton {
     // ---- IPC (barch anon ...) ----
     function status() {
         return { ok: true, on: on, state: state, browser: browser, mullvad: mullvad, webrtc: webrtc,
-                 dhcpHostname: dhcpHostname, missing: missing, error: error, vpn: Vpn.status() }
+                 dhcpHostname: dhcpHostname,
+                 killswitch: { installed: killswitchInstalled, armed: killswitch, endpoint: killswitchEndpoint },
+                 missing: missing, error: error, vpn: Vpn.status() }
     }
     IpcHandler {
         target: "anon"

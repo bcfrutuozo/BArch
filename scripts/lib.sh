@@ -25,7 +25,7 @@ declare -A PACKAGES=(
 USER_SERVICES=(cliphist.service)
 
 # System services and timers to enable on a fresh install (apply-system.sh asks first)
-SYSTEM_SERVICES=(earlyoom.service smartd.service paccache.timer btrfs-scrub@-.timer setvtrgb.service)
+SYSTEM_SERVICES=(earlyoom.service smartd.service paccache.timer btrfs-scrub@-.timer setvtrgb.service nftables.service)
 
 # System files copied into system/files/ (never symlinked).
 # Globs are allowed. Anything missing is skipped, and so are symlinks.
@@ -54,6 +54,7 @@ SYSTEM_FILES=(
   /etc/bluetooth/main.conf
   /etc/default/earlyoom
   /etc/smartd.conf
+  /etc/nftables.conf
   "/etc/brave/policies/managed/*"
   "/etc/chromium/policies/managed/*"
   /usr/local/bin/desktop-notify
@@ -62,7 +63,9 @@ SYSTEM_FILES=(
   /usr/local/bin/archnews
   /usr/local/bin/barch-agent-snapshot
   /usr/local/bin/barch-failure-relay
+  /usr/local/bin/barch-killswitch
   /etc/polkit-1/rules.d/50-barch-agent-snapshot.rules
+  /etc/polkit-1/rules.d/50-barch-killswitch.rules
   /etc/pam.d/barch-lock
   "/etc/pacman.d/hooks/*"
   "/etc/modprobe.d/*"

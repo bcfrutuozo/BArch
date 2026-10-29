@@ -18,7 +18,9 @@
 # change and activate it with the session's polkit rights, no password. DNS is exclusive while
 # connected (dns-priority -1) and IPv6 is routed into the tunnel, where PIA drops it, so neither
 # leaks. The profile never autoconnects: PIA forgets the key after a while, every connection
-# registers a new one.
+# registers a new one. While Anonymous Mode's kill switch is armed (anon/anon.sh, table
+# inet barch-killswitch), a region change re-arms it for the new server before the tunnel moves,
+# so the new handshake is let through; the API calls before that go through the current tunnel.
 #
 # Files: ~/.config/pia/credentials (two lines: username, password; chmod 600; NOT in the repo),
 #        ~/.local/state/barch/pia/ (token, server list, latencies, preferred region, current tunnel).
@@ -35,6 +37,7 @@ servers_url=https://serverlist.piaservers.net/vpninfo/servers/v6
 token_url=https://www.privateinternetaccess.com/api/client/v2/token
 status_url=https://www.privateinternetaccess.com/api/client/status
 lat_max=0.6                              # s: regions slower than this are left out of "auto"
+ks_state=/run/barch-killswitch/state.json  # written by /usr/local/bin/barch-killswitch (root)
 umask 077
 mkdir -p "$state"
 
@@ -112,6 +115,16 @@ add_key() {   # add_key <cn> <ip> <token> <pubkey> -> PIA's JSON answer (status,
     --data-urlencode "pt=$3" --data-urlencode "pubkey=$4" "https://$1:1337/addKey"
 }
 
+# ---------------------------------------------------------------- kill switch (Anonymous Mode)
+ks_armed() { jq -e '.armed == true' "$ks_state" >/dev/null 2>&1; }
+ks_rearm() {   # ks_rearm <server ip> <port>: let the new endpoint through before the tunnel moves
+  if systemctl start --no-ask-password "barch-killswitch@on_${1}_${2}.service" >/dev/null 2>&1; then
+    log "kill switch re-armed for $1:$2"
+  else
+    log "could not re-arm the kill switch for $1:$2"
+  fi
+}
+
 # ---------------------------------------------------------------- NetworkManager
 nm_active() { nmcli -t -f NAME connection show --active 2>/dev/null | grep -qx "$con"; }
 nm_exists() { nmcli -t -f NAME connection show 2>/dev/null | grep -qx "$con"; }
@@ -156,6 +169,8 @@ connect() {
     nmcli connection add type wireguard con-name "$con" ifname "$con" connection.permissions "user:$USER" "${props[@]}" >/dev/null \
       || fail "NetworkManager refused to create the profile '$con'"
   fi
+  jq --arg sip "$server_ip" --argjson sport "$server_port" '. + {server_ip: $sip, server_port: $sport}' "$state/current.json" > "$state/current.json.tmp" && mv "$state/current.json.tmp" "$state/current.json"
+  ks_armed && ks_rearm "$server_ip" "$server_port"
   nm_active && nmcli connection down "$con" >/dev/null 2>&1
   nmcli --wait 25 connection up "$con" >/dev/null 2>&1 || fail "could not bring the tunnel up (nmcli connection up $con)"
 
