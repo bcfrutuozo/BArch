@@ -23,7 +23,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 
 | Folder | Goes to | What it is |
 |---|---|---|
-| `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hyprlock, hypridle, hyprpaper |
+| `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, hyprpaper, `scripts/lock.sh` (lock with hyprlock fallback) |
 | `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/Theme.qml` is the central theme |
 | `foot/` | `~/.config/foot` | Terminal |
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
@@ -61,6 +61,12 @@ The main pieces:
   (mic, camera, screen sharing); ShadowPlay-style replay (off at login,
   Super+Alt+R turns it on, Alt+F10 saves); weather with rain alerts;
   iCloud agenda in the clock's calendar; quick notes (Super+N); session restore at login.
+- **Lock screen** (`quickshell/lock/`, Super+L, idle and login): blurred wallpaper per monitor, clock,
+  date and weather, notifications that arrived while away, music playing; follows the theme live
+  through `~/.local/state/quickshell/theme.json`. It runs as its own Quickshell process
+  (`scripts/lock.sh`), so it does not fall with the bar; if it dies or shows nothing, the script
+  starts hyprlock in its place, and **Super+Ctrl+Alt+L** does the same by hand (works while locked).
+  To look at it without locking: `lock/preview.sh` (a normal window with its own Shell ID).
 - **System health:** `.pacnew` files, failed services, TPM fallback warning and a monthly cleanup.
 - **Updates:** pending packages, unread Arch news (also enforced by a pacman hook) and the kernel.
 
@@ -152,7 +158,7 @@ the import logs (IDs of everything written) are in `~/.local/state/barch/finance
 ## Theme
 
 `quickshell/.config/quickshell/theme/Theme.qml` is the single source. It generates the colors for
-foot, Neovim, hyprlock, the Hyprland borders, GTK 3 (`BArch-dark/light` themes over adw-gtk3),
+foot, Neovim, the lock screen, hyprlock, the Hyprland borders, GTK 3 (`BArch-dark/light` themes over adw-gtk3),
 GTK 4/libadwaita, qt6ct, fontconfig and MangoHud. `theme-auto` switches the Hyprland theme,
 the wallpapers (`wallpaper-mode`) and the apps (`apps-theme`: GTK theme, Papirus icons, cursor).
 Generated files inside the repo are git-ignored.

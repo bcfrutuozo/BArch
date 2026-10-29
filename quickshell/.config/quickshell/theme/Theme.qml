@@ -134,7 +134,7 @@ Singleton {
 
     // (o swaync foi substituído pelas notificações do próprio Quickshell, em notifications/)
     function hex(c) { return c.toString().slice(0, 7) }
-    Component.onCompleted: { hyprApply.restart(); appsWrite.restart(); hudWrite.restart(); panelIconsProc.running = true }
+    Component.onCompleted: { hyprApply.restart(); appsWrite.restart(); hudWrite.restart(); themeJsonWrite.restart(); panelIconsProc.running = true }
 
     // ================= terminal (foot) e editor (nvim) =================
     // Os dois recebem SEMPRE o par darkFlavor/lightFlavor (o "theme set" só afeta a barra).
@@ -256,6 +256,24 @@ Singleton {
         id: lockWrite
         interval: 300
         onTriggered: root.writeFile(Quickshell.env("HOME") + "/.config/hypr/hyprlock-colors.conf", root.hyprlockConf)
+    }
+
+    // ================= tela de bloqueio (Quickshell, lock/shell.qml) =================
+    // O bloqueio roda numa instância separada do Quickshell (qs -p ~/.config/quickshell/lock) e
+    // NÃO importa este singleton: carregá-lo gera os arquivos de tema dos apps e aplica as bordas
+    // do Hyprland, coisa que só a barra deve fazer. Em vez disso ele lê a paleta ATUAL deste
+    // JSON (segue claro/escuro e o "theme set"); um FileView com watchChanges troca na hora.
+    readonly property string themeJson: JSON.stringify({
+        flavor: flavor, dark: lockDark, font: font, iconFont: iconFont,
+        colors: { crust: hex(crust), base: hex(base), surface: hex(surface), overlay: hex(overlay),
+                  subtext: hex(subtext), text: hex(text), accent: hex(accent),
+                  green: hex(green), yellow: hex(yellow), red: hex(red) }
+    }, null, 2) + "\n"
+    onThemeJsonChanged: themeJsonWrite.restart()
+    Timer {
+        id: themeJsonWrite
+        interval: 300
+        onTriggered: root.writeFile(root.stateDir + "theme.json", root.themeJson)
     }
 
     onFootIniChanged: termWrite.restart()

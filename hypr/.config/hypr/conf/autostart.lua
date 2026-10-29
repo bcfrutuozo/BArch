@@ -2,8 +2,8 @@
 -- https://wiki.hypr.land/Configuring/Basics/Autostart/
 
 hl.on("hyprland.start", function ()
-    -- Screen lock and idle
-    hl.exec_cmd("hyprlock")
+    -- Screen lock (Quickshell, hyprlock as fallback) and idle
+    hl.exec_cmd("~/.config/hypr/scripts/lock.sh")
     hl.exec_cmd("hypridle")
 
     -- Automatic light/dark mode
