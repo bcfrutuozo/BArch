@@ -1,0 +1,14 @@
+# Daily encrypted backup of what the repo cannot hold (secrets, app state, personal files) to the
+# NAS with restic: `barch backup run`. The list is backup/include.txt in ~/BArch. A failure goes
+# through the usual OnFailure drop-in (service.d) to `barch failure`, which notifies with Investigate.
+[Unit]
+Description=BArch backup to the NAS (restic)
+After=nas-mount.service network-online.target
+Wants=nas-mount.service
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/barch backup run
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h

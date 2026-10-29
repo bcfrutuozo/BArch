@@ -19,6 +19,7 @@ declare -A PACKAGES=(
   [games]="Games/battle.net/run.sh .config/gamemode.ini .local/share/applications/steam.desktop"
   [bin]=".local/bin/kernel-update .local/bin/theme-auto .local/bin/apps-theme .local/bin/papirus-accent .local/bin/barch .local/bin/nas-mount .local/bin/keyring-wait"
   [calendar]=".config/khal .config/vdirsyncer/config"
+  [audio]=".config/pipewire .config/wireplumber"
 )
 
 # User services to enable on a fresh install

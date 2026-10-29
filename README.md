@@ -33,6 +33,8 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `apps-theme`, `papirus-accent`, `nas-mount`, `keyring-wait` |
 | `games/` | `~/Games/battle.net/run.sh`, `~/.config/gamemode.ini`, `~/.local/share/applications/steam.desktop` | Battle.net launcher (umu + Proton-GE), gamemode rules, Steam launcher without `GDK_SCALE` (Steam would scale twice) |
 | `calendar/` | `~/.config/khal`, `~/.config/vdirsyncer/config` | iCloud calendar sync (the app password stays out of the repo) |
+| `audio/` | `~/.config/pipewire`, `~/.config/wireplumber` | PipeWire rates and resampler, onboard output at 32-bit/192 kHz, Bluetooth output-only at AAC (below), fifine mic as input only |
+| `backup/` | — | `barch backup`: what restic saves to the NAS (`include.txt`, `exclude.txt`), see Backup |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
 | `agent/` | — | Scheduled agent tasks (`tasks/`), the failure ignore list and the upstream watch list; used by `barch` |
 | `tools/` | — | Generators: wallpapers (`make_wallpapers.py`), Limine theme (`limine-theme.py`) |
@@ -123,7 +125,12 @@ The main pieces:
   need a secret at startup are held until then with `keyring-wait` (Nextcloud: drop-in in `systemd/`)
   instead of asking for the keyring password at every login.
   To look at it without locking: `lock/preview.sh` (a normal window with its own Shell ID).
-- **System health:** `.pacnew` files, failed services, TPM fallback warning and a monthly cleanup.
+- **System health:** `.pacnew` files, failed services, TPM fallback warning, the daily backup (failed
+  or more than two days old) and a monthly cleanup.
+- **Bluetooth audio** (`audio/`): headsets are output only, AAC first (then SBC-XQ, SBC); the
+  headset profile (HFP/HSP, 16 kHz mono) is out of the roles and the automatic switch to it is off,
+  so an app opening the microphone (Discord, a call) never degrades the music: the fifine is the
+  microphone. The connected device shows its codec in the Bluetooth tile and in the bar's device list.
 - **Updates:** pending packages, unread Arch news (also enforced by a pacman hook) and the kernel.
 
 ## barch CLI
@@ -139,7 +146,8 @@ barch monitor side on|off|status   barch caffeine on|off|status
 barch nightlight on|off|status     barch dnd on|off|status
 barch anon on [region]|off|toggle|status   # Anonymous Mode: VPN + kill switch + Mullvad Browser as default + hostname out of DHCP
 barch vpn on [region]|off|toggle|status|regions|region <id>|auto
-barch health [--refresh]           # .pacnew, failed services, TPM, cleanup
+barch health [--refresh]           # .pacnew, failed services, TPM, backup, cleanup
+barch backup init|run|status|list|restore [SNAPSHOT] <path>...   # restic to the NAS (see Backup)
 barch agent ask "why is X slow?"   # Claude in a terminal in ~/BArch (the launcher's "a ")
 barch finance import [--dry-run]   # C6 Bank statements → Firefly (see Finance)
 barch replay share [file] [--from 12 --to 40]
@@ -214,6 +222,28 @@ Each run uses Claude like a conversation would (a task costs roughly what a shor
 Token, `config.json` (URL, PDF password), dictionary and files never enter the repo; the ledger and
 the import logs (IDs of everything written) are in `~/.local/state/barch/finance/`.
 
+## Backup
+
+The repo holds the configuration; `barch backup` holds the rest: secrets, per-app state and
+personal files, encrypted with [restic](https://restic.net) on the NAS
+(`/mnt/nasfrutuozo/organization/desktops/bcfrutuozo/restic`; another path or a restic URL goes in
+`~/.config/barch/backup.conf` as `BACKUP_REPO=`). What goes in is `backup/include.txt` (SSH and
+GPG keys, PIA, the vdirsyncer password, the keyring, Firefly data and the finance ledger, browser
+profiles, Parsec, Steam user data, Claude's project memory, the VM definitions dumped by
+`virsh`, Documents, Pictures, Videos); `exclude.txt` drops caches and sockets. The restic
+password lives in `~/.config/barch/backup/password` and nowhere in the repo: `barch backup init`
+generates it, prints it once, and it belongs in Bitwarden too, because a reinstalled machine
+needs it before anything can be restored.
+
+`barch-backup.timer` runs it daily at 13:00 (`Persistent`, so a machine that was off catches
+up), keeping 14 daily, 8 weekly and 12 monthly snapshots (pruned on Sundays). The health widget
+turns yellow when the last run failed or is more than two days old, and a failed run also goes
+through `barch failure` like any other service. `barch backup restore latest ~/.ssh` puts the
+files under `~/Restore/<snapshot>/` with their full paths, never in place.
+
+Not covered: anything only root can read (`/etc/NetworkManager/system-connections`, the
+Wi-Fi passwords) and the VM disk images.
+
 ## Theme
 
 `quickshell/.config/quickshell/theme/Theme.qml` is the single source. It generates the colors for
@@ -240,6 +270,9 @@ cd ~/BArch
 3. After `apply-system.sh`: rebuild the boot images (`sudo limine-update`), re-enroll the TPM
    (below), reboot. Fill in anything marked `REDACTED`.
 4. Build the kernel: `kernel-update -f`.
+5. Secrets and app state: with the NAS mounted and the restic password (Bitwarden) in
+   `~/.config/barch/backup/password`, `barch backup restore latest ~/.ssh ~/.gnupg ~/.config/pia ...`
+   (see Backup) and move the files into place.
 
 `install.sh` and `apply-system.sh` detect virtual machines: there they skip NVIDIA, the CachyOS
 kernel and every disk/boot file, so the repo can be tested in a KVM guest without breaking it.
@@ -272,4 +305,6 @@ True for this machine only; review before using the repo elsewhere.
 
 SSH/GPG keys, Secure Boot keys, Wi-Fi passwords, SMB credentials, the iCloud app password
 (`~/.config/vdirsyncer/icloud-password`) and anything else secret. `collect-system.sh` skips
-secret-looking files, redacts inline passwords and warns about suspicious lines.
+secret-looking files, redacts inline passwords and warns about suspicious lines. Most of these
+are in the encrypted NAS backup instead (see Backup); the restic password itself is only in
+Bitwarden and on this machine.

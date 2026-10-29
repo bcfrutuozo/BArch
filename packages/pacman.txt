@@ -105,6 +105,7 @@ qt6-tools
 qt6-wayland
 qt6ct
 quickshell
+restic
 retroarch
 ripgrep
 rtkit
