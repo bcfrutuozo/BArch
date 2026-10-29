@@ -52,7 +52,6 @@ gvfs-smb
 hypridle
 hyprland
 hyprlauncher
-hyprlock
 hyprpaper
 hyprpicker
 hyprpolkitagent

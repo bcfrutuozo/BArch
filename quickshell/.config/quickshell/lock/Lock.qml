@@ -16,9 +16,10 @@
 // follows it; without the file, Dracula).
 //
 // If this process dies while locked, Hyprland keeps the session locked (red screen) and
-// misc:allow_session_lock_restore lets another lock take over: hypr/scripts/lock.sh runs
-// hyprlock when `qs` exits with an error, and Super+Ctrl+Alt+L (works while locked) does the
-// same by hand. Missing vs. hyprlock: a Caps Lock indicator (Quickshell has no keyboard state).
+// misc:allow_session_lock_restore lets a new lock take over: hypr/scripts/lock.sh starts this
+// config again whenever `qs` exits with an error, and Super+Ctrl+Alt+L (works while locked)
+// forces that by hand. There is no other locker (hyprlock was retired on 2026-10-29).
+// Known gap: no Caps Lock indicator (Quickshell has no keyboard state).
 
 import QtQuick
 import Quickshell
@@ -70,7 +71,7 @@ Scope {
     readonly property color pill: Qt.alpha(base, dark ? 0.45 : 0.6)
     readonly property color outline: Qt.alpha(fg, 0.14)
     readonly property color shadow: dark ? Qt.rgba(0, 0, 0, 0.4) : Qt.rgba(0, 0, 0, 0.1)
-    readonly property string font: "SF Pro Display"      // hyprlock used the Display face; the bar uses Text
+    readonly property string font: "SF Pro Display"      // the Display face; the bar uses Text
     readonly property string iconFont: theme.iconFont
 
     // ================= password =================
@@ -81,9 +82,13 @@ Scope {
     property bool unlocking: false
     signal shake()
 
+    // /etc/pam.d/barch-lock (system/files: the login stack + gnome-keyring). Until that file is
+    // installed the plain login stack is used, so the screen can always be unlocked.
+    property string pamConfig: "login"
+    FileView { path: "/etc/pam.d/barch-lock"; printErrors: false; onLoaded: root.pamConfig = "barch-lock" }
     PamContext {
         id: pam
-        config: "hyprlock"              // /etc/pam.d/hyprlock: include login + gnome-keyring
+        config: root.pamConfig
         user: root.user
         onPamMessage: if (responseRequired) respond(root.buffer)
         onCompleted: result => {
@@ -182,17 +187,17 @@ Scope {
         const l = lockLoader.item
         if (!l || l.locked || l.secure) return         // still locking, or locked
         if (root.unlocking) { Qt.quit(); return }       // our own unlock: done, exit 0
-        console.error("lock: the compositor ended the session lock before the unlock; exiting so hyprlock can take over")
+        console.error("lock: the compositor ended the session lock before the unlock; exiting so lock.sh starts a new one")
         Qt.exit(1)
     }
     // Hyprland sends `locked` (-> secure) once every monitor has drawn a lock frame (5 s at
     // most). If that never happens (lock denied, no compositor support, nothing rendered) this
-    // process is not protecting anything: leave with an error so lock.sh falls back to hyprlock.
+    // process is not protecting anything: leave with an error so lock.sh starts a new one.
     Timer {
         running: !root.preview
         interval: 15000
         onTriggered: if (!lockLoader.item || !lockLoader.item.secure) {
-            console.error("lock: session lock not acquired after 15 s, exiting so hyprlock can take over")
+            console.error("lock: session lock not acquired after 15 s, exiting so lock.sh starts a new one")
             Qt.exit(1)
         }
     }
@@ -205,7 +210,7 @@ Scope {
         function state(): string {
             const l = lockLoader.item
             return JSON.stringify({ locked: !!(l && l.locked), secure: !!(l && l.secure),
-                                    unlocking: root.unlocking, preview: root.preview })
+                                    unlocking: root.unlocking, preview: root.preview, pam: root.pamConfig })
         }
     }
 

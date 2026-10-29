@@ -6,7 +6,7 @@
 #   primary-dark.png  primary-light.png      (monitor principal, paisagem)
 #   secondary-dark.png secondary-light.png   (monitor vertical, retrato)
 # e mantém os links primary.png / secondary.png apontando para o modo atual
-# (o hyprpaper.conf e o hyprlock.conf usam esses links, então o login também acerta).
+# (o hyprpaper.conf e a tela de bloqueio usam esses links, então o login também acerta).
 
 mode="${1:-dark}"
 dir="$HOME/Pictures/Wallpapers"

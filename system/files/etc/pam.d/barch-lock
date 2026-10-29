@@ -1,0 +1,5 @@
+# PAM configuration for the BArch lock screen (quickshell/lock, PamContext config "barch-lock").
+# The same stack hyprlock used: 'login', plus unlocking the GNOME keyring with the password.
+
+auth        include     login
+auth        optional    pam_gnome_keyring.so

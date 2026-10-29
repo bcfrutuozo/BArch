@@ -78,7 +78,7 @@ hl.config({
         disable_hyprland_logo   = false, -- true desativa o logo/fundo padrão
         font_family = "SF Pro Display",
         -- Se o programa de bloqueio morrer, a sessão continua travada (tela vermelha) e isto
-        -- permite subir outro bloqueio no lugar: scripts/lock.sh cai para o hyprlock (Super+Ctrl+Alt+L)
+        -- permite subir outro bloqueio no lugar: scripts/lock.sh inicia o lock de novo (Super+Ctrl+Alt+L)
         allow_session_lock_restore = true,
     },
 })
