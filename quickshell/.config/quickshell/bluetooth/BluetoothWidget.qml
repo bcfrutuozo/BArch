@@ -2,7 +2,8 @@
 // Na barra: símbolo do Bluetooth (apagado quando desligado, azul com algo conectado;
 // some se não houver adaptador).
 // Clique: painel com liga/desliga, busca, "My Devices" (pareados: clique conecta/desconecta,
-// × esquece) e "Other Devices" (encontrados na busca: clique pareia e conecta).
+// × esquece) e "Other Devices" (encontrados na busca: clique pareia e conecta). Um dispositivo
+// conectado mostra bateria e o codec de áudio negociado (AAC, SBC-XQ, SBC), lido do nó do PipeWire.
 
 import QtQuick
 import QtQuick.Layouts
@@ -10,6 +11,7 @@ import Quickshell
 import Quickshell.Widgets
 import Quickshell.Hyprland
 import Quickshell.Bluetooth
+import Quickshell.Services.Pipewire
 import "../theme"
 
 Item {
@@ -32,8 +34,22 @@ Item {
 
     property string statusText: ""
 
+    // nós de saída Bluetooth do PipeWire (bluez_output.<MAC com _>.N); acompanhados para ler as propriedades
+    readonly property var btNodes: Pipewire.nodes.values.filter(n => n.name && n.name.startsWith("bluez_output."))
+    PwObjectTracker { objects: root.btNodes }
+
     function glyph(cp) { return String.fromCodePoint(cp) }
     function battery(d) { return d.batteryAvailable ? Math.round(d.battery * 100) + "%" : "" }
+    function codec(d) {
+        if (!d.connected || !d.address) return ""
+        const key = d.address.replace(/:/g, "_").toUpperCase()
+        const n = root.btNodes.find(n => n.name.toUpperCase().includes(key))
+        const c = n && n.properties ? n.properties["api.bluez5.codec"] : ""
+        return c ? String(c).toUpperCase().replace("_", "-") : ""
+    }
+    function details(d) {   // "Connected  ·  85%  ·  AAC"
+        return ["Connected", battery(d), codec(d)].filter(x => x).join("  ·  ")
+    }
 
     function toggle(d) {
         if (d.connected) d.disconnect()
@@ -244,9 +260,7 @@ Item {
                                     elide: Text.ElideRight
                                 }
                                 Text {
-                                    text: dev.modelData.connected
-                                        ? "Connected" + (root.battery(dev.modelData) ? "  ·  " + root.battery(dev.modelData) : "")
-                                        : "Not connected"
+                                    text: dev.modelData.connected ? root.details(dev.modelData) : "Not connected"
                                     color: dev.modelData.connected ? Theme.good : Theme.dim
                                     font.family: Theme.font
                                     font.pixelSize: Theme.fontSize - 3

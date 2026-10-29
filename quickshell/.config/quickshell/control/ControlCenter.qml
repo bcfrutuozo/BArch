@@ -13,6 +13,7 @@ import Quickshell.Io
 import Quickshell.Hyprland
 import Quickshell.Wayland
 import Quickshell.Bluetooth
+import Quickshell.Services.Pipewire
 import "../theme"
 import "../notifications"
 import "../audio"
@@ -73,6 +74,15 @@ Item {
     readonly property var btAdapter: Bluetooth.defaultAdapter
     readonly property bool btOn: btAdapter !== null && btAdapter.enabled
     readonly property var btConnected: Bluetooth.devices.values.filter(d => d.connected)
+    // codec negociado (AAC, SBC-XQ…) do dispositivo conectado, pelo nó bluez_output do PipeWire
+    readonly property var btNodes: Pipewire.nodes.values.filter(n => n.name && n.name.startsWith("bluez_output."))
+    PwObjectTracker { objects: root.btNodes }
+    function btCodec(d) {
+        const key = (d.address || "").replace(/:/g, "_").toUpperCase()
+        const n = key ? root.btNodes.find(n => n.name.toUpperCase().includes(key)) : null
+        const c = n && n.properties ? n.properties["api.bluez5.codec"] : ""
+        return c ? String(c).toUpperCase().replace("_", "-") : ""
+    }
 
     function glyph(cp) { return String.fromCodePoint(cp) }
 
@@ -520,7 +530,7 @@ Item {
                         label: "Bluetooth"
                         sublabel: !root.btAdapter ? "No adapter"
                                 : !root.btOn ? "Off"
-                                : root.btConnected.length > 0 ? root.btConnected.map(d => d.name).join(", ")
+                                : root.btConnected.length > 0 ? root.btConnected.map(d => d.name + (root.btCodec(d) ? " (" + root.btCodec(d) + ")" : "")).join(", ")
                                 : "On"
                         active: root.btOn
                         available: root.btAdapter !== null

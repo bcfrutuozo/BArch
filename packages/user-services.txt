@@ -4,6 +4,7 @@ barch-agent@kernel-check.timer
 barch-agent@morning.timer
 barch-agent@upstream-watch.timer
 barch-agent@weekly-review.timer
+barch-backup.timer
 cliphist.service
 hyprsunset.service
 librepods.service

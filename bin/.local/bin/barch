@@ -13,7 +13,9 @@
 #   aur        review of the PKGBUILD changes of pending AUR updates (Update All runs it)
 #
 # finance import: C6 Bank statements → Firefly III (finance/import.py; data in ~/.config/firefly).
-# State: ~/.local/state/barch (failures/, reports/, agent/).
+# backup: restic, encrypted, to the NAS; what to save is backup/include.txt (the repo cannot hold
+#   secrets and app state); barch-backup.timer runs it daily; the health widget watches the result.
+# State: ~/.local/state/barch (failures/, reports/, agent/, backup/).
 #
 # Exit codes: 0 ok, 1 the bar or the task refused or failed, 2 usage error, 3 the bar is not
 # reachable, 4 (aur review) something needs a look before updating.
@@ -68,6 +70,17 @@ Agent:
   snapshot list               safety snapshots taken around Claude sessions in ~/BArch
   snapshot hook               Claude Code SessionStart/SessionEnd hook (reads JSON on stdin)
   failure <unit> [--system]   OnFailure handler: save the log and notify (used by systemd)
+
+Backup (restic, encrypted, to the NAS; list: backup/include.txt in the repo):
+  backup init                 create the repository and the password (printed once: keep it in
+                              Bitwarden; without it the backup cannot be read)
+  backup run [--prune]        back up now (barch-backup.timer does it daily at 13:00; old
+                              snapshots are pruned on Sundays, or with --prune)
+  backup status               last run and the timer's next run
+  backup list                 snapshots
+  backup restore [SNAPSHOT] <path>... [--target DIR]
+                              restore paths (absolute, as they were) from SNAPSHOT (default
+                              latest) into DIR (default ~/Restore/<snapshot>, never in place)
 
 Media:
   replay share [file] [--from T] [--to T]
@@ -303,7 +316,11 @@ cmd_health() {
       "  TPM unlock: \(.tpm)" + (if .tpm == "failed" then "  → \(.reenroll)" else "" end),
       "  cleanup: " + (if .cleanupDue then "due" else "not due" end)
         + (if .lastCleanup > 0 then " (last \(day(.lastCleanup)))" else "" end)
-        + "; \(.clean.orphans) orphans, cache \(.clean.cache), journal \(.clean.journal)"
+        + "; \(.clean.orphans) orphans, cache \(.clean.cache), journal \(.clean.journal)",
+      "  backup: " + (if .backup.configured | not then "not set up (barch backup init)"
+        elif .backup.at == 0 then "never ran"
+        else (if .backup.ok then "ok" else "FAILED" end) + " (last \(.backup.at | strflocaltime("%Y-%m-%d %H:%M")))"
+          + (if .backupLate then " · overdue" else "" end) end)
     end'
 }
 
@@ -775,6 +792,125 @@ cmd_replay() {
 
 # ---------------------------------------------------------------- finance
 
+# ---------------------------------------------------------------- backup (restic → NAS)
+BACKUP_REPO_DEFAULT=/mnt/nasfrutuozo/organization/desktops/bcfrutuozo/restic
+BACKUP_CONF=${XDG_CONFIG_HOME:-$HOME/.config}/barch/backup.conf      # optional: BACKUP_REPO=<path or restic URL>
+BACKUP_PASS=${XDG_CONFIG_HOME:-$HOME/.config}/barch/backup/password  # never in the repo
+BACKUP_STATE=$STATE/backup                                           # last.json, last.err, vm/*.xml
+
+backup_env() {
+  # shellcheck source=/dev/null
+  [[ -r $BACKUP_CONF ]] && source "$BACKUP_CONF"
+  export RESTIC_REPOSITORY=${BACKUP_REPO:-$BACKUP_REPO_DEFAULT}
+  export RESTIC_PASSWORD_FILE=$BACKUP_PASS
+  export RESTIC_CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/restic
+  mkdir -p "$BACKUP_STATE"
+}
+# the repository is a path on the NAS: it has to be a mounted network share, not an empty mount point
+backup_mounted() {
+  [[ $RESTIC_REPOSITORY == /* ]] || return 0
+  findmnt -T "$(dirname "$RESTIC_REPOSITORY")" -t cifs,nfs,nfs4 >/dev/null 2>&1
+}
+backup_state() {   # backup_state <ok: true|false> <error> [summary json]
+  jq -n --argjson ok "$1" --arg error "$2" --argjson at "$(date +%s)" --argjson summary "${3:-null}"     --arg repo "$RESTIC_REPOSITORY" '{at: $at, ok: $ok, error: $error, repo: $repo, summary: $summary}'     > "$BACKUP_STATE/last.json.tmp" && mv "$BACKUP_STATE/last.json.tmp" "$BACKUP_STATE/last.json"
+}
+backup_fail() { backup_state false "$1"; logger -t barch-backup -- "failed: $1"; die 1 "$1"; }
+
+cmd_backup() {
+  local sub=${1:-status}
+  (($#)) && shift
+  case $sub in
+    init)
+      need restic; backup_env
+      [[ -s $BACKUP_PASS ]] && die 1 "already initialised: $BACKUP_PASS exists (repository: $RESTIC_REPOSITORY)"
+      backup_mounted || die 1 "the NAS share for $RESTIC_REPOSITORY is not mounted"
+      install -d -m 700 "$(dirname "$BACKUP_PASS")"
+      (umask 077; head -c 32 /dev/urandom | base64 | tr -d '\n' > "$BACKUP_PASS")
+      restic init --quiet || { rm -f "$BACKUP_PASS"; die 1 "restic init failed"; }
+      echo "Repository: $RESTIC_REPOSITORY"
+      echo "Password file: $BACKUP_PASS"
+      echo
+      echo "Save this password in Bitwarden now. Without it the backup cannot be read:"
+      echo
+      echo "  $(cat "$BACKUP_PASS")"
+      echo
+      echo "Next: barch backup run; the timer: systemctl --user enable --now barch-backup.timer"
+      ;;
+    run)
+      need restic; backup_env
+      [[ -s $BACKUP_PASS ]] || backup_fail "not initialised: run 'barch backup init'"
+      backup_mounted || backup_fail "the NAS share for $RESTIC_REPOSITORY is not mounted"
+      # the VM definitions (the disk images are rebuilt; the XML is what took work)
+      mkdir -p "$BACKUP_STATE/vm"
+      while IFS= read -r vm; do
+        [[ -n $vm ]] && virsh --connect qemu:///system dumpxml --inactive "$vm" > "$BACKUP_STATE/vm/${vm// /_}.xml" 2>/dev/null
+      done < <(virsh --connect qemu:///system list --all --name 2>/dev/null)
+      # include list → absolute paths that exist
+      local files start summary rc
+      files=$(mktemp)
+      while IFS= read -r p; do
+        [[ $p == /* ]] || p="$HOME/$p"
+        [[ -e $p ]] && echo "$p"
+      done < <(grep -vE '^\s*(#|$)' "$REPO/backup/include.txt") > "$files"
+      [[ -s $files ]] || backup_fail "nothing to back up: backup/include.txt matched no existing path"
+      start=$(date +%s)
+      summary=$(restic backup --files-from "$files" --exclude-file "$REPO/backup/exclude.txt" --exclude-caches \
+                  --tag auto --json 2>"$BACKUP_STATE/last.err" | jq -c 'select(.message_type == "summary")' | tail -1)
+      rc=${PIPESTATUS[0]}; rm -f "$files"
+      # 3 = some files could not be read (a socket, a file that vanished): the snapshot was still made
+      [[ $rc == 0 || $rc == 3 ]] || backup_fail "restic backup failed (exit $rc): $(grep -v '^$' "$BACKUP_STATE/last.err" | tail -1)"
+      if [[ ${1:-} == --prune || $(date +%u) == 7 ]]; then
+        restic forget --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --prune --quiet 2>>"$BACKUP_STATE/last.err" \
+          || backup_fail "restic forget/prune failed: $(tail -1 "$BACKUP_STATE/last.err")"
+      fi
+      backup_state true "" "${summary:-null}"
+      logger -t barch-backup -- "ok: $(jq -r '"\(.files_new + .files_changed) files changed, \(.data_added) bytes added, snapshot \(.snapshot_id[0:8])"' <<<"${summary:-{}}" 2>/dev/null)"
+      show "$(jq -c --argjson took "$(( $(date +%s) - start ))" '. + {took: $took}' "$BACKUP_STATE/last.json")" \
+        '"backup ok: \(.summary.files_new + .summary.files_changed) files changed, \(.summary.data_added / 1048576 | floor) MB added, \(.summary.total_files_processed) files in \(.took) s, snapshot \(.summary.snapshot_id[0:8])"'
+      ;;
+    status)
+      backup_env
+      local last next
+      last=$(cat "$BACKUP_STATE/last.json" 2>/dev/null || echo '{"at":0,"ok":false,"error":"","summary":null}')
+      next=$(systemctl --user show barch-backup.timer -p NextElapseUSecRealtime --value 2>/dev/null)
+      show "$(jq -c --arg next "${next:-}" --argjson configured "$([[ -s $BACKUP_PASS ]] && echo true || echo false)" \
+              --arg repo "$RESTIC_REPOSITORY" '. + {next: $next, configured: $configured, repo: $repo}' <<<"$last")" '
+        if .configured | not then "backup: not initialised (barch backup init); repository would be \(.repo)"
+        elif .at == 0 then "backup: never ran (barch backup run); repository \(.repo)"
+        else "backup: " + (if .ok then "ok" else "FAILED: \(.error)" end)
+          + " · last \(.at | strflocaltime("%Y-%m-%d %H:%M"))"
+          + (if .summary then " · \(.summary.total_files_processed) files, \(.summary.data_added / 1048576 | floor) MB added, snapshot \(.summary.snapshot_id[0:8])" else "" end)
+          + "\n  repository \(.repo)"
+          + (if .next != "" then "\n  next run \(.next)" else "\n  timer not enabled (systemctl --user enable --now barch-backup.timer)" end)
+        end'
+      ;;
+    list)
+      need restic; backup_env
+      [[ -s $BACKUP_PASS ]] || die 1 "not initialised: run 'barch backup init'"
+      restic snapshots --compact
+      ;;
+    restore)
+      need restic; backup_env
+      [[ -s $BACKUP_PASS ]] || die 1 "not initialised: run 'barch backup init'"
+      local snap=latest target="" paths=() a
+      [[ ${1:-} =~ ^([0-9a-f]{8,}|latest)$ ]] && { snap=$1; shift; }
+      while (($#)); do
+        a=$1; shift
+        case $a in
+          --target) target=${1:-}; shift ;;
+          *) paths+=("$a") ;;
+        esac
+      done
+      ((${#paths[@]})) || usage_error "backup restore [SNAPSHOT] <path>... [--target DIR]"
+      [[ -n $target ]] || target="$HOME/Restore/$snap-$(date +%Y%m%d-%H%M)"
+      local inc=()
+      for a in "${paths[@]}"; do [[ $a == /* ]] || a="$HOME/$a"; inc+=(--include "$a"); done
+      restic restore "$snap" --target "$target" "${inc[@]}" && echo "restored into $target (paths keep their full names below it)"
+      ;;
+    *) usage_error "backup init|run [--prune]|status|list|restore [SNAPSHOT] <path>... [--target DIR]" ;;
+  esac
+}
+
 cmd_finance() {
   [[ ${1:-} == import ]] || usage_error "finance import [--dry-run] [--keep] [--yes] [--dir DIR] [--seed]"
   shift
@@ -813,6 +949,7 @@ case $cmd in
   agent) cmd_agent "$@" ;;
   aur) cmd_aur "$@" ;;
   replay) cmd_replay "$@" ;;
+  backup) cmd_backup "$@" ;;
   finance) cmd_finance "$@" ;;
   help | -h | --help) usage ;;
   *) usage_error "unknown command '$cmd'" ;;

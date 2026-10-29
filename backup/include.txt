@@ -1,0 +1,33 @@
+# backup/include.txt — what `barch backup` saves to the NAS (restic, encrypted). One path per line,
+# relative to $HOME unless absolute; missing paths are skipped. Everything in this repo is already
+# in git, so this is only what the repo cannot hold: secrets, per-app state, personal files.
+# Paths that are stow symlinks into the repo (~/.config/khal, ...) are pointless here: restic
+# stores the link, not the files. The repo already has them.
+# Exclusions (caches, sockets, the restic password itself) are in exclude.txt.
+
+# secrets and credentials (see README "Not stored here")
+.ssh
+.gnupg
+.config/pia
+# vdirsyncer: the folder is real (icloud-password); only its config is a repo symlink
+.config/vdirsyncer
+.config/gh
+.local/share/keyrings
+
+# app state this machine would lose on a reinstall
+.config/firefly
+.local/state/barch
+.config/Nextcloud
+.config/BraveSoftware
+.mullvad
+.parsec
+.local/share/Steam/userdata
+.claude/projects
+
+# the Windows VM definition (the disk image is too big and is rebuilt; the XML is what took work)
+.local/state/barch/backup/vm
+
+# personal files that live here and not on the NAS
+Documents
+Pictures
+Videos

@@ -27,6 +27,7 @@ Item {
     property string luksDevice: "/dev/nvme0n1p2"
     property string tpmPcrs: "7"
     property int cleanupDays: 30
+    property int backupDays: 2              // sem backup bem-sucedido há mais que isso = problema
     property var terminal: ["foot", "--title", "System Health", "-e"]
 
     // ---------- estado ----------
@@ -35,6 +36,7 @@ Item {
     property var failedUsr: []
     property string tpm: "ok"
     property var clean: ({ orphans: 0, cache: "?", journal: "?" })
+    property var backup: ({ configured: false, at: 0, ok: false, error: "", summary: null })
     property real lastCleanup: 0
     property bool loaded: false
     property real checkedAt: 0              // fim da última verificação (ms)
@@ -43,7 +45,20 @@ Item {
     readonly property string reenroll: "sudo systemd-cryptenroll " + luksDevice
         + " --wipe-slot=tpm2 --tpm2-device=auto --tpm2-pcrs=" + tpmPcrs
     readonly property bool cleanupDue: loaded && (Date.now() - lastCleanup) > cleanupDays * 86400000
+    // backup configurado mas falhou ou está atrasado (o timer roda todo dia)
+    readonly property bool backupLate: loaded && backup.configured
+        && (!backup.ok || (Date.now() / 1000 - backup.at) > backupDays * 86400)
     readonly property int issues: pacnew.length + failedSys.length + failedUsr.length + (tpm === "failed" ? 1 : 0)
+        + (backupLate ? 1 : 0)
+    function backupLine() {
+        if (!backup.configured) return "Not set up: barch backup init"
+        if (backup.at === 0) return "Never ran"
+        const when = new Date(backup.at * 1000).toLocaleString(Qt.locale("en_US"), "MMM d, HH:mm")
+        if (!backup.ok) return "Failed " + when + (backup.error ? ": " + backup.error : "")
+        const s = backup.summary
+        return "Last: " + when + (s ? "   ·   " + s.total_files_processed + " files, "
+            + Math.round(s.data_added / 1048576) + " MB added" : "")
+    }
     readonly property bool shown: issues > 0 || cleanupDue
 
     function glyph(cp) { return String.fromCodePoint(cp) }
@@ -66,6 +81,7 @@ Item {
                 root.failedUsr = d.failed.user || []
                 root.tpm = d.tpm
                 root.clean = d.clean
+                if (d.backup) root.backup = d.backup
                 root.loaded = true
                 root.checkedAt = Date.now()
                 if (root.tpm === "failed") tpmNotice.running = true
@@ -108,7 +124,8 @@ Item {
                 ok: true, loaded: root.loaded, checkedAt: root.checkedAt, running: checkProc.running,
                 issues: root.issues, pacnew: root.pacnew, failed: { system: root.failedSys, user: root.failedUsr },
                 tpm: root.tpm, reenroll: root.reenroll, clean: root.clean,
-                cleanupDue: root.cleanupDue, lastCleanup: root.lastCleanup
+                cleanupDue: root.cleanupDue, lastCleanup: root.lastCleanup,
+                backup: root.backup, backupLate: root.backupLate
             })
         }
         function refresh(): string { root.refresh(); return JSON.stringify({ ok: true, checkedAt: root.checkedAt }) }
@@ -306,6 +323,20 @@ Item {
                             label: "Reset"
                             onClicked: root.run("sudo systemctl reset-failed; systemctl --user reset-failed; echo Cleared.")
                         }
+                    }
+                }
+
+                // --- backup (restic → NAS) ---
+                Section {
+                    visible: root.backup.configured
+                    title: !root.backupLate ? "Backup" : root.backup.ok ? "Backup Overdue" : "Backup Failed"
+                    icon: 0xF0193                                    // cloud_upload
+                    tint: root.backupLate ? Theme.yellow : Theme.dim
+                    Line { text: root.backupLine(); wrapMode: Text.Wrap; elide: Text.ElideNone }
+                    RowLayout {
+                        spacing: 6
+                        Btn { label: "Run Now"; onClicked: root.run("barch backup run") }
+                        Btn { label: "Snapshots"; onClicked: root.run("barch backup list") }
                     }
                 }
 
