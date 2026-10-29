@@ -1,6 +1,6 @@
-// shell.qml — the real lock screen (replaces hyprlock), one Quickshell process per lock:
+// shell.qml — the real lock screen, one Quickshell process per lock:
 //
-//   ~/.config/hypr/scripts/lock.sh            what hypridle and the autostart run (hyprlock fallback)
+//   ~/.config/hypr/scripts/lock.sh            what hypridle and the autostart run (and restart it)
 //   qs -p ~/.config/quickshell/lock -n        the same by hand (-n: never two)
 //
 // NEVER kill or (re)start this config from a script or an agent session: it may be the lock that

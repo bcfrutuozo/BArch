@@ -228,37 +228,8 @@ Singleton {
                                  "sh", content, path])
     }
 
-    // ================= tela de bloqueio (hyprlock) =================
-    // Gera ~/.config/hypr/hyprlock-colors.conf com a paleta ATUAL (segue o modo claro/escuro).
-    // O hyprlock.conf faz "source" dele; como o hyprlock lê a config a cada bloqueio,
-    // a tela sempre abre com o tema do momento.
-    readonly property bool lockDark: paletteIsDark(p)
-    readonly property string hyprlockConf: [
-        "# Gerado automaticamente pelo Theme.qml do Quickshell (" + flavor + "). Não edite.",
-        "$fg          = " + rgba(text, 0.95),
-        "$fg_dim      = " + rgba(text, lockDark ? 0.65 : 0.72),
-        "$accent      = " + rgba(accent),
-        "$ok          = " + rgba(green),
-        "$fail        = " + rgba(red),
-        "$warn        = " + rgba(yellow),
-        "$pill        = " + rgba(base, lockDark ? 0.45 : 0.6),
-        "$outline     = " + rgba(text, 0.14),
-        "$placeholder = ##" + hx(text) + "88",
-        "$shadow      = " + (lockDark ? "rgba(00000066)" : "rgba(00000018)"),
-        // papel de parede: os de ~/Pictures/Wallpapers já vêm no brilho de cada modo,
-        // então só um leve escurecimento à noite para o relógio e a senha se destacarem
-        "$bg_brightness = " + (lockDark ? "0.8" : "1.0"),
-        "$bg_contrast   = " + (lockDark ? "1.0" : "1.0"),
-        ""
-    ].join("\n")
-    onHyprlockConfChanged: lockWrite.restart()
-    Timer {
-        id: lockWrite
-        interval: 300
-        onTriggered: root.writeFile(Quickshell.env("HOME") + "/.config/hypr/hyprlock-colors.conf", root.hyprlockConf)
-    }
-
     // ================= tela de bloqueio (Quickshell, lock/shell.qml) =================
+    readonly property bool lockDark: paletteIsDark(p)
     // O bloqueio roda numa instância separada do Quickshell (qs -p ~/.config/quickshell/lock) e
     // NÃO importa este singleton: carregá-lo gera os arquivos de tema dos apps e aplica as bordas
     // do Hyprland, coisa que só a barra deve fazer. Em vez disso ele lê a paleta ATUAL deste

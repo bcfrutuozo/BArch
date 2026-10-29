@@ -84,4 +84,4 @@ reusing the widget's own functions.
 Ryzen + 64 GB RAM, NVIDIA RTX 4080 (`nvidia-open-dkms`), Alienware AW3225QF (4K QD-OLED, HDR,
 DisplayPort) plus a side monitor, btrfs on LUKS2 with Snapper (`snap-pac`), zram, PipeWire,
 Hyprland under uwsm with autologin on tty1 and the Quickshell lock screen (`quickshell/lock/`) at
-session start, hyprlock as fallback.
+session start (no other locker: `hypr/scripts/lock.sh` restarts it if it dies).

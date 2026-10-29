@@ -116,7 +116,7 @@ Item {
                     root.wx = d
                     root.error = ""
                     root.checkRain(d)
-                    // resumo para a tela de bloqueio (lock/lock-info.sh weather)
+                    // resumo para a tela de bloqueio (lock/Lock.qml lê este arquivo)
                     Theme.writeFile(Quickshell.env("HOME") + "/.cache/quickshell/weather-now.txt",
                         String.fromCodePoint(root.iconFor(d.current.code, d.current.day)) + "\t"
                         + Math.round(d.current.temp) + "°\t" + root.describe(d.current.code) + "\n")

@@ -62,6 +62,7 @@ SYSTEM_FILES=(
   /usr/local/bin/barch-agent-snapshot
   /usr/local/bin/barch-failure-relay
   /etc/polkit-1/rules.d/50-barch-agent-snapshot.rules
+  /etc/pam.d/barch-lock
   "/etc/pacman.d/hooks/*"
   "/etc/modprobe.d/*"
   "/etc/sysctl.d/*"

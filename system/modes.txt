@@ -21,6 +21,7 @@
 644 /etc/pacman.d/hooks/05-uki-prev.hook
 644 /etc/pacman.d/hooks/90-limine-copy.hook
 644 /etc/pacman.d/hooks/90-mkinitcpio-install.hook
+644 /etc/pam.d/barch-lock
 644 /etc/plymouth/plymouthd.conf
 644 /etc/polkit-1/rules.d/50-barch-agent-snapshot.rules
 644 /etc/smartd.conf
