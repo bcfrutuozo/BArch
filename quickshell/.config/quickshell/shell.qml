@@ -16,6 +16,7 @@ import QtQuick.Layouts
 import QtQuick.Effects
 import Quickshell.Wayland
 import "theme"
+import "screens"
 import "control"
 import "bluetooth"
 import "pods"
@@ -141,10 +142,12 @@ ShellRoot {
 
   Variants {
     id: bars
-    // Barra só no monitor principal; se ele estiver desconectado, volta a aparecer em todos
+    // Barra só no monitor principal; se ele estiver desconectado, volta a aparecer em todos.
+    // Screens.list, não Quickshell.screens: a lista direta muda no meio da criação das janelas
+    // (boot, resume) e derruba o quickshell (ver screens/Screens.qml).
     model: {
-      const s = Quickshell.screens.filter(s => s.name === "HDMI-A-2")
-      return s.length > 0 ? s : Quickshell.screens
+      const s = Screens.list.filter(s => s.name === "HDMI-A-2")
+      return s.length > 0 ? s : Screens.list
     }
 
     PanelWindow {
