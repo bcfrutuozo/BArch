@@ -45,6 +45,9 @@ Desktop (through the bar):
   caffeine on|off|status      keep the screen from idling, locking and suspending
   nightlight on|off|status    night light (hyprsunset)
   dnd on|off|status           Do Not Disturb
+  vpn on [region]|off|toggle|status
+                              PIA over WireGuard (the Control Center's VPN tile)
+  vpn regions                 regions, fastest first; vpn region <id>|auto picks the one to use
   health [--refresh]          system health summary (.pacnew, failed services, TPM, cleanup)
 
 Agent:
@@ -231,6 +234,23 @@ cmd_nightlight() {
 }
 
 cmd_dnd() { toggle notifs dndSet "${1:-}" '"do not disturb: \(.dnd | '"$onoff_text"')"'; }
+
+cmd_vpn() {
+  local text='"vpn: \(.state)" + (if .name != "" then " (\(.name)\(if .ip != "" then ", " + .ip else "" end))" else "" end)
+              + " · region: \(.preferred)" + (if .error != "" then " · error: \(.error)" else "" end)'
+  case ${1:-status} in
+    on | connect) ipc vpn up "${2:-}" ;;
+    off | disconnect) ipc vpn down ;;
+    toggle) ipc vpn toggle ;;
+    status) ipc vpn status ;;
+    regions)
+      ipc vpn regions
+      text='.preferred as $p | .regions[] | "\(if .id == $p then "* " else "  " end)\(.id)\t\(.name)\t\(.country)\t\(if .latency then "\(.latency * 1000 | floor) ms" else "" end)"' ;;
+    region) [[ -n ${2:-} ]] || usage_error "vpn region <id>|auto"; ipc vpn region "$2" ;;
+    *) usage_error "vpn on [region]|off|toggle|status|regions|region <id>|auto" ;;
+  esac
+  show "$OUT" "$text"
+}
 
 cmd_health() {
   case ${1:-} in
@@ -764,6 +784,7 @@ case $cmd in
   caffeine) cmd_caffeine "$@" ;;
   nightlight | night-light) cmd_nightlight "$@" ;;
   dnd) cmd_dnd "$@" ;;
+  vpn) cmd_vpn "$@" ;;
   health) cmd_health "$@" ;;
   snapshot) cmd_snapshot "$@" ;;
   failure) cmd_failure "$@" ;;

@@ -17,6 +17,7 @@ import "../theme"
 import "../notifications"
 import "../audio"
 import "../record"
+import "../vpn"
 
 Item {
     id: root
@@ -34,6 +35,33 @@ Item {
     property string screenshotDir: Quickshell.env("HOME") + "/Pictures/Screenshots"
 
     // ---------- estado ----------
+    // VPN (PIA): escolha da região aberta no painel; o filtro precisa do teclado (shell.qml)
+    property bool chooseRegion: false
+    property string regionFilter: ""
+    readonly property bool wantsKeyboard: chooseRegion && popup.visible
+    readonly property var regionList: {
+        const q = regionFilter.trim().toLowerCase()
+        const all = [{ id: "auto", name: "Auto", country: "", latency: null, sub: "fastest region, measured now" }].concat(Vpn.regions)
+        if (q === "") return all
+        return all.filter(r => (r.name + " " + r.id + " " + r.country).toLowerCase().includes(q))
+    }
+    function pickRegion(id) { Vpn.setPreferred(id); chooseRegion = false; regionFilter = "" }
+    function regionTile() {
+        chooseRegion = !chooseRegion
+        regionFilter = ""
+        if (chooseRegion) { Vpn.loadRegions(); Vpn.measure(); regionField.forceActiveFocus() }
+    }
+    // "Change region" no painel do escudo da barra: abre este painel já na lista
+    Connections {
+        target: Vpn
+        enabled: root.ipcEnabled
+        function onChooseRegion() {
+            if (!Popups.isOpen(popup)) { Popups.show(popup); root.refresh() }
+            root.chooseRegion = false
+            root.regionTile()
+        }
+    }
+
     property bool caffeine: false
     property bool nightLight: false
     property bool hasHyprsunset: true
@@ -280,7 +308,7 @@ Item {
             target: popup
             function onVisibleChanged() {
                 popup.visible ? Popups.opened(popup) : Popups.closed(popup)
-                if (!popup.visible) root.chooseRecord = false
+                if (!popup.visible) { root.chooseRecord = false; root.chooseRegion = false; root.regionFilter = "" }
             }
         }
         visible: false
@@ -542,6 +570,27 @@ Item {
                     }
 
                     Tile {
+                        icon: Vpn.connected ? root.glyph(0xF099D) : root.glyph(0xF09E0)   // shield_lock / shield_off_outline
+                        label: "VPN"
+                        sublabel: !Vpn.available ? "No PIA credentials"
+                                : Vpn.connecting ? "Connecting to " + (Vpn.regionName || root.cap(Vpn.preferred)) + "…"
+                                : Vpn.connected ? Vpn.regionName + (Vpn.ip ? "  ·  " + Vpn.ip : "")
+                                : Vpn.error !== "" ? Vpn.error : "Off"
+                        active: Vpn.active
+                        available: Vpn.available
+                        onClicked: Vpn.toggle()
+                    }
+
+                    Tile {
+                        icon: root.glyph(0xF01E7)   // earth
+                        label: "VPN Region"
+                        sublabel: Vpn.regionLabel(Vpn.preferred) + (Vpn.preferred === "auto" && Vpn.connected ? "  ·  " + Vpn.regionName : "")
+                        active: root.chooseRegion
+                        available: Vpn.available
+                        onClicked: root.regionTile()
+                    }
+
+                    Tile {
                         icon: root.glyph(0xF0A6D)   // selection_drag
                         label: "Screenshot"
                         sublabel: "Select a region"
@@ -554,6 +603,95 @@ Item {
                         sublabel: Recorder.recording ? Recorder.elapsed : "Screen or region"
                         active: Recorder.recording || root.chooseRecord
                         onClicked: root.recordTile()
+                    }
+                }
+
+                // escolha da região da VPN (aparece ao clicar em VPN Region): filtro + lista por latência
+                ColumnLayout {
+                    visible: root.chooseRegion
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 32
+                        radius: Theme.buttonRadius
+                        color: Theme.surface
+                        border.width: 1
+                        border.color: regionField.activeFocus ? Theme.accent : "transparent"
+                        RowLayout {
+                            anchors { fill: parent; leftMargin: 10; rightMargin: 10 }
+                            spacing: 8
+                            Text { text: root.glyph(0xF0349); color: Theme.dim; font.family: Theme.iconFont; font.pixelSize: Theme.fontSize }   // magnify
+                            TextInput {
+                                id: regionField
+                                Layout.fillWidth: true
+                                color: Theme.fg; font.family: Theme.font; font.pixelSize: Theme.fontSize - 1
+                                clip: true
+                                onTextChanged: root.regionFilter = text
+                                Keys.onEscapePressed: { root.chooseRegion = false; text = "" }
+                                Keys.onReturnPressed: if (root.regionList.length > 0) root.pickRegion(root.regionList[0].id)
+                                Text {
+                                    anchors.fill: parent; verticalAlignment: Text.AlignVCenter
+                                    visible: regionField.text === ""
+                                    text: "Filter regions (" + Vpn.regions.length + ")"
+                                    color: Theme.overlay; font.family: Theme.font; font.pixelSize: Theme.fontSize - 1
+                                }
+                            }
+                            Text {
+                                visible: Vpn.measuring
+                                text: "measuring…"
+                                color: Theme.dim; font.family: Theme.font; font.pixelSize: Theme.fontSize - 3
+                            }
+                        }
+                    }
+
+                    ListView {
+                        id: regionView
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.min(contentHeight, 240)
+                        clip: true
+                        model: root.regionList
+                        boundsBehavior: Flickable.StopAtBounds
+                        delegate: Rectangle {
+                            id: regionRow
+                            required property var modelData
+                            readonly property bool selected: Vpn.preferred === modelData.id
+                            width: regionView.width
+                            implicitHeight: 32
+                            radius: Theme.buttonRadius
+                            color: regionMouse.containsMouse ? Theme.hover : "transparent"
+                            RowLayout {
+                                anchors { fill: parent; leftMargin: 10; rightMargin: 10 }
+                                spacing: 8
+                                Text {
+                                    text: regionRow.modelData.name
+                                    color: regionRow.selected ? Theme.accent : Theme.fg
+                                    font.family: Theme.font; font.pixelSize: Theme.fontSize - 1; font.bold: regionRow.selected
+                                    elide: Text.ElideRight; Layout.fillWidth: true
+                                }
+                                Text {
+                                    visible: text !== ""
+                                    text: regionRow.modelData.sub !== undefined ? regionRow.modelData.sub
+                                        : regionRow.modelData.country + (regionRow.modelData.pf ? "  ·  pf" : "") + (regionRow.modelData.geo ? "  ·  geo" : "")
+                                    color: Theme.dim; font.family: Theme.font; font.pixelSize: Theme.fontSize - 3
+                                }
+                                Text {
+                                    Layout.preferredWidth: 48
+                                    horizontalAlignment: Text.AlignRight
+                                    text: Vpn.ms(regionRow.modelData.latency)
+                                    color: regionRow.modelData.latency !== null && regionRow.modelData.latency < 0.05 ? Theme.good : Theme.dim
+                                    font.family: Theme.font; font.pixelSize: Theme.fontSize - 3
+                                }
+                            }
+                            MouseArea {
+                                id: regionMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.pickRegion(regionRow.modelData.id)
+                            }
+                        }
                     }
                 }
 

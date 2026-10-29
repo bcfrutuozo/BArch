@@ -1,0 +1,3 @@
+singleton Vpn Vpn.qml
+VpnWidget 1.0 VpnWidget.qml
+PanelButton 1.0 PanelButton.qml

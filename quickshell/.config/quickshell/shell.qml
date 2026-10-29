@@ -43,6 +43,7 @@ import "privacy"
 import "notifications"
 import "replay"
 import "weather"
+import "vpn"
 import "wallpaper"
 import "polkit"
 
@@ -155,8 +156,8 @@ ShellRoot {
       implicitHeight: Theme.islandHeight + Theme.gap
       color: "transparent"
 
-      // Libera o teclado só enquanto há senha de Wi-Fi ou busca no clipboard para digitar
-      WlrLayershell.keyboardFocus: (wifi.wantsKeyboard || clip.wantsKeyboard) ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+      // Libera o teclado só enquanto há senha de Wi-Fi, busca no clipboard ou filtro de região da VPN para digitar
+      WlrLayershell.keyboardFocus: (wifi.wantsKeyboard || clip.wantsKeyboard || control.wantsKeyboard) ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
       // ================= ESQUERDA: workspaces + janela ativa =================
       Row {
@@ -585,6 +586,9 @@ ShellRoot {
         WiredWidget {}
         WifiWidget { id: wifi }
 
+        // VPN (PIA): só aparece com o túnel ligado
+        VpnWidget {}
+
         // Bluetooth
         BluetoothWidget {}
 
@@ -598,7 +602,7 @@ ShellRoot {
         }
 
         // Central de controle: modo claro/escuro, cafeína, luz noturna, não perturbe, captura
-        ControlCenter { window: bar; ipcEnabled: bar.primary }
+        ControlCenter { id: control; window: bar; ipcEnabled: bar.primary }
 
         // Energia
         Label {

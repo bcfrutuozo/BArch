@@ -15,6 +15,7 @@ Scope {
 
     property string error: ""
     readonly property var flow: agent.flow
+
     readonly property bool canAnswer: flow !== null && flow.isResponseRequired && !flow.isCompleted
 
     PolkitAgent {
@@ -145,27 +146,8 @@ Scope {
                     Layout.topMargin: 6
                     Layout.alignment: Qt.AlignRight
                     spacing: 8
-                    component Button: Rectangle {
-                        property string label
-                        property bool primary: false
-                        signal clicked()
-                        implicitWidth: lbl.implicitWidth + 28
-                        implicitHeight: 32
-                        radius: 10
-                        color: primary ? Theme.accent : mouse.containsMouse ? Theme.surface : "transparent"
-                        border.width: primary ? 0 : 1
-                        border.color: Theme.border
-                        Text {
-                            id: lbl
-                            anchors.centerIn: parent
-                            text: parent.label
-                            color: parent.primary ? Theme.crust : Theme.text
-                            font.family: Theme.font; font.pixelSize: Theme.fontSize; font.bold: parent.primary
-                        }
-                        MouseArea { id: mouse; anchors.fill: parent; hoverEnabled: true; onClicked: parent.clicked() }
-                    }
-                    Button { label: "Cancel"; onClicked: root.cancel() }
-                    Button { label: "Authenticate"; primary: true; onClicked: root.submit() }
+                    DialogButton { label: "Cancel"; onClicked: root.cancel() }
+                    DialogButton { label: "Authenticate"; primary: true; onClicked: root.submit() }
                 }
             }
         }
