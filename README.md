@@ -132,7 +132,8 @@ Claude Code works on this machine on its own, read-only unless you are in the se
 - **Safety snapshot.** Every Claude session started in `~/BArch` takes a snapper pre snapshot of
   `/` when it starts and a post one when it ends (hooks in `claude/.claude/settings.json` →
   `barch-agent-snapshot@.service`, which polkit lets you start without a password). The agent is
-  told the number. `barch snapshot list` shows the pairs; `sudo snapper -c root status pre..post`
+  told the number. The pre is kept out of snapper's number cleanup until its post exists (a day
+  at most, for sessions that never end cleanly). `barch snapshot list` shows the pairs; `sudo snapper -c root status pre..post`
   shows what a session changed outside the repo and `undochange` reverts it. `/home` is not in the
   snapshot (the repo has git); sessions in other folders take none.
 - **Scheduled tasks.** `agent/tasks/<task>.md` (prompt + allowed tools) and an optional

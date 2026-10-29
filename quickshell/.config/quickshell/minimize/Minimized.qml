@@ -95,7 +95,8 @@ Singleton {
         stdout: StdioCollector {
             onStreamFinished: {
                 let ws = "1"
-                try { ws = String(JSON.parse(text).id) } catch (e) {}
+                // only numbered workspaces have an id (Hyprland 0.57); name is always addressable
+                try { const w = JSON.parse(text); ws = w.id !== undefined ? String(w.id) : (w.name || "1") } catch (e) {}
                 root.moveBack(currentProc.target, ws)
             }
         }
