@@ -7,12 +7,13 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import "../theme"
+import "../screens"
 
 Scope {
     id: root
 
     Variants {
-        model: Quickshell.screens
+        model: Screens.list      // assentada; a lista direta derruba o quickshell (screens/Screens.qml)
 
         PanelWindow {
             id: win
