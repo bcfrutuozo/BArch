@@ -55,8 +55,16 @@ The main pieces:
 - **Window tools:** minimize (Super+M, comes back to its own workspace), always on top
   (Super+Shift+P), right-click menu on any window preview, swap/resize with Super+Shift/Ctrl+arrows.
 - **Control Center:** Light / Dark / Auto, Display (HDR, SDR brightness, side monitor on/off),
-  Bluetooth, Caffeine, Night Light, Do Not Disturb, Game HDR, Game HUD (MangoHud), Screenshot,
-  screen Recording (full screen or region).
+  Bluetooth, Caffeine, Night Light, Do Not Disturb, VPN and VPN Region (below), Game HDR, Game HUD
+  (MangoHud), Screenshot, screen Recording (full screen or region).
+- **VPN** (`quickshell/vpn/`): Private Internet Access over WireGuard, without root. `pia.sh` gets a
+  token from the PIA API, registers a fresh key pair on the chosen server and writes the answer into
+  a NetworkManager profile owned by the user (`connection.permissions`), so `nmcli` brings it up
+  with the session's polkit rights. Region "Auto" is the lowest latency measured at that moment;
+  the VPN Region tile lists them all with a filter, fastest first. DNS is exclusive and IPv6 is
+  routed into the tunnel (dropped there) while connected. A shield with the country shows in the
+  bar while connected (click: IP, time, Change region, Disconnect). Credentials go in `~/.config/pia/credentials`
+  (username and password, one per line, `chmod 600`), never in the repo.
 - **Wallpaper** on every monitor (a background layer, no hyprpaper): `primary-<mode>.png` on the main
   one, `secondary-<mode>.png` on the portrait one, crossfading when the theme mode changes.
 - **Polkit agent** (`Quickshell.Services.Polkit`, no hyprpolkitagent): the password dialog apps get
@@ -98,6 +106,7 @@ barch theme light|dark|auto|status
 barch hdr on|off|status            barch sdr <nits>|status
 barch monitor side on|off|status   barch caffeine on|off|status
 barch nightlight on|off|status     barch dnd on|off|status
+barch vpn on [region]|off|toggle|status|regions|region <id>|auto
 barch health [--refresh]           # .pacnew, failed services, TPM, cleanup
 barch agent ask "why is X slow?"   # Claude in a terminal in ~/BArch (the launcher's "a ")
 barch finance import [--dry-run]   # C6 Bank statements → Firefly (see Finance)
@@ -107,7 +116,7 @@ barch replay share [file] [--from 12 --to 40]
 ```
 
 Every command takes `--json`. Exit codes: `0` ok, `1` the bar refused, `2` usage, `3` bar not reachable.
-On the QML side these are the `IpcHandler`s `control`, `theme`, `notifs` and `health` (`qs ipc show`).
+On the QML side these are the `IpcHandler`s `control`, `theme`, `notifs`, `health` and `vpn` (`qs ipc show`).
 
 ## Agent
 
