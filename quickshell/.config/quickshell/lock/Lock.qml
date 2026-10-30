@@ -45,7 +45,7 @@ Scope {
     readonly property string home: Quickshell.env("HOME")
     readonly property string user: Quickshell.env("USER")
     property int lockedAt: Math.floor(Date.now() / 1000)            // "notifications while away"
-    readonly property string mainScreen: "HDMI-A-2"                    // primary-lock.png; the others, secondary-lock.png
+    readonly property string mainScreen: "HDMI-A-2"                    // primary-lock-*.png; the others, secondary-lock-*.png
 
     Component.onCompleted: {
         // The real lock must not reload itself when a file under lock/ is saved: a broken edit
@@ -76,6 +76,21 @@ Scope {
         }
     }
     readonly property bool dark: theme.dark
+
+    // ================= wallpaper scene (the bar's wallpaper.json, see wallpaper/Wallpapers.qml) =================
+    property string scene: "mountains"
+    FileView {
+        path: root.home + "/.local/state/quickshell/wallpaper.json"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            try {
+                const w = JSON.parse(text())
+                if (typeof w.lock === "string" && w.lock !== "") root.scene = w.lock
+            } catch (e) { console.warn("lock: invalid wallpaper.json:", e) }
+        }
+    }
     readonly property color fg: theme.colors.text
     readonly property color dim: Qt.alpha(fg, dark ? 0.65 : 0.72)
     readonly property color base: theme.colors.base

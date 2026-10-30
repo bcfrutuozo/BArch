@@ -25,6 +25,7 @@ dnsmasq
 docker
 docker-buildx
 docker-compose
+dosfstools
 dotnet-sdk
 drm-info
 earlyoom

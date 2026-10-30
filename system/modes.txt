@@ -28,11 +28,13 @@
 644 /etc/polkit-1/rules.d/50-barch-agent-snapshot.rules
 644 /etc/polkit-1/rules.d/50-barch-killswitch.rules
 644 /etc/smartd.conf
+644 /etc/systemd/system/archlinux-keyring-wkd-sync.service.d/barch-timeout.conf
 644 /etc/systemd/system/barch-agent-snapshot@.service
 644 /etc/systemd/system/barch-failure@.service
 644 /etc/systemd/system/barch-failure@.service.d/zz-no-onfailure.conf
 644 /etc/systemd/system/barch-killswitch@.service
 644 /etc/systemd/system/btrfs-scrub@.service.d/report.conf
+644 /etc/systemd/system/dirmngr@.service.d/barch-stop-timeout.conf
 644 /etc/systemd/system/getty@tty1.service.d/autologin.conf
 644 /etc/systemd/system/nftables.service.d/remain.conf
 664 /etc/systemd/system/numlock.service

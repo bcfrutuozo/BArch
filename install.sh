@@ -84,7 +84,7 @@ if [[ -d "$themes" && ! -e "$themes/current.lua" ]]; then
   ln -sfn dark.lua "$themes/current.lua" && ok "Hyprland theme: dark (theme-auto switches it later)"
 fi
 step "Wallpapers"
-if compgen -G "$HOME/Pictures/Wallpapers/primary-dark.png" >/dev/null; then
+if compgen -G "$HOME/Pictures/Wallpapers/mountains/primary-dark.png" >/dev/null; then
   ok "already there"
 else
   mkdir -p "$HOME/Pictures/Wallpapers"
@@ -95,8 +95,8 @@ else
     warn "couldn't generate the wallpapers (run tools/make_wallpapers.py by hand to see why)"
   fi
 fi
-# versões pequenas já desfocadas para a tela de bloqueio (instalações antigas não as têm)
-if ! compgen -G "$HOME/Pictures/Wallpapers/primary-lock-dark.png" >/dev/null && [[ -f "$HOME/Pictures/Wallpapers/primary-dark.png" ]]; then
+# versões pequenas já desfocadas para a tela de bloqueio e miniaturas (instalações antigas não as têm)
+if ! compgen -G "$HOME/Pictures/Wallpapers/mountains/thumb-dark.png" >/dev/null && [[ -f "$HOME/Pictures/Wallpapers/mountains/primary-dark.png" ]]; then
   python3 "$REPO/tools/make_wallpapers.py" "$HOME/Pictures/Wallpapers" lock || warn "couldn't generate the lock screen wallpapers"
 fi
 

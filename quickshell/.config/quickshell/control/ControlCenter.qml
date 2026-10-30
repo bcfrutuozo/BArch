@@ -20,6 +20,7 @@ import "../audio"
 import "../record"
 import "../vpn"
 import "../anon"
+import "../wallpaper"
 
 Item {
     id: root
@@ -208,6 +209,11 @@ Item {
     function screenshot() {
         Popups.hide(popup)
         shotDelay.restart()       // espera o painel sumir antes de selecionar a área
+    }
+    // papel de parede: a escolha é o modo "b " do launcher (miniaturas, desktop / lock / ambos)
+    function chooseWallpaper() {
+        Popups.hide(popup)
+        Quickshell.execDetached(["qs", "ipc", "call", "launcher", "openWith", "b "])
     }
 
     // cafeína: impede o hypridle de apagar, bloquear ou suspender
@@ -475,6 +481,14 @@ Item {
                         sublabel: root.sideOn ? "On" : "Screen off"
                         active: root.sideOn
                         onClicked: root.toggleSide()
+                    }
+                    Tile {
+                        Layout.columnSpan: 2
+                        icon: root.glyph(0xF0E09)   // wallpaper
+                        label: "Wallpaper"
+                        sublabel: Wallpapers.desktop === Wallpapers.lock ? Wallpapers.label(Wallpapers.desktop)
+                                : Wallpapers.label(Wallpapers.desktop) + "  ·  Lock screen: " + Wallpapers.label(Wallpapers.lock)
+                        onClicked: root.chooseWallpaper()
                     }
                 }
 

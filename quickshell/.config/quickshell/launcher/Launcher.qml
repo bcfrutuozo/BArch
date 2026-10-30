@@ -11,6 +11,8 @@
 //   ? ...    pesquisa na web (ou abre o endereço, se for um link).
 //   a ...    fala com o Claude (barch agent ask): Enter abre uma conversa nova no ~/BArch já com o
 //            texto; Shift+Enter continua a última conversa de lá.
+//   b ...    papéis de parede (as cenas de ~/Pictures/Wallpapers, wallpaper/Wallpapers.qml); Enter
+//            pergunta onde aplicar (desktop e lock, só desktop, só lock), Shift+Enter aplica nos dois.
 //   = ...    calculadora qalc (unidades e conversões: "= 5 km to mi"); Enter copia.
 //   > ...    roda um comando; Shift+Enter roda no terminal e mantém aberto.
 // Teclas: ↑/↓, Tab/Shift+Tab ou Ctrl+J/K navegam · PgUp/PgDn · Enter · Esc fecha.
@@ -25,6 +27,7 @@ import Quickshell.Wayland
 import Quickshell.Widgets
 import Quickshell.Hyprland
 import "../theme"
+import "../wallpaper"
 
 Scope {
     id: root
@@ -90,6 +93,7 @@ Scope {
         if (/^c\s/.test(t)) return "clip"
         if (/^p\s/.test(t)) return "projects"
         if (/^a\s/.test(t)) return "agent"
+        if (/^b\s/.test(t)) return "wall"
         if (t.startsWith("/")) return "files"
         return "apps"
     }
@@ -97,7 +101,7 @@ Scope {
     readonly property string arg: {
         switch (mode) {
         case "run": case "qalc": case "emoji": case "web": return lead.slice(1).trim()
-        case "windows": case "clip": case "projects": case "agent": return lead.slice(1).trim()
+        case "windows": case "clip": case "projects": case "agent": case "wall": return lead.slice(1).trim()
         case "files": return lead.slice(1).trim()
         default: return trimmed
         }
@@ -115,8 +119,12 @@ Scope {
         clip:    { label: "Clipboard", glyph: 0xF0A38 },
         projects:{ label: "Projects",  glyph: 0xF0CCF },
         files:   { label: "Files",     glyph: 0xF0224 },
-        agent:   { label: "Claude",    glyph: 0xF06A9 }
+        agent:   { label: "Claude",    glyph: 0xF06A9 },
+        wall:    { label: "Wallpaper", glyph: 0xF0E09 }
     })
+
+    // papel de parede escolhido no modo "b ", à espera de "onde aplicar" ("" = ainda na lista)
+    property string wallPick: ""
 
     onModeChanged: {
         if (mode === "windows") winProc.running = true
@@ -140,6 +148,7 @@ Scope {
 
     onQueryChanged: {
         qalcResult = ""
+        wallPick = ""
         if (qalcMode && hasQalc && arg.length > 0) qalcDebounce.restart()
         if (mode === "files") filesDebounce.restart()
     }
@@ -456,6 +465,27 @@ Scope {
         return out
     }
 
+    function wallResults(q) {
+        if (wallPick !== "") {
+            const name = Wallpapers.label(wallPick)
+            return [
+                { kind: "wallto", target: "both",    title: "Desktop and Lock Screen", subtitle: name, glyph: 0xF0E09, scene: wallPick },
+                { kind: "wallto", target: "desktop", title: "Desktop Only",            subtitle: name, glyph: 0xF0379, scene: wallPick },
+                { kind: "wallto", target: "lock",    title: "Lock Screen Only",        subtitle: name, glyph: 0xF033E, scene: wallPick }
+            ]
+        }
+        if (Wallpapers.scenes.length === 0)
+            return [{ kind: "info", title: "No Wallpapers Found", subtitle: "tools/make_wallpapers.py ~/Pictures/Wallpapers", glyph: 0xF0E09 }]
+        const out = []
+        for (const sc of Wallpapers.scenes) {
+            if (q && !(sc.label + " " + sc.id + " " + sc.description).toLowerCase().includes(q)) continue
+            const used = Wallpapers.usedIn(sc.id)
+            out.push({ kind: "wall", title: sc.label, subtitle: sc.description + (used ? "  ·  " + used : ""),
+                       scene: sc.id, thumb: Wallpapers.thumb(sc.id), active: used !== "" })
+        }
+        return out
+    }
+
     readonly property var results: {
         const q = arg.toLowerCase()
         switch (mode) {
@@ -473,6 +503,7 @@ Scope {
         case "files":   return fileResults(q)
         case "emoji":   return emojiResults(q)
         case "web":     return webResults(arg)
+        case "wall":    return wallResults(q)
         case "agent":
             return [
                 { kind: "agent", title: arg || "New Conversation", subtitle: arg ? "Ask Claude" : "Open Claude in ~/BArch", glyph: 0xF06A9 },
@@ -528,6 +559,13 @@ Scope {
             break
         case "agent":
             Quickshell.execDetached(["barch", "agent", "ask"].concat(shift || r.resume ? ["--continue"] : [], arg ? [arg] : []))
+            break
+        case "wall":                       // Enter: onde aplicar; Shift+Enter: desktop e lock de uma vez
+            if (!shift) { wallPick = r.scene; list.currentIndex = 0; return }
+            Wallpapers.set(r.scene, "both")
+            break
+        case "wallto":
+            Wallpapers.set(r.scene, r.target)
             break
         }
         close()
@@ -649,7 +687,8 @@ Scope {
                             Keys.onPressed: ev => {
                                 const ctrl = ev.modifiers & Qt.ControlModifier
                                 if (ev.key === Qt.Key_Escape) {
-                                    root.close()
+                                    if (root.wallPick !== "") { root.wallPick = ""; list.currentIndex = 0 }
+                                    else root.close()
                                 } else if (ev.key === Qt.Key_Down || ev.key === Qt.Key_Tab || (ctrl && ev.key === Qt.Key_J)) {
                                     list.incrementCurrentIndex()
                                 } else if (ev.key === Qt.Key_Up || ev.key === Qt.Key_Backtab || (ctrl && ev.key === Qt.Key_K)) {
@@ -692,7 +731,10 @@ Scope {
                 ListView {
                     id: list
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(count, root.maxRows) * (root.rowHeight + spacing)
+                    // as linhas com miniatura (papéis de parede) são mais altas: menos delas por vez
+                    Layout.preferredHeight: root.mode === "wall" && root.wallPick === ""
+                                            ? Math.min(count, 5) * (84 + spacing)
+                                            : Math.min(count, root.maxRows) * (root.rowHeight + spacing)
                     visible: count > 0
                     clip: true
                     spacing: 2
@@ -737,7 +779,7 @@ Scope {
                                 clip: true
                                 Image {
                                     anchors.fill: parent
-                                    source: row.hasThumb && root.thumbsVersion > 0 ? "file://" + row.modelData.thumb : ""
+                                    source: row.hasThumb && (row.modelData.kind !== "clip" || root.thumbsVersion > 0) ? "file://" + row.modelData.thumb : ""
                                     fillMode: Image.PreserveAspectFit
                                     sourceSize: Qt.size(256, 144)
                                     asynchronous: true
@@ -797,7 +839,7 @@ Scope {
                                 Text {
                                     Layout.fillWidth: true
                                     text: row.modelData.title
-                                    color: Theme.fg
+                                    color: row.modelData.active ? Theme.accent : Theme.fg
                                     elide: Text.ElideRight
                                     font.family: ["calc", "run", "term"].includes(row.modelData.kind) ? Theme.monoFont : Theme.font
                                     font.pixelSize: row.modelData.kind === "calc" ? Theme.fontSize + 3 : Theme.fontSize
