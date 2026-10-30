@@ -438,6 +438,247 @@ def scene_mesh(mode, W, H, portrait):
     return c.finish()
 
 
+def noise2d(rng, W, H, octaves, base_period):
+    """Ruído suave 2D (-1..1): grades aleatórias ampliadas com bicúbica, somadas em oitavas."""
+    out = np.zeros((H, W), dtype=np.float32)
+    amp, period, total = 1.0, float(base_period), 0.0
+    for _ in range(octaves):
+        gw, gh = int(W / period) + 2, int(H / period) + 2
+        grid = Image.fromarray(rng.uniform(-1, 1, (gh, gw)).astype(np.float32), "F")
+        out += amp * np.asarray(grid.resize((W, H), Image.BICUBIC))
+        total += amp
+        amp *= 0.5
+        period /= 2.0
+    return out / total
+
+
+def scene_lake(mode, W, H, portrait):
+    """Montanhas refletidas num lago parado."""
+    water = 0.50
+    c = Canvas(mode, W, H, portrait, water)
+    c.glow(sigma=0.12)
+    c.stars()
+    c.orb(*((0.66, 0.16, 0.08) if portrait else (0.70, 0.18, 0.05)))
+    layers = MOUNTAIN_LAYERS[mode]
+    nl = len(layers)
+    for i, col in enumerate(layers):
+        k = i / (nl - 1)
+        base = H * (0.30 + k * 0.17) if not portrait else H * (0.32 + k * 0.16)
+        amp = H * (0.11 - 0.04 * k) * (0.7 if portrait else 1.0)
+        rr = c.ridge(base, amp, W * (0.45 - 0.22 * k))
+        rr = np.minimum(rr, H * water)                      # nada abaixo da linha d'água
+        c.fill(rr, col, fog=0.12, haze=(1 - k) * 0.22)
+    # reflexo: a metade de cima espelhada, suavizada, com ondulação leve e mais escura
+    hw = int(H * water)
+    top = c.img[:hw]
+    refl = np.ascontiguousarray(top[::-1][:H - hw])
+    shift = (np.sin(np.arange(refl.shape[0]) / 9.0) * 3 * (0.3 + 0.7 * value_noise_1d(refl.shape[0], 2, c.rng, 60))).astype(int)
+    for r in range(0, refl.shape[0], 1):
+        if shift[r]:
+            refl[r] = np.roll(refl[r], shift[r], axis=0)
+    refl = np.asarray(Image.fromarray(np.clip(refl, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(2)), dtype=np.float32)
+    water_col = hexrgb("#1a1c2e" if c.dark else "#9fb6d6")
+    depth = np.linspace(0, 1, refl.shape[0], dtype=np.float32)[:, None, None]
+    c.img[hw:] = mix(refl * (0.8 if c.dark else 0.94), water_col, 0.12 + 0.38 * depth ** 1.5)
+    line = np.exp(-((c.y - hw) / 1.5) ** 2) * (0.25 if c.dark else 0.35)
+    c.img = mix(c.img, c.p["orb"], np.broadcast_to(line, (H, 1))[..., None] * np.ones((1, W, 1), dtype=np.float32))
+    return c.finish()
+
+
+def scene_hills(mode, W, H, portrait):
+    """Colinas suaves, em verde discreto."""
+    c = Canvas(mode, W, H, portrait, 0.56 if portrait else 0.50)
+    c.glow()
+    c.stars()
+    c.orb(*((0.30, 0.20, 0.08) if portrait else (0.28, 0.22, 0.055)))
+    layers = (["#3d5a55", "#2f4842", "#223632", "#162421"] if c.dark
+              else ["#bcd6ac", "#9fc294", "#82a87a", "#668b62"])
+    nl = len(layers)
+    for i, col in enumerate(layers):
+        k = i / (nl - 1)
+        base = H * (c.horizon + k * (0.30 if portrait else 0.38))
+        amp = H * (0.10 - 0.02 * k) * (0.8 if portrait else 1.0)
+        rr = c.ridge(base, amp, W * (0.8 - 0.3 * k), octaves=2, wobble=0.02, phase=i * 1.3)
+        slope = np.gradient(rr)
+        shade = np.clip(-slope * (W * 0.3 / max(amp, 1)), -1, 1) * (0.10 if c.dark else 0.06)
+        c.fill(rr, col, fog=0.3, haze=(1 - k) * 0.28, shade=shade)
+    return c.finish()
+
+
+def scene_clouds(mode, W, H, portrait):
+    """Céu com nuvens volumosas, iluminadas por cima."""
+    c = Canvas(mode, W, H, portrait, 0.95)
+    c.stars(below=0.6)
+    c.orb(*((0.70, 0.14, 0.08) if portrait else (0.76, 0.16, 0.055)), halo=0.3)
+    n = noise2d(c.rng, W, H, 6, W * (0.5 if portrait else 0.35))
+    band = np.exp(-((c.ys - 0.62) / 0.30) ** 2)                 # nuvens no meio/baixo da imagem
+    dens = np.clip((n + 0.05) * 2.2, 0, 1) * band
+    dens = np.asarray(Image.fromarray((dens * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(6)), dtype=np.float32) / 255
+    lit = hexrgb("#7a75a6" if c.dark else "#ffffff")
+    shadow = hexrgb("#302e48" if c.dark else "#c3cadc")
+    gy = np.gradient(dens, axis=0)
+    shade = np.clip(0.45 + gy * 90, 0, 1)                       # borda de cima clara, base escura
+    cloud = mix(shadow, lit, shade[..., None])
+    c.img = mix(c.img, cloud, (np.clip(dens * 1.25, 0, 1) ** 0.9)[..., None])
+    return c.finish()
+
+
+def scene_mesa(mode, W, H, portrait):
+    """Canyon: mesas em patamares, tons quentes."""
+    c = Canvas(mode, W, H, portrait, 0.52 if portrait else 0.48)
+    c.glow(0.12, sigma=0.14)
+    c.stars()
+    c.orb(*((0.70, 0.20, 0.075) if portrait else (0.74, 0.22, 0.05)))
+    layers = (["#6a4a62", "#55395a", "#3e2a44", "#271b2c"] if c.dark
+              else ["#f1b78f", "#e39d72", "#cf8358", "#b06a47"])
+    nl = len(layers)
+    kernel = np.ones(21) / 21
+    for i, col in enumerate(layers):
+        k = i / (nl - 1)
+        base = H * (c.horizon + k * (0.30 if portrait else 0.38))
+        amp = H * (0.12 - 0.03 * k) * (0.8 if portrait else 1.0)
+        n = value_noise_1d(W, 3, c.rng, W * (0.35 - 0.12 * k))
+        steps = np.round((0.55 + n) * 4) / 4                    # patamares
+        rr = np.convolve(np.pad(base - amp * steps, 10, mode="edge"), kernel, mode="valid")
+        c.fill(rr, col, fog=0.22, haze=(1 - k) * 0.25)
+    return c.finish()
+
+
+def scene_polygons(mode, W, H, portrait):
+    """Terreno low-poly: triângulos chapados num degradê."""
+    from PIL import ImageDraw
+    rng = np.random.default_rng(RNG_SEED)
+    cols, rows = (12, 20) if portrait else (22, 12)
+    cw, ch = W / cols, H / rows
+    pts = np.zeros((rows + 1, cols + 1, 2))
+    for r in range(rows + 1):
+        for q in range(cols + 1):
+            jx = 0 if q in (0, cols) else rng.uniform(-0.38, 0.38) * cw
+            jy = 0 if r in (0, rows) else rng.uniform(-0.38, 0.38) * ch
+            pts[r, q] = (q * cw + jx, r * ch + jy)
+    a, b = (hexrgb("#4f3f84"), hexrgb("#1b1c27")) if mode != "light" else (hexrgb("#c7cff0"), hexrgb("#7f8fd0"))
+    img = Image.new("RGB", (W, H))
+    draw = ImageDraw.Draw(img)
+    for r in range(rows):
+        for q in range(cols):
+            p00, p01, p10, p11 = pts[r, q], pts[r, q + 1], pts[r + 1, q], pts[r + 1, q + 1]
+            tris = [(p00, p01, p11), (p00, p11, p10)] if (r + q) % 2 else [(p00, p01, p10), (p01, p11, p10)]
+            for tri in tris:
+                cy = sum(t[1] for t in tri) / 3 / H
+                cx = sum(t[0] for t in tri) / 3 / W
+                t = np.clip(0.65 * cy + 0.35 * cx, 0, 1)
+                col = mix(a, b, t) * (1 + rng.uniform(-0.09, 0.09))
+                draw.polygon([tuple(p) for p in tri], fill=tuple(int(v) for v in np.clip(col, 0, 255)))
+    return img
+
+
+def scene_retro(mode, W, H, portrait):
+    """Synthwave: sol listrado no horizonte e grade em perspectiva."""
+    c = Canvas(mode, W, H, portrait, 0.60 if portrait else 0.58)
+    p = c.p
+    if c.dark:
+        c.img = mix(c.img, hexrgb("#6b2d6e"), (np.clip((c.ys - 0.15) / (c.horizon - 0.15), 0, 1) ** 2.2 * 0.6)[..., None])
+    else:
+        c.img = mix(c.img, hexrgb("#f7cdbb"), (np.clip((c.ys - 0.15) / (c.horizon - 0.15), 0, 1) ** 2 * 0.7)[..., None])
+    c.stars(density=7000)
+    scale = W if portrait else H
+    r = 0.16 if portrait else 0.20
+    sx, sy = 0.5, c.horizon - r * 0.55 * (scale / H)
+    dx = (c.xs - sx) * (W / scale)
+    dy = (c.ys - sy) * (H / scale)
+    d = np.sqrt(dx ** 2 + dy ** 2) / r
+    halo = np.exp(-np.clip(d - 1, 0, None) * 2.2) * (0.35 if c.dark else 0.3)
+    glow_col = hexrgb(DRACULA["pink"] if c.dark else LATTE["peach"])
+    c.img = mix(c.img, glow_col, halo[..., None])
+    top, bot = (hexrgb(DRACULA["yellow"]), hexrgb(DRACULA["pink"])) if c.dark else (hexrgb("#fbe3c8"), hexrgb(LATTE["peach"]))
+    t = np.clip((c.ys - (sy - r * H / scale)) / (2 * r * H / scale), 0, 1)
+    sun = mix(top, bot, t[..., None])
+    disc = np.clip((1.0 - d) * r * scale * 0.6, 0, 1)
+    stripes = np.where(t > 0.45, (np.sin((t - 0.45) * 95) > -0.2 + (t - 0.45) * 1.8), True)
+    c.img = mix(c.img, sun, (disc * stripes * 0.95)[..., None])
+    c.img = np.where((c.ys >= c.horizon)[..., None], hexrgb("#1a1226" if c.dark else "#e4e0ee"), c.img)
+    # grade: linhas verticais para o ponto de fuga e horizontais com espaçamento em perspectiva
+    below = np.clip(c.ys - c.horizon, 1e-4, None)
+    z = 0.03 / below
+    vx = (c.xs - 0.5) / below * (0.9 if portrait else 0.35)
+    thick = 0.0025 + 0.004 * (c.ys - c.horizon)
+    hl = np.exp(-((np.mod(z, 1.0) - 0.5) / (z * 0.02 + 0.03)) ** 2) * 0.9
+    vl = np.exp(-((np.mod(vx * 8, 1.0) - 0.5) / (thick / below * 1.6)) ** 2)
+    grid = np.clip(hl + vl, 0, 1) * (c.ys >= c.horizon) * np.clip((c.ys - c.horizon) / 0.03, 0, 1)
+    gcol = hexrgb(DRACULA["purple"] if c.dark else LATTE["mauve"])
+    c.img = mix(c.img, gcol, (grid * (0.75 if c.dark else 0.35))[..., None])
+    c.img = mix(c.img, hexrgb(DRACULA["pink"] if c.dark else LATTE["peach"]),
+                (np.exp(-((c.ys - c.horizon) / 0.004) ** 2) * (0.8 if c.dark else 0.5))[..., None])
+    return c.finish()
+
+
+def scene_nebula(mode, W, H, portrait):
+    """Nebulosa: nuvens de cor sobre estrelas (de dia, a versão pastel)."""
+    c = Canvas(mode, W, H, portrait, 1.0)
+    base = hexrgb("#14151c" if c.dark else LATTE["base"])
+    c.img = np.broadcast_to(base, c.img.shape).copy()
+    rng = c.rng
+    if c.dark:
+        c.stars(density=4500, below=1.0)
+    cols = ([(DRACULA["purple"], 0.75), (DRACULA["pink"], 0.55), (DRACULA["cyan"], 0.30)] if c.dark
+            else [(LATTE["mauve"], 0.34), (LATTE["pink"], 0.30), (LATTE["sky"], 0.22)])
+    for col, alpha in cols:
+        n = noise2d(rng, W, H, 6, W * 0.45)
+        warp = noise2d(rng, W, H, 3, W * 0.3)
+        a = np.clip(1.7 * n + 0.4 * warp + 0.25, 0, 1) ** 1.4
+        c.img = mix(c.img, hexrgb(col), (a * alpha)[..., None])
+    if c.dark:
+        c.stars(density=12000, below=1.0)
+    return c.finish()
+
+
+def scene_bokeh(mode, W, H, portrait):
+    """Bokeh: círculos de luz desfocados, grandes ao fundo e nítidos na frente."""
+    from PIL import ImageDraw
+    rng = np.random.default_rng(RNG_SEED)
+    a, b = (hexrgb("#17181f"), hexrgb("#2a2440")) if mode != "light" else (hexrgb(LATTE["base"]), hexrgb("#d9dfee"))
+    ys = np.linspace(0, 1, H, dtype=np.float32)[:, None, None]
+    xs = np.linspace(0, 1, W, dtype=np.float32)[None, :, None]
+    bg = Image.fromarray(np.clip(mix(a, b, (0.6 * ys + 0.4 * xs)), 0, 255).astype(np.uint8))
+    accents = ([DRACULA["purple"], DRACULA["pink"], DRACULA["cyan"], DRACULA["orange"]] if mode != "light"
+               else [LATTE["mauve"], LATTE["pink"], LATTE["sky"], LATTE["peach"]])
+    scale = min(W, H)
+    groups = ([(14, 0.10, 0.20, 60, 0.20), (22, 0.04, 0.09, 18, 0.30), (30, 0.012, 0.035, 3, 0.55)] if mode != "light"
+              else [(14, 0.10, 0.20, 60, 0.16), (22, 0.04, 0.09, 18, 0.20), (24, 0.012, 0.035, 3, 0.30)])
+    for n, rmin, rmax, blur, alpha in groups:
+        layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(layer)
+        for _ in range(n):
+            r = scale * rng.uniform(rmin, rmax)
+            x, y = rng.uniform(-r, W + r), rng.uniform(-r, H + r)
+            col = hexrgb(accents[rng.integers(0, len(accents))])
+            av = int(255 * alpha * rng.uniform(0.6, 1.0))
+            draw.ellipse([x - r, y - r, x + r, y + r], fill=(int(col[0]), int(col[1]), int(col[2]), av))
+        layer = layer.filter(ImageFilter.GaussianBlur(blur))
+        bg = Image.alpha_composite(bg.convert("RGBA"), layer).convert("RGB")
+    return bg
+
+
+def scene_contours(mode, W, H, portrait):
+    """Curvas de nível de um relevo imaginário, em linhas finas da cor de destaque."""
+    c = Canvas(mode, W, H, portrait, 1.0)
+    base = hexrgb("#1e1f29" if c.dark else LATTE["base"])
+    c.img = np.broadcast_to(base, c.img.shape).copy()
+    levels = (noise2d(c.rng, W, H, 4, W * 0.45) + 0.6 * noise2d(c.rng, W, H, 2, W * 0.9)) * 11
+    gy, gx = np.gradient(levels)
+    g = np.maximum(np.sqrt(gx ** 2 + gy ** 2), 1e-4)
+    frac = np.mod(levels, 1.0)
+    dist = np.minimum(frac, 1 - frac) / g                        # distância em pixels até a linha
+    line = np.clip(3.2 - dist, 0, 1)
+    major = (np.mod(np.floor(levels), 4) == 0)
+    strength = np.where(major, 1.0, 0.55) * line
+    glow = np.exp(-((c.xs - 0.3) ** 2 + (c.ys - 0.35) ** 2) / 0.35)
+    col = hexrgb(DRACULA["purple"] if c.dark else LATTE["mauve"])
+    c.img = mix(c.img, hexrgb("#2a2740" if c.dark else "#e2e4ef"), (glow * 0.8)[..., None])
+    c.img = mix(c.img, col, (strength * (0.55 if c.dark else 0.5) * (0.55 + 0.45 * glow))[..., None])
+    return c.finish()
+
+
 # id → (label, descrição, função); a ordem é a do seletor
 SCENES = {
     "mountains": ("Mountains", "Layered ridges under the moon or the sun", scene_mountains),
@@ -446,7 +687,16 @@ SCENES = {
     "forest": ("Forest", "Pine treelines in the mist", scene_forest),
     "city": ("City", "Skyline, windows lit at night", scene_city),
     "aurora": ("Aurora", "Northern lights at night, sun rays by day", scene_aurora),
+    "lake": ("Lake", "Mountains mirrored in still water", scene_lake),
+    "hills": ("Hills", "Rolling green hills", scene_hills),
+    "clouds": ("Clouds", "Big clouds lit from above", scene_clouds),
+    "mesa": ("Mesa", "Canyon terraces in warm tones", scene_mesa),
+    "retro": ("Retro", "Synthwave sun and perspective grid", scene_retro),
+    "polygons": ("Polygons", "Low-poly terrain", scene_polygons),
     "mesh": ("Mesh", "Soft color blobs, no landscape", scene_mesh),
+    "nebula": ("Nebula", "Clouds of color over the stars", scene_nebula),
+    "bokeh": ("Bokeh", "Out-of-focus lights", scene_bokeh),
+    "contours": ("Contours", "Contour lines of an imaginary relief", scene_contours),
 }
 
 LOCK_SCALE = 4          # 3840x2160 -> 960x540

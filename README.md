@@ -37,7 +37,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `backup/` | — | `barch backup`: what restic saves to the NAS (`include.txt`, `exclude.txt`), see Backup |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
 | `agent/` | — | Scheduled agent tasks (`tasks/`), the failure ignore list and the upstream watch list; used by `barch` |
-| `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, seven scenes in both palettes), Limine theme (`limine-theme.py`) |
+| `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, sixteen scenes in both palettes), Limine theme (`limine-theme.py`) |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
 | `packages/` | — | Explicitly installed packages (`pacman.txt`, `aur.txt`, `aur-ignore.txt`) |
 
@@ -104,8 +104,9 @@ The main pieces:
   (username and password, one per line, `chmod 600`), never in the repo.
 - **Wallpapers** on every monitor (a background layer, no hyprpaper), drawn by
   `tools/make_wallpapers.py` in the two palettes so they follow the theme (night with the moon and
-  stars in Dracula, day with the sun in Latte), crossfading when the mode changes. Seven scenes:
-  Mountains, Waves, Dunes, Forest, City, Aurora and Mesh, each in `~/Pictures/Wallpapers/<scene>/`
+  stars in Dracula, day with the sun in Latte), crossfading when the mode changes. Sixteen scenes
+  (Mountains, Waves, Dunes, Forest, City, Aurora, Lake, Hills, Clouds, Mesa, Retro, Polygons, Mesh,
+  Nebula, Bokeh, Contours), each in `~/Pictures/Wallpapers/<scene>/`
   as `primary-<mode>.png` (main monitor), `secondary-<mode>.png` (portrait), the small pre-blurred
   `*-lock-*` copies for the lock screen and a `thumb-<mode>.png`. The launcher's `b ` mode (also the
   Wallpaper tile in the Control Center) lists them with thumbnails and marks the ones in use; Enter
