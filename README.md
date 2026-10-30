@@ -61,7 +61,7 @@ The main pieces:
   (`hypr/scripts/passthrough.sh`: an X11 window holding the keyboard gets the shortcut instead of
   Hyprland, since Xwayland's grab never reaches the compositor).
 - **Control Center:** Light / Dark / Auto, Display (HDR, SDR brightness, side monitor on/off,
-  Wallpaper), Bluetooth, Caffeine, Night Light, Do Not Disturb, Anonymous Mode and VPN Region (below), Game HDR,
+  Themes, Wallpaper), Bluetooth, Caffeine, Night Light, Do Not Disturb, Anonymous Mode and VPN Region (below), Game HDR,
   Game HUD (MangoHud), Screenshot, screen Recording (full screen or region).
 - **Anonymous Mode** (`quickshell/anon/`): one tile for the VPN plus what would still give the machine
   away. On: Mullvad Browser (the Tor Browser protections without Tor: one User-Agent for everyone,
@@ -156,7 +156,7 @@ IPC, so it does exactly what the Control Center does; the bar has to be running.
 
 ```bash
 barch notify "Backup" "Finished in 4 min" [--critical|--low] [--app NAME] [--action "Label=command"]
-barch theme light|dark|auto|status
+barch theme light|dark|auto|status   barch theme dark|light <palette>   barch theme palettes
 barch wallpaper list|status        barch wallpaper <scene> [--lock|--desktop]   # both by default
 barch hdr on|off|status            barch sdr <nits>|status
 barch monitor side on|off|status   barch caffeine on|off|status
@@ -263,10 +263,19 @@ Wi-Fi passwords) and the VM disk images.
 
 ## Theme
 
-`quickshell/.config/quickshell/theme/Theme.qml` is the single source. It generates the colors for
+`quickshell/.config/quickshell/theme/Theme.qml` is the single source. It holds twelve palettes,
+eight dark (OLED, Dracula, Catppuccin Mocha / Macchiato / Frappé, Tokyo Night, Nord, Gruvbox) and
+four light (Catppuccin Latte, Nord Light, Snow, Paper), and one of each side is pinned: the dark
+one is what Dark mode shows, the light one what Light mode shows. The **Themes** tile in the
+Control Center lists them in the two groups with their colors; a click pins it (`barch theme dark
+nord`, `barch theme light snow`, `barch theme palettes`; saved in
+`~/.local/state/quickshell/flavors.json`). From the pinned pair it generates the colors for
 foot, Neovim, the lock screen, the Hyprland borders, GTK 3 (`BArch-dark/light` themes over adw-gtk3),
-GTK 4/libadwaita, qt6ct, fontconfig and MangoHud. `theme-auto` switches the Hyprland theme,
-the apps (`apps-theme`: GTK theme, Papirus icons, cursor); the wallpapers follow `Theme.isDark` inside the bar.
+GTK 4/libadwaita, qt6ct, fontconfig and MangoHud. Changing the pinned palette of the mode in use
+repaints the bar, the borders, the lock and the open GTK apps at once; terminals, Neovim and Qt
+apps already open keep their colors until reopened. `theme-auto` switches the Hyprland theme,
+the apps (`apps-theme`: GTK theme, Papirus icons, cursor); the wallpapers follow `Theme.isDark`
+inside the bar (they are drawn in Dracula and Latte colors whatever the pinned palette).
 Generated files inside the repo are git-ignored.
 
 ## Fresh install

@@ -11,8 +11,13 @@ pragma Singleton
 //   qs ipc call theme set nord     só a barra, para testar uma paleta (até reiniciar)
 //   qs ipc call theme auto         volta a seguir o sistema
 //   qs ipc call theme list         paletas disponíveis
+//   qs ipc call theme palettes     as paletas em dois grupos, escuras e claras, com as cores (JSON)
+//   qs ipc call theme flavor dark nord
+//                                  fixa a paleta do modo escuro (ou claro); fica salva em
+//                                  ~/.local/state/quickshell/flavors.json e vale para tudo que é gerado
 //   qs ipc call theme status       aparência escolhida, modo atual e paleta (JSON)
-// O barch (~/.local/bin) usa "mode" e "status": theme light | dark | auto | status.
+// O barch (~/.local/bin) usa mode, status, flavor e palettes: theme light | dark | auto | status |
+// dark <paleta> | light <paleta> | palettes.
 
 import QtQuick
 import Quickshell
@@ -23,6 +28,8 @@ Singleton {
     id: root
 
     // ================= escolha aqui =================
+    // Valores iniciais; a escolha feita na central de controle (bloco Themes) ou com
+    // "theme flavor" fica em ~/.local/state/quickshell/flavors.json e vale sobre estes.
     property string darkFlavor: "dracula"     // paleta do modo escuro
     property string lightFlavor: "latte"    // paleta do modo claro
     property string defaultMode: "dark"     // se o sistema não declara preferência ("default")
@@ -89,6 +96,66 @@ Singleton {
                       text: "#4c4f69", accent: "#1e66f5", green: "#40a02b", yellow: "#df8e1d", red: "#d20f39" }
     })
     readonly property var p: palettes[flavor] || palettes.mocha
+
+    // nomes para a interface
+    readonly property var flavorLabels: ({
+        oled: "OLED", dracula: "Dracula", mocha: "Catppuccin Mocha", macchiato: "Catppuccin Macchiato",
+        frappe: "Catppuccin Frappé", tokyonight: "Tokyo Night", nord: "Nord", gruvbox: "Gruvbox",
+        latte: "Catppuccin Latte", nordlight: "Nord Light", snow: "Snow", paper: "Paper"
+    })
+    function flavorLabel(id) { return flavorLabels[id] || (id ? id.charAt(0).toUpperCase() + id.slice(1) : "") }
+    // as paletas em dois grupos, pela claridade do fundo (ordem: a de cada lado primeiro)
+    readonly property var darkFlavors: Object.keys(palettes).filter(k => paletteIsDark(palettes[k]))
+    readonly property var lightFlavors: Object.keys(palettes).filter(k => !paletteIsDark(palettes[k]))
+    function flavorInfo(id) {
+        const q = palettes[id]
+        return { id: id, label: flavorLabel(id), base: q.base, surface: q.surface, text: q.text, accent: q.accent,
+                 dark: paletteIsDark(q), active: id === (paletteIsDark(q) ? darkFlavor : lightFlavor) }
+    }
+
+    // ================= paleta fixa de cada modo (persistente) =================
+    readonly property string flavorsPath: stateDir + "flavors.json"
+    property bool flavorsLoaded: false
+    FileView {
+        path: root.flavorsPath
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            try {
+                const f = JSON.parse(text())
+                if (root.palettes[f.dark] && root.paletteIsDark(root.palettes[f.dark])) root.darkFlavor = f.dark
+                if (root.palettes[f.light] && !root.paletteIsDark(root.palettes[f.light])) root.lightFlavor = f.light
+            } catch (e) { console.warn("theme: invalid flavors.json:", e) }
+            root.flavorsLoaded = true
+        }
+        onLoadFailed: root.flavorsLoaded = true
+    }
+    // Fixa a paleta de um lado. Se é o lado em uso, tudo troca na hora (barra, bordas, lock,
+    // GTK: o tema é reaplicado para os apps abertos relerem o CSS novo). foot, nvim e os apps Qt
+    // já abertos ficam como estão até abrirem de novo.
+    function setFlavor(mode, name) {
+        const q = palettes[name]
+        if (!q) return "unknown palette: " + name
+        const dark = paletteIsDark(q)
+        if (mode === "dark" && !dark) return name + " is a light palette"
+        if (mode === "light" && dark) return name + " is a dark palette"
+        if (dark) darkFlavor = name; else lightFlavor = name
+        writeFile(flavorsPath, JSON.stringify({ dark: darkFlavor, light: lightFlavor }, null, 2) + "\n")
+        gtkKick.restart()
+        return ""
+    }
+    // GTK 3 só relê o gtk.css quando o nome do tema muda: vai ao adw-gtk3 e volta, depois
+    // que o appsWrite (400 ms) gravou os arquivos novos.
+    Timer {
+        id: gtkKick
+        interval: 900
+        onTriggered: Quickshell.execDetached(["sh", "-c",
+            'cur=$(gsettings get org.gnome.desktop.interface gtk-theme | tr -d "\x27"); '
+            + 'case $cur in BArch-*) gsettings set org.gnome.desktop.interface gtk-theme "$1"; sleep 0.4; '
+            + 'gsettings set org.gnome.desktop.interface gtk-theme "$cur";; esac',
+            "sh", root.isDark ? "adw-gtk3-dark" : "adw-gtk3"])
+    }
 
     // ================= cores =================
     // Tons da paleta (os mesmos nomes que o shell.qml já usava)
@@ -644,12 +711,24 @@ Singleton {
         }
         function status(): string {
             return JSON.stringify({ ok: true, appearance: root.appearance || "unset", mode: root.currentMode,
-                                    flavor: root.flavor, dayStart: root.dayStart, nightStart: root.nightStart })
+                                    flavor: root.flavor, dark: root.darkFlavor, light: root.lightFlavor,
+                                    dayStart: root.dayStart, nightStart: root.nightStart })
         }
         function set(name: string): string {
             if (!root.palettes[name]) return "unknown theme: " + name
             root.forcedFlavor = name
             return "theme: " + name + " (until restart; 'theme auto' to follow the system)"
+        }
+        // paleta fixa do modo escuro ou claro (JSON, usado pelo barch e pela central de controle)
+        function flavor(mode: string, name: string): string {
+            if (mode !== "dark" && mode !== "light") return JSON.stringify({ ok: false, error: "use: dark | light" })
+            const err = root.setFlavor(mode, name)
+            if (err) return JSON.stringify({ ok: false, error: err, palettes: (mode === "dark" ? root.darkFlavors : root.lightFlavors) })
+            return JSON.stringify({ ok: true, dark: root.darkFlavor, light: root.lightFlavor, mode: root.currentMode, flavor: root.flavor })
+        }
+        function palettes(): string {
+            return JSON.stringify({ ok: true, dark: root.darkFlavors.map(root.flavorInfo), light: root.lightFlavors.map(root.flavorInfo),
+                                    current: { dark: root.darkFlavor, light: root.lightFlavor } })
         }
         function auto(): string {
             root.forcedFlavor = ""
