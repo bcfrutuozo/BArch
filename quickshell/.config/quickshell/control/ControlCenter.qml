@@ -497,8 +497,9 @@ Item {
                     Tile {
                         icon: root.glyph(0xF0E09)   // wallpaper
                         label: "Wallpaper"
-                        sublabel: Wallpapers.desktop === Wallpapers.lock ? Wallpapers.label(Wallpapers.desktop)
-                                : Wallpapers.label(Wallpapers.desktop) + "  ·  Lock screen: " + Wallpapers.label(Wallpapers.lock)
+                        sublabel: (Wallpapers.desktop === Wallpapers.lock ? Wallpapers.label(Wallpapers.desktop)
+                                : Wallpapers.label(Wallpapers.desktop) + "  ·  Lock screen: " + Wallpapers.label(Wallpapers.lock))
+                                + (Wallpapers.rendering ? "  ·  rendering " + Theme.flavorLabel(Wallpapers.renderingPalette) + "…" : "")
                         onClicked: root.chooseWallpaper()
                     }
                 }

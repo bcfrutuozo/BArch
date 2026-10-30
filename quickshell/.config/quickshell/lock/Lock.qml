@@ -77,7 +77,11 @@ Scope {
     }
     readonly property bool dark: theme.dark
 
-    // ================= wallpaper scene (the bar's wallpaper.json, see wallpaper/Wallpapers.qml) =================
+    // ================= wallpaper (the bar's wallpaper.json, see wallpaper/Wallpapers.qml) =================
+    // folder: ~/Pictures/Wallpapers/<palette>/<scene>/; the palette is the one in theme.json, falling
+    // back to the default of its side (dracula / latte, the pair install.sh renders) if it has no folder
+    readonly property string palette: theme.flavor || (dark ? "dracula" : "latte")
+    readonly property string fallbackPalette: dark ? "dracula" : "latte"
     property string scene: "mountains"
     FileView {
         path: root.home + "/.local/state/quickshell/wallpaper.json"
