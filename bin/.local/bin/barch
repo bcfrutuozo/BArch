@@ -41,6 +41,9 @@ Desktop (through the bar):
                               button that runs COMMAND (sh -c)
   theme light|dark|auto|status
                               appearance (Auto follows the theme-auto schedule)
+  wallpaper list|status       the scenes in ~/Pictures/Wallpapers, which is on the desktop and the lock
+  wallpaper <scene> [--lock|--desktop]
+                              use a scene (both by default; a lock-only choice stays until changed)
   hdr on|off|status           HDR on the main monitor
   sdr <nits>|status           SDR brightness inside HDR
   monitor side on|off|status  side monitor (DPMS)
@@ -221,6 +224,29 @@ cmd_theme() {
     *) usage_error "theme light|dark|auto|status" ;;
   esac
   show "$OUT" "$text"
+}
+
+cmd_wallpaper() {
+  local scene="" target=both
+  for a in "$@"; do
+    case $a in
+      --lock) target=lock ;;
+      --desktop) target=desktop ;;
+      -*) usage_error "wallpaper list|status|<scene> [--lock|--desktop]" ;;
+      *) [[ -z $scene ]] || usage_error "one scene at a time"; scene=$a ;;
+    esac
+  done
+  case $scene in
+    list)
+      ipc wallpaper list
+      show "$OUT" '.scenes[] | "\(.id)\t\(.label)\t\(.description)"' ;;
+    status | '')
+      ipc wallpaper status
+      show "$OUT" '"desktop: \(.desktop), lock screen: \(.lock) (\(.mode))"' ;;
+    *)
+      ipc wallpaper set "$scene" "$target"
+      show "$OUT" '"desktop: \(.desktop), lock screen: \(.lock)"' ;;
+  esac
 }
 
 control_text_hdr='"hdr: \(.hdr | '"$onoff_text"')" + (if .hdr then " (SDR white \(.sdrWhite) nits)" else "" end)'
@@ -935,6 +961,7 @@ cmd=${1:-help}
 case $cmd in
   notify) cmd_notify "$@" ;;
   theme) cmd_theme "$@" ;;
+  wallpaper) cmd_wallpaper "$@" ;;
   hdr) cmd_hdr "$@" ;;
   sdr) cmd_sdr "$@" ;;
   monitor) cmd_monitor "$@" ;;

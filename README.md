@@ -37,7 +37,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `backup/` | — | `barch backup`: what restic saves to the NAS (`include.txt`, `exclude.txt`), see Backup |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
 | `agent/` | — | Scheduled agent tasks (`tasks/`), the failure ignore list and the upstream watch list; used by `barch` |
-| `tools/` | — | Generators: wallpapers (`make_wallpapers.py`), Limine theme (`limine-theme.py`) |
+| `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, seven scenes in both palettes), Limine theme (`limine-theme.py`) |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
 | `packages/` | — | Explicitly installed packages (`pacman.txt`, `aur.txt`, `aur-ignore.txt`) |
 
@@ -53,14 +53,15 @@ The main pieces:
   top-right corner of the main monitor opens the workspace overview (drag windows between workspaces).
 - **Launcher** (Super+Space): apps, `w` windows, `c` clipboard with image thumbnails (Super+V),
   `p` git projects, `/` files, `:` emoji, `?` web, `=` calculator, `>` run, `a` Claude (Super+A;
-  asks in a new session in `~/BArch`, Shift+Enter continues the last one); OCR, color picker, QR.
+  asks in a new session in `~/BArch`, Shift+Enter continues the last one), `b` wallpapers (below);
+  OCR, color picker, QR.
 - **Window tools:** minimize (Super+M, comes back to its own workspace), always on top
   (Super+Shift+P), right-click menu on any window preview, swap/resize with Super+Shift/Ctrl+arrows.
   Alt+Tab and Super+Tab reach the remote machine when Parsec's immersive mode is on
   (`hypr/scripts/passthrough.sh`: an X11 window holding the keyboard gets the shortcut instead of
   Hyprland, since Xwayland's grab never reaches the compositor).
-- **Control Center:** Light / Dark / Auto, Display (HDR, SDR brightness, side monitor on/off),
-  Bluetooth, Caffeine, Night Light, Do Not Disturb, Anonymous Mode and VPN Region (below), Game HDR,
+- **Control Center:** Light / Dark / Auto, Display (HDR, SDR brightness, side monitor on/off,
+  Wallpaper), Bluetooth, Caffeine, Night Light, Do Not Disturb, Anonymous Mode and VPN Region (below), Game HDR,
   Game HUD (MangoHud), Screenshot, screen Recording (full screen or region).
 - **Anonymous Mode** (`quickshell/anon/`): one tile for the VPN plus what would still give the machine
   away. On: Mullvad Browser (the Tor Browser protections without Tor: one User-Agent for everyone,
@@ -101,8 +102,18 @@ The main pieces:
   routed into the tunnel (dropped there) while connected. A shield with the country shows in the
   bar while connected (click: IP, time, Change region, Disconnect). Credentials go in `~/.config/pia/credentials`
   (username and password, one per line, `chmod 600`), never in the repo.
-- **Wallpaper** on every monitor (a background layer, no hyprpaper): `primary-<mode>.png` on the main
-  one, `secondary-<mode>.png` on the portrait one, crossfading when the theme mode changes.
+- **Wallpapers** on every monitor (a background layer, no hyprpaper), drawn by
+  `tools/make_wallpapers.py` in the two palettes so they follow the theme (night with the moon and
+  stars in Dracula, day with the sun in Latte), crossfading when the mode changes. Seven scenes:
+  Mountains, Waves, Dunes, Forest, City, Aurora and Mesh, each in `~/Pictures/Wallpapers/<scene>/`
+  as `primary-<mode>.png` (main monitor), `secondary-<mode>.png` (portrait), the small pre-blurred
+  `*-lock-*` copies for the lock screen and a `thumb-<mode>.png`. The launcher's `b ` mode (also the
+  Wallpaper tile in the Control Center) lists them with thumbnails and marks the ones in use; Enter
+  asks where to apply it (desktop and lock screen, desktop only, lock screen only), Shift+Enter
+  applies it to both. The choice lives in `~/.local/state/quickshell/wallpaper.json`
+  (`barch wallpaper`), which the lock screen watches, so the two can differ.
+  `make_wallpapers.py ~/Pictures/Wallpapers [scene...]` regenerates them (a new scene is a function
+  in `SCENES`; `scenes.json` is written from it).
 - **Polkit agent** (`Quickshell.Services.Polkit`, no hyprpolkitagent): the password dialog apps get
   when they ask for privileges (`pkexec`, GNOME Disks, …), in the bar's theme.
 - **Own notification server** with history, DND, sounds and app actions; privacy indicator
@@ -111,11 +122,12 @@ The main pieces:
   iCloud agenda in the clock's calendar; quick notes (Super+N); session restore at login.
 - **Lock screen** (`quickshell/lock/`, Super+L, idle and login): blurred wallpaper per monitor, clock,
   date and weather, notifications that arrived while away, music playing; follows the theme live
-  through `~/.local/state/quickshell/theme.json`. It is its own Quickshell process, so it does not
+  through `~/.local/state/quickshell/theme.json` and shows the scene chosen for it in
+  `wallpaper.json`. It is its own Quickshell process, so it does not
   fall with the bar, and it stays resident: `scripts/lock.sh` starts it at login and every lock
   request (hypridle, Super+L) is just `ipc call lock lock`, so the screen is up as soon as each
   monitor draws a frame instead of after a Quickshell start. The wallpapers it shows are small,
-  pre-blurred copies (`primary-lock-<mode>.png`, `secondary-lock-<mode>.png`, made by
+  pre-blurred copies (`<scene>/primary-lock-<mode>.png`, `secondary-lock-<mode>.png`, made by
   `make_wallpapers.py`), and everything fades in together. It is the only locker: if the
   process dies while locked, `lock.sh` starts it again and locks it again (Hyprland allows a new
   lock to take over), slowing down to one try every 10 s after three quick failures;
@@ -144,6 +156,7 @@ IPC, so it does exactly what the Control Center does; the bar has to be running.
 ```bash
 barch notify "Backup" "Finished in 4 min" [--critical|--low] [--app NAME] [--action "Label=command"]
 barch theme light|dark|auto|status
+barch wallpaper list|status        barch wallpaper <scene> [--lock|--desktop]   # both by default
 barch hdr on|off|status            barch sdr <nits>|status
 barch monitor side on|off|status   barch caffeine on|off|status
 barch nightlight on|off|status     barch dnd on|off|status
@@ -159,7 +172,7 @@ barch replay share [file] [--from 12 --to 40]
 ```
 
 Every command takes `--json`. Exit codes: `0` ok, `1` the bar refused, `2` usage, `3` bar not reachable.
-On the QML side these are the `IpcHandler`s `control`, `theme`, `notifs`, `health`, `vpn` and `anon` (`qs ipc show`).
+On the QML side these are the `IpcHandler`s `control`, `theme`, `wallpaper`, `notifs`, `health`, `vpn` and `anon` (`qs ipc show`).
 
 ## Agent
 
