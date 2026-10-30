@@ -19,23 +19,29 @@ Item {
     readonly property bool ready: shown && wall.status !== Image.Loading
 
     // ---- wallpaper (já desfocado) ----
-    // <cena>/primary-lock-<modo>.png / secondary-lock-<modo>.png: 960x540 já com blur (tools/make_wallpapers.py);
-    // a cena vem do wallpaper.json do bar (ctl.scene) e o modo do theme.json. Decodificam em poucos ms, síncronas, então o primeiro frame da
+    // <paleta>/<cena>/primary-lock.png / secondary-lock.png: 960x540 já com blur (tools/make_wallpapers.py);
+    // a cena vem do wallpaper.json do bar (ctl.scene) e a paleta do theme.json (ctl.palette). Sem a pasta
+    // da paleta, a padrão do lado (ctl.fallbackPalette); sem a versão lock, a imagem grande. Decodificam em poucos ms, síncronas, então o primeiro frame da
     // superfície já sai com o papel de parede; desfocar o PNG 4K aqui custava ~100 ms e entrava com um
     // pulo. Sem a versão lock (instalação antiga), cai para a imagem grande.
     Image {
         id: wall
-        property bool fallback: false
+        property int attempt: 0            // 0: paleta em uso · 1: paleta padrão · 2: paleta padrão, imagem grande
+        readonly property string name: screenRoot.primary ? "primary" : "secondary"
         anchors.fill: parent
-        source: "file://" + ctl.home + "/Pictures/Wallpapers/" + ctl.scene + "/" + (screenRoot.primary ? "primary" : "secondary")
-                + (fallback ? "" : "-lock") + (ctl.dark ? "-dark" : "-light") + ".png"
+        source: "file://" + ctl.home + "/Pictures/Wallpapers/" + (attempt === 0 ? ctl.palette : ctl.fallbackPalette) + "/"
+                + ctl.scene + "/" + name + (attempt === 2 ? "" : "-lock") + ".png"
         fillMode: Image.PreserveAspectCrop
         cache: false
         smooth: true
         opacity: screenRoot.ready ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
-        onStatusChanged: if (status === Image.Error && !fallback) { console.warn("lock: no lock wallpaper, using the full-size one:", source); fallback = true }
-        Connections { target: ctl; function onSceneChanged() { wall.fallback = false } }
+        onStatusChanged: if (status === Image.Error && attempt < 2) { console.warn("lock: wallpaper missing:", source); attempt++ }
+        Connections {
+            target: ctl
+            function onSceneChanged() { wall.attempt = 0 }
+            function onPaletteChanged() { wall.attempt = 0 }
+        }
     }
 
     // esconde o cursor; clique devolve o foco ao campo

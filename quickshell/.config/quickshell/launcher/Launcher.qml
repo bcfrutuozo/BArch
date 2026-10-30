@@ -477,6 +477,9 @@ Scope {
         if (Wallpapers.scenes.length === 0)
             return [{ kind: "info", title: "No Wallpapers Found", subtitle: "tools/make_wallpapers.py ~/Pictures/Wallpapers", glyph: 0xF0E09 }]
         const out = []
+        if (!Wallpapers.available)
+            out.push({ kind: "info", title: (Wallpapers.rendering ? "Rendering the " : "No ") + Theme.flavorLabel(Wallpapers.palette) + " set"
+                       + (Wallpapers.rendering ? "…" : ""), subtitle: "Showing " + Theme.flavorLabel(Wallpapers.used) + " meanwhile", glyph: 0xF0E09 })
         for (const sc of Wallpapers.scenes) {
             if (q && !(sc.label + " " + sc.id + " " + sc.description).toLowerCase().includes(q)) continue
             const used = Wallpapers.usedIn(sc.id)

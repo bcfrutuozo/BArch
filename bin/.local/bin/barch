@@ -46,6 +46,9 @@ Desktop (through the bar):
   wallpaper list|status       the scenes in ~/Pictures/Wallpapers, which is on the desktop and the lock
   wallpaper <scene> [--lock|--desktop]
                               use a scene (both by default; a lock-only choice stays until changed)
+  wallpaper render [<palette>|all]
+                              draw the scenes in a palette's colors (the bar does it on its own the
+                              first time a palette is pinned); default: the palette in use
   hdr on|off|status           HDR on the main monitor
   sdr <nits>|status           SDR brightness inside HDR
   monitor side on|off|status  side monitor (DPMS)
@@ -243,7 +246,7 @@ cmd_wallpaper() {
       --lock) target=lock ;;
       --desktop) target=desktop ;;
       -*) usage_error "wallpaper list|status|<scene> [--lock|--desktop]" ;;
-      *) [[ -z $scene ]] || usage_error "one scene at a time"; scene=$a ;;
+      *) if [[ $scene == render ]]; then set -- render "$a"; elif [[ -n $scene ]]; then usage_error "one scene at a time"; else scene=$a; fi ;;
     esac
   done
   case $scene in
@@ -252,7 +255,12 @@ cmd_wallpaper() {
       show "$OUT" '.scenes[] | "\(.id)\t\(.label)\t\(.description)"' ;;
     status | '')
       ipc wallpaper status
-      show "$OUT" '"desktop: \(.desktop), lock screen: \(.lock) (\(.mode))"' ;;
+      show "$OUT" '"desktop: \(.desktop), lock screen: \(.lock), palette: \(.used)"
+                   + (if .available then "" else " (no \(.palette) set yet)" end)
+                   + (if .rendering != "" then ", rendering \(.rendering)" else "" end)' ;;
+    render)
+      ipc wallpaper render "${2:-}"
+      show "$OUT" '"rendering: \(.rendering) (palettes ready: \(.palettes | join(", ")))"' ;;
     *)
       ipc wallpaper set "$scene" "$target"
       show "$OUT" '"desktop: \(.desktop), lock screen: \(.lock)"' ;;

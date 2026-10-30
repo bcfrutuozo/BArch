@@ -84,19 +84,19 @@ if [[ -d "$themes" && ! -e "$themes/current.lua" ]]; then
   ln -sfn dark.lua "$themes/current.lua" && ok "Hyprland theme: dark (theme-auto switches it later)"
 fi
 step "Wallpapers"
-if compgen -G "$HOME/Pictures/Wallpapers/mountains/primary-dark.png" >/dev/null; then
+if compgen -G "$HOME/Pictures/Wallpapers/dracula/mountains/primary.png" >/dev/null; then
   ok "already there"
 else
   mkdir -p "$HOME/Pictures/Wallpapers"
   sudo pacman -S --needed --noconfirm python-numpy python-pillow >/dev/null   # o gerador precisa
-  if python3 "$REPO/tools/make_wallpapers.py" "$HOME/Pictures/Wallpapers"; then
-    ok "generated in ~/Pictures/Wallpapers"
+  if python3 "$REPO/tools/make_wallpapers.py" "$HOME/Pictures/Wallpapers"; then     # dracula + latte; the bar renders the others when pinned
+    ok "generated in ~/Pictures/Wallpapers (Dracula and Latte; other palettes render when pinned)"
   else
     warn "couldn't generate the wallpapers (run tools/make_wallpapers.py by hand to see why)"
   fi
 fi
 # versões pequenas já desfocadas para a tela de bloqueio e miniaturas (instalações antigas não as têm)
-if ! compgen -G "$HOME/Pictures/Wallpapers/mountains/thumb-dark.png" >/dev/null && [[ -f "$HOME/Pictures/Wallpapers/mountains/primary-dark.png" ]]; then
+if ! compgen -G "$HOME/Pictures/Wallpapers/dracula/mountains/thumb.png" >/dev/null && [[ -f "$HOME/Pictures/Wallpapers/dracula/mountains/primary.png" ]]; then
   python3 "$REPO/tools/make_wallpapers.py" "$HOME/Pictures/Wallpapers" lock || warn "couldn't generate the lock screen wallpapers"
 fi
 

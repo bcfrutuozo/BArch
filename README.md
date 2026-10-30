@@ -37,7 +37,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `backup/` | — | `barch backup`: what restic saves to the NAS (`include.txt`, `exclude.txt`), see Backup |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
 | `agent/` | — | Scheduled agent tasks (`tasks/`), the failure ignore list and the upstream watch list; used by `barch` |
-| `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, sixteen scenes in both palettes), Limine theme (`limine-theme.py`) |
+| `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, sixteen scenes in the colors of each palette), Limine theme (`limine-theme.py`) |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
 | `packages/` | — | Explicitly installed packages (`pacman.txt`, `aur.txt`, `aur-ignore.txt`) |
 
@@ -103,18 +103,22 @@ The main pieces:
   bar while connected (click: IP, time, Change region, Disconnect). Credentials go in `~/.config/pia/credentials`
   (username and password, one per line, `chmod 600`), never in the repo.
 - **Wallpapers** on every monitor (a background layer, no hyprpaper), drawn by
-  `tools/make_wallpapers.py` in the two palettes so they follow the theme (night with the moon and
-  stars in Dracula, day with the sun in Latte), crossfading when the mode changes. Sixteen scenes
+  `tools/make_wallpapers.py` in the colors of every palette of the theme: it reads the twelve
+  palettes from `Theme.qml` and derives sky, light, water, trees and so on from their ten tones, so
+  a dark palette renders the night (moon, stars) and a light one the day (sun). Sixteen scenes
   (Mountains, Waves, Dunes, Forest, City, Aurora, Lake, Hills, Clouds, Mesa, Retro, Polygons, Mesh,
-  Nebula, Bokeh, Contours), each in `~/Pictures/Wallpapers/<scene>/`
-  as `primary-<mode>.png` (main monitor), `secondary-<mode>.png` (portrait), the small pre-blurred
-  `*-lock-*` copies for the lock screen and a `thumb-<mode>.png`. The launcher's `b ` mode (also the
-  Wallpaper tile in the Control Center) lists them with thumbnails and marks the ones in use; Enter
-  asks where to apply it (desktop and lock screen, desktop only, lock screen only), Shift+Enter
-  applies it to both. The choice lives in `~/.local/state/quickshell/wallpaper.json`
-  (`barch wallpaper`), which the lock screen watches, so the two can differ.
-  `make_wallpapers.py ~/Pictures/Wallpapers [scene...]` regenerates them (a new scene is a function
-  in `SCENES`; `scenes.json` is written from it).
+  Nebula, Bokeh, Contours), each in `~/Pictures/Wallpapers/<palette>/<scene>/` as `primary.png`
+  (main monitor), `secondary.png` (portrait), the small pre-blurred `*-lock.png` copies for the lock
+  screen and a `thumb.png`. The bar shows the folder of the palette in use, crossfading when the
+  mode or the pinned palette changes; a palette without a folder yet uses Dracula or Latte
+  meanwhile and gets rendered in the background the first time it is pinned (about a minute,
+  with a notification; `barch wallpaper render [palette|all]` does it by hand). The launcher's `b `
+  mode (also the Wallpaper tile in the Control Center) lists the scenes with thumbnails and marks
+  the ones in use; Enter asks where to apply it (desktop and lock screen, desktop only, lock
+  screen only), Shift+Enter applies it to both. The choice lives in
+  `~/.local/state/quickshell/wallpaper.json` (`barch wallpaper`), which the lock screen watches,
+  so the two can differ. `make_wallpapers.py ~/Pictures/Wallpapers [-p palette]... [scene...]`
+  regenerates them (a new scene is a function in `SCENES`; a new palette in `Theme.qml` is enough).
 - **Polkit agent** (`Quickshell.Services.Polkit`, no hyprpolkitagent): the password dialog apps get
   when they ask for privileges (`pkexec`, GNOME Disks, …), in the bar's theme.
 - **Own notification server** with history, DND, sounds and app actions; privacy indicator
@@ -128,7 +132,7 @@ The main pieces:
   fall with the bar, and it stays resident: `scripts/lock.sh` starts it at login and every lock
   request (hypridle, Super+L) is just `ipc call lock lock`, so the screen is up as soon as each
   monitor draws a frame instead of after a Quickshell start. The wallpapers it shows are small,
-  pre-blurred copies (`<scene>/primary-lock-<mode>.png`, `secondary-lock-<mode>.png`, made by
+  pre-blurred copies (`<palette>/<scene>/primary-lock.png`, `secondary-lock.png`, made by
   `make_wallpapers.py`), and everything fades in together. It is the only locker: if the
   process dies while locked, `lock.sh` starts it again and locks it again (Hyprland allows a new
   lock to take over), slowing down to one try every 10 s after three quick failures;
@@ -158,6 +162,7 @@ IPC, so it does exactly what the Control Center does; the bar has to be running.
 barch notify "Backup" "Finished in 4 min" [--critical|--low] [--app NAME] [--action "Label=command"]
 barch theme light|dark|auto|status   barch theme dark|light <palette>   barch theme palettes
 barch wallpaper list|status        barch wallpaper <scene> [--lock|--desktop]   # both by default
+barch wallpaper render [<palette>|all]   # the scenes in a palette's colors (automatic when pinned)
 barch hdr on|off|status            barch sdr <nits>|status
 barch monitor side on|off|status   barch caffeine on|off|status
 barch nightlight on|off|status     barch dnd on|off|status
@@ -274,9 +279,8 @@ foot, Neovim, the lock screen, the Hyprland borders, GTK 3 (`BArch-dark/light` t
 GTK 4/libadwaita, qt6ct, fontconfig and MangoHud. Changing the pinned palette of the mode in use
 repaints the bar, the borders, the lock and the open GTK apps at once; terminals, Neovim and Qt
 apps already open keep their colors until reopened. `theme-auto` switches the Hyprland theme,
-the apps (`apps-theme`: GTK theme, Papirus icons, cursor); the wallpapers follow `Theme.isDark`
-inside the bar (they are drawn in Dracula and Latte colors whatever the pinned palette).
-Generated files inside the repo are git-ignored.
+the apps (`apps-theme`: GTK theme, Papirus icons, cursor); the wallpapers are drawn in the colors
+of the palette in use (see Wallpapers). Generated files inside the repo are git-ignored.
 
 ## Fresh install
 
