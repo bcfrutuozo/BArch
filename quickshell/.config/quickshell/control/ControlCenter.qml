@@ -40,6 +40,7 @@ Item {
     // ---------- estado ----------
     // VPN (PIA, usada pelo Anonymous Mode): escolha da região aberta no painel; o filtro precisa do teclado (shell.qml)
     property bool chooseRegion: false
+    property bool chooseTheme: false        // bloco Themes: as paletas escuras e claras, para fixar uma de cada
     property string regionFilter: ""
     readonly property bool wantsKeyboard: chooseRegion && popup.visible
     readonly property var regionList: {
@@ -237,6 +238,10 @@ Item {
         target: "control"
         enabled: root.ipcEnabled
         function status(): string { root.refresh(); return JSON.stringify(root.state()) }
+        // abre / fecha o painel (scripts e capturas); "themes" abre já nas paletas
+        function open(): string { if (!Popups.isOpen(popup)) { Popups.show(popup); root.refresh() } return JSON.stringify({ ok: true }) }
+        function close(): string { Popups.hide(popup); return JSON.stringify({ ok: true }) }
+        function themes(): string { root.chooseTheme = true; return this.open() }
         function hdr(on: bool): string { root.setHdr(on); return JSON.stringify(root.state()) }
         function sdr(nits: int): string {
             if (!root.hdrOn) return root.fail("HDR is off; the SDR brightness only applies in HDR")
@@ -325,7 +330,7 @@ Item {
             target: popup
             function onVisibleChanged() {
                 popup.visible ? Popups.opened(popup) : Popups.closed(popup)
-                if (!popup.visible) { root.chooseRecord = false; root.chooseRegion = false; root.regionFilter = "" }
+                if (!popup.visible) { root.chooseRecord = false; root.chooseRegion = false; root.regionFilter = ""; root.chooseTheme = false }
             }
         }
         visible: false
@@ -375,8 +380,8 @@ Item {
 
                     Repeater {
                         model: [
-                            { key: "light", icon: 0xF0599, label: "Light", sub: root.cap(Theme.lightFlavor) },   // weather_sunny
-                            { key: "dark",  icon: 0xF0F65, label: "Dark",  sub: root.cap(Theme.darkFlavor) },    // moon_waning_crescent
+                            { key: "light", icon: 0xF0599, label: "Light", sub: Theme.flavorLabel(Theme.lightFlavor) },   // weather_sunny
+                            { key: "dark",  icon: 0xF0F65, label: "Dark",  sub: Theme.flavorLabel(Theme.darkFlavor) },     // moon_waning_crescent
                             { key: "auto",  icon: 0xF1A78, label: "Auto",                                         // sun_clock_outline
                               sub: root.pad(Theme.dayStart) + " – " + root.pad(Theme.nightStart) }
                         ]
@@ -483,7 +488,13 @@ Item {
                         onClicked: root.toggleSide()
                     }
                     Tile {
-                        Layout.columnSpan: 2
+                        icon: root.glyph(0xF03D8)   // md-palette
+                        label: "Themes"
+                        sublabel: Theme.flavorLabel(Theme.darkFlavor) + "  ·  " + Theme.flavorLabel(Theme.lightFlavor)
+                        active: root.chooseTheme
+                        onClicked: root.chooseTheme = !root.chooseTheme
+                    }
+                    Tile {
                         icon: root.glyph(0xF0E09)   // wallpaper
                         label: "Wallpaper"
                         sublabel: Wallpapers.desktop === Wallpapers.lock ? Wallpapers.label(Wallpapers.desktop)
@@ -522,6 +533,80 @@ Item {
                         color: Theme.dim
                         font.family: Theme.font
                         font.pixelSize: Theme.fontSize - 2
+                    }
+                }
+
+                // paletas (aparece ao clicar em Themes): as escuras e as claras, uma de cada fica fixa
+                ColumnLayout {
+                    visible: root.chooseTheme
+                    Layout.fillWidth: true
+                    spacing: 6
+                    Repeater {
+                        model: [
+                            { title: "Dark", mode: "dark", ids: Theme.darkFlavors },
+                            { title: "Light", mode: "light", ids: Theme.lightFlavors }
+                        ]
+                        ColumnLayout {
+                            id: group
+                            required property var modelData
+                            Layout.fillWidth: true
+                            spacing: 4
+                            Text {
+                                text: group.modelData.title
+                                color: Theme.dim
+                                font.family: Theme.font
+                                font.pixelSize: Theme.fontSize - 2
+                            }
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                Repeater {
+                                    model: group.modelData.ids
+                                    Rectangle {
+                                        id: chip
+                                        required property string modelData
+                                        readonly property var info: Theme.flavorInfo(modelData)
+                                        readonly property bool selected: info.active
+                                        implicitWidth: chipRow.implicitWidth + 20
+                                        implicitHeight: 30
+                                        radius: 15
+                                        color: chipMouse.containsMouse ? Theme.hover : "transparent"
+                                        border.width: selected ? 1.5 : 1
+                                        border.color: selected ? Theme.accent : Theme.border
+                                        RowLayout {
+                                            id: chipRow
+                                            anchors.centerIn: parent
+                                            spacing: 7
+                                            // amostra: fundo da paleta com o destaque por cima
+                                            Rectangle {
+                                                implicitWidth: 16; implicitHeight: 16; radius: 8
+                                                color: chip.info.base
+                                                border.width: 1; border.color: chip.info.surface
+                                                Rectangle {
+                                                    anchors.right: parent.right; anchors.bottom: parent.bottom
+                                                    width: 9; height: 9; radius: 4.5
+                                                    color: chip.info.accent
+                                                }
+                                            }
+                                            Text {
+                                                text: chip.info.label
+                                                color: chip.selected ? Theme.accent : Theme.fg
+                                                font.family: Theme.font
+                                                font.pixelSize: Theme.fontSize - 2
+                                                font.bold: chip.selected
+                                            }
+                                        }
+                                        MouseArea {
+                                            id: chipMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: Theme.setFlavor(group.modelData.mode, chip.modelData)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
