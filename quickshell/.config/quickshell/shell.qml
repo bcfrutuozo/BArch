@@ -146,13 +146,18 @@ ShellRoot {
     // O model são nomes (Screens.names), não os objetos de Quickshell.screens: a lista direta
     // muda no meio da criação das janelas (boot, resume, hotplug) e derruba o quickshell
     // (ver screens/Screens.qml).
-    model: Screens.names.includes("HDMI-A-2") ? ["HDMI-A-2"] : Screens.names
+    // Nunca ler bars.model de dentro do delegate: o getter copia a lista enquanto o laço de
+    // criação do quickshell 0.3.2 ainda itera nela com iteradores não-const (detach), e a
+    // iteração seguinte lê lixo e derruba a barra (SIGSEGV em Variants::updateVariants toda
+    // vez que o monitor dormia, 2026-10-30). Por isso a lista fica numa propriedade própria.
+    readonly property var names: Screens.names.includes("HDMI-A-2") ? ["HDMI-A-2"] : Screens.names
+    model: names
 
     PanelWindow {
       id: bar
       required property string modelData       // nome do monitor
       // só a primeira barra responde ao IPC dos widgets que existem uma vez por barra
-      readonly property bool primary: modelData === bars.model[0]
+      readonly property bool primary: modelData === bars.names[0]
       screen: Screens.byName(modelData)
       anchors { top: true; left: true; right: true }
       implicitHeight: Theme.islandHeight + Theme.gap
