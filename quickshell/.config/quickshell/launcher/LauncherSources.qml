@@ -256,6 +256,7 @@ Scope {
         { title: "Light Mode", glyph: 0xF05A8, keywords: "theme appearance",   cmd: ["qs", "ipc", "call", "theme", "mode", "light"] },
         { title: "Dark Mode",  glyph: 0xF0594, keywords: "theme appearance",   cmd: ["qs", "ipc", "call", "theme", "mode", "dark"] },
         { title: "Auto Theme", glyph: 0xF050E, keywords: "schedule appearance light dark mode", cmd: ["qs", "ipc", "call", "theme", "mode", "auto"] },
+        { title: "Palette Editor", alias: "palette", sub: "New palettes, from an image, live preview", glyph: 0xF03D8, keywords: "theme colors palette editor create", cmd: ["barch", "theme", "edit"] },
         // ferramentas de tela (launcher/tools.sh): digite o atalho (ocr, pick, qr)
         { title: "Copy Text from Screen", alias: "ocr",  sub: "Select an area · OCR",          glyph: 0xF113A, keywords: "ocr text extract recognize read", cmd: ["bash", Quickshell.shellDir + "/launcher/tools.sh", "ocr"] },
         { title: "Pick Color",            alias: "pick", sub: "Click any pixel · copies hex",  glyph: 0xF020A, keywords: "color picker eyedropper hex colour", cmd: ["bash", Quickshell.shellDir + "/launcher/tools.sh", "pick"] },

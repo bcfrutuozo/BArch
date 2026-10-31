@@ -16,6 +16,12 @@ pragma Singleton
 //                                  fixa a paleta do modo escuro (ou claro); fica salva em
 //                                  ~/.local/state/quickshell/flavors.json e vale para tudo que é gerado
 //   qs ipc call theme status       aparência escolhida, modo atual e paleta (JSON)
+//   qs ipc call theme get nord     uma paleta de palettes.json (JSON)
+//   qs ipc call theme preview '{"crust":...}'
+//                                  rascunho do editor: vira a paleta "draft" e tudo o segue
+//   qs ipc call theme previewEnd   volta ao par fixado
+//   qs ipc call theme save praia '{"label":"Praia","crust":...}'
+//   qs ipc call theme remove praia grava / apaga uma paleta em theme/palettes.json
 // O barch (~/.local/bin) usa mode, status, flavor e palettes: theme light | dark | auto | status |
 // dark <paleta> | light <paleta> | palettes.
 
@@ -23,6 +29,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
+import "../palette/palette.js" as P   // lado, 16 cores de terminal, contraste (o editor usa o mesmo arquivo)
 
 Singleton {
     id: root
@@ -43,72 +50,66 @@ Singleton {
     readonly property string flavor: forcedFlavor !== "" ? forcedFlavor : (isDark ? darkFlavor : lightFlavor)
 
     // ================= paletas =================
-    // Cada uma tem os mesmos 10 tons; os nomes seguem o Catppuccin.
-    readonly property var palettes: ({
-        // ---- paleta própria: escuro OLED ----
-        // Fundo preto puro (no OLED o pixel fica apagado), cinzas neutros quase sem brilho
-        // e texto um pouco abaixo do branco, para gastar menos o painel.
-        oled:       { crust: "#000000", base: "#000000", surface: "#1c1c1f", overlay: "#2e2e33", subtext: "#8a8a93",
-                      text: "#d8d8dc", accent: "#7cacf8", green: "#8bd5a0", yellow: "#e8c07d", red: "#f08a8a" },
-        // ---- Dracula (draculatheme.com/spec) ----
-        // Cores oficiais; o texto secundário é o "comment" clareado um tom, porque o original
-        // (#6272a4) fica abaixo do contraste mínimo de leitura sobre o fundo.
-        dracula:    { crust: "#191a21", base: "#282a36", surface: "#44475a", overlay: "#6272a4", subtext: "#8b94c3",
-                      text: "#f8f8f2", accent: "#bd93f9", green: "#50fa7b", yellow: "#f1fa8c", red: "#ff5555",
-                      // terminal: as 16 cores oficiais do Dracula
-                      ansi: { fg: "#f8f8f2", bg: "#282a36",
-                              regular: ["#21222c", "#ff5555", "#50fa7b", "#f1fa8c", "#bd93f9", "#ff79c6", "#8be9fd", "#f8f8f2"],
-                              bright:  ["#6272a4", "#ff6e6e", "#69ff94", "#ffffa5", "#d6acff", "#ff92df", "#a4ffff", "#ffffff"] } },
-        // ---- claro "nord light" (inspirado no lyne-dots) ----
-        // Fundos "snow storm" do Nord, texto "polar night" e o azul ardósia (#5e81ac) como
-        // destaque. Verde, amarelo e vermelho do Nord escurecidos para ler bem no fundo claro.
-        nordlight:  { crust: "#ffffff", base: "#eceff4", surface: "#d8dee9", overlay: "#c5cbd6", subtext: "#5d6984",
-                      text: "#2e3440", accent: "#5e81ac", green: "#4a7536", yellow: "#8a6412", red: "#a5464f" },
-        // ---- paleta própria: claro "neve" ----
-        // Cinza-claro neutro com um toque frio (sem o amarelado que lembra o modo noturno);
-        // fica um pouco abaixo do branco puro para brilhar menos no OLED.
-        snow:       { crust: "#ffffff", base: "#f3f4f6", surface: "#e1e4e9", overlay: "#c9ced6", subtext: "#5f6774",
-                      text: "#262b33", accent: "#2459d6", green: "#2f7a3b", yellow: "#8a5d00", red: "#c0322c" },
-        // ---- paleta própria: claro "papel" (creme quente; parece modo noturno) ----
-        paper:      { crust: "#fbf7ef", base: "#f2ecdf", surface: "#e2d9c8", overlay: "#cfc4b0", subtext: "#756a59",
-                      text: "#3d362c", accent: "#2a5bb8", green: "#3d7330", yellow: "#8f6208", red: "#b23a34" },
-
-        mocha:      { crust: "#11111b", base: "#181825", surface: "#313244", overlay: "#45475a", subtext: "#7f849c",
-                      text: "#cdd6f4", accent: "#89b4fa", green: "#a6e3a1", yellow: "#f9e2af", red: "#f38ba8" },
-        macchiato:  { crust: "#181926", base: "#1e2030", surface: "#363a4f", overlay: "#494d64", subtext: "#8087a2",
-                      text: "#cad3f5", accent: "#8aadf4", green: "#a6da95", yellow: "#eed49f", red: "#ed8796" },
-        frappe:     { crust: "#232634", base: "#292c3c", surface: "#414559", overlay: "#51576d", subtext: "#838ba7",
-                      text: "#c6d0f5", accent: "#8caaee", green: "#a6d189", yellow: "#e5c890", red: "#e78284" },
-        tokyonight: { crust: "#16161e", base: "#1a1b26", surface: "#292e42", overlay: "#3b4261", subtext: "#737aa2",
-                      text: "#c0caf5", accent: "#7aa2f7", green: "#9ece6a", yellow: "#e0af68", red: "#f7768e" },
-        // Nord escuro ("polar night"); par do nordlight. Texto secundário e vermelho clareados
-        // um tom para ler bem no fundo #2e3440.
-        nord:       { crust: "#242933", base: "#2e3440", surface: "#3b4252", overlay: "#4c566a", subtext: "#97a2b6",
-                      text: "#eceff4", accent: "#88c0d0", green: "#a3be8c", yellow: "#ebcb8b", red: "#dc8b93",
-                      // terminal: as 16 cores oficiais do Nord
-                      ansi: { fg: "#d8dee9", bg: "#2e3440",
-                              regular: ["#3b4252", "#bf616a", "#a3be8c", "#ebcb8b", "#81a1c1", "#b48ead", "#88c0d0", "#e5e9f0"],
-                              bright:  ["#4c566a", "#bf616a", "#a3be8c", "#ebcb8b", "#81a1c1", "#b48ead", "#8fbcbb", "#eceff4"] } },
-        gruvbox:    { crust: "#1d2021", base: "#282828", surface: "#3c3836", overlay: "#504945", subtext: "#928374",
-                      text: "#ebdbb2", accent: "#83a598", green: "#b8bb26", yellow: "#fabd2f", red: "#fb4934" },
-        // clara: aqui "crust" é o tom MAIS CLARO, porque é usado como texto sobre o destaque
-        latte:      { crust: "#eff1f5", base: "#e6e9ef", surface: "#ccd0da", overlay: "#bcc0cc", subtext: "#6c6f85",
-                      text: "#4c4f69", accent: "#1e66f5", green: "#40a02b", yellow: "#df8e1d", red: "#d20f39" }
+    // theme/palettes.json é a fonte: id → { label, crust, base, surface, overlay, subtext, text,
+    // accent, green, yellow, red, ansi? }. Os dez tons seguem os nomes do Catppuccin; "ansi"
+    // (fg, bg, regular[8], bright[8]) é opcional, para as paletas com 16 cores oficiais de
+    // terminal. O editor (quickshell/palette, `barch theme edit`) grava nele por "theme save" e
+    // make_wallpapers.py lê o mesmo arquivo. Enquanto se edita, "theme preview" põe o rascunho
+    // como a paleta "draft" e tudo que é gerado passa a segui-lo.
+    readonly property string palettesPath: Quickshell.shellDir + "/theme/palettes.json"
+    readonly property var tones: ["crust", "base", "surface", "overlay", "subtext", "text", "accent", "green", "yellow", "red"]
+    // o mínimo para a barra subir com o arquivo faltando ou quebrado
+    readonly property var fallbackPalettes: ({
+        mocha: { label: "Catppuccin Mocha", crust: "#11111b", base: "#181825", surface: "#313244", overlay: "#45475a",
+                 subtext: "#7f849c", text: "#cdd6f4", accent: "#89b4fa", green: "#a6e3a1", yellow: "#f9e2af", red: "#f38ba8" },
+        latte: { label: "Catppuccin Latte", crust: "#eff1f5", base: "#e6e9ef", surface: "#ccd0da", overlay: "#bcc0cc",
+                 subtext: "#6c6f85", text: "#4c4f69", accent: "#1e66f5", green: "#40a02b", yellow: "#df8e1d", red: "#d20f39" }
     })
+    property var filePalettes: readPalettes() || ({})
+    property var draft: null                // paleta em edição ("theme preview"), id "draft"
+    readonly property var palettes: {
+        const all = Object.assign({}, filePalettes)
+        for (const k in fallbackPalettes) if (!all[k]) all[k] = fallbackPalettes[k]
+        if (draft) all.draft = draft
+        return all
+    }
+    FileView {
+        id: palettesFile
+        path: root.palettesPath
+        blockLoading: true
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        // um arquivo quebrado (ou lido no meio de uma gravação) nunca apaga as paletas em memória
+        onLoaded: { const r = root.readPalettes(); if (r) root.filePalettes = r }
+    }
+    // só entra uma paleta com os dez tons em #rrggbb
+    function validPalette(q) {
+        return !!q && typeof q === "object" && tones.every(t => /^#[0-9a-fA-F]{6}$/.test(String(q[t] || "")))
+    }
+    function readPalettes() {
+        try {
+            const j = JSON.parse(palettesFile.text())
+            const out = {}
+            for (const k in j) {
+                if (k !== "draft" && validPalette(j[k])) out[k] = j[k]
+                else console.warn("theme: palette", k, "in palettes.json is incomplete, skipped")
+            }
+            return out
+        } catch (e) { console.log("theme: palettes.json unreadable (being written?), keeping the current set:", e); return null }
+    }
     readonly property var p: palettes[flavor] || palettes.mocha
 
     // nomes para a interface
-    readonly property var flavorLabels: ({
-        oled: "OLED", dracula: "Dracula", mocha: "Catppuccin Mocha", macchiato: "Catppuccin Macchiato",
-        frappe: "Catppuccin Frappé", tokyonight: "Tokyo Night", nord: "Nord", gruvbox: "Gruvbox",
-        latte: "Catppuccin Latte", nordlight: "Nord Light", snow: "Snow", paper: "Paper"
-    })
-    function flavorLabel(id) { return flavorLabels[id] || (id ? id.charAt(0).toUpperCase() + id.slice(1) : "") }
-    // as paletas em dois grupos, pela claridade do fundo (ordem: a de cada lado primeiro)
-    readonly property var darkFlavors: Object.keys(palettes).filter(k => paletteIsDark(palettes[k]))
-    readonly property var lightFlavors: Object.keys(palettes).filter(k => !paletteIsDark(palettes[k]))
-    function flavorInfo(id) {
+    function flavorLabel(id) {
         const q = palettes[id]
+        return q && q.label ? q.label : (id ? id.charAt(0).toUpperCase() + id.slice(1) : "")
+    }
+    // as paletas em dois grupos, pela claridade do fundo (ordem: a de cada lado primeiro)
+    readonly property var darkFlavors: Object.keys(palettes).filter(k => k !== "draft" && paletteIsDark(palettes[k]))
+    readonly property var lightFlavors: Object.keys(palettes).filter(k => k !== "draft" && !paletteIsDark(palettes[k]))
+    function flavorInfo(id) {
+        const q = palettes[id] || fallbackPalettes.mocha      // um id que acabou de ser apagado ainda pode estar num delegate
         return { id: id, label: flavorLabel(id), base: q.base, surface: q.surface, text: q.text, accent: q.accent,
                  dark: paletteIsDark(q), active: id === (paletteIsDark(q) ? darkFlavor : lightFlavor) }
     }
@@ -155,6 +156,57 @@ Singleton {
             + 'case $cur in BArch-*) gsettings set org.gnome.desktop.interface gtk-theme "$1"; sleep 0.4; '
             + 'gsettings set org.gnome.desktop.interface gtk-theme "$cur";; esac',
             "sh", root.isDark ? "adw-gtk3-dark" : "adw-gtk3"])
+    }
+
+    // ================= rascunho do editor (quickshell/palette) =================
+    // preview: o rascunho vira a paleta "draft", fixada no seu lado (escuro ou claro) sem gravar
+    // flavors.json; se o lado não é o modo atual, a barra é forçada a mostrá-lo mesmo assim.
+    // previewEnd volta ao par de antes. save/remove gravam palettes.json (a barra é a dona do
+    // arquivo: o editor nunca escreve nele).
+    property var previewSaved: null         // { dark, light, forced } de antes do preview
+    function previewPalette(q) {
+        if (!validPalette(q)) return "a palette needs the ten tones as #rrggbb"
+        if (!previewSaved) previewSaved = { dark: darkFlavor, light: lightFlavor, forced: forcedFlavor }
+        draft = q
+        darkFlavor = previewSaved.dark
+        lightFlavor = previewSaved.light
+        if (paletteIsDark(q)) darkFlavor = "draft"; else lightFlavor = "draft"
+        forcedFlavor = paletteIsDark(q) !== isDark ? "draft" : ""
+        gtkKick.restart()
+        return ""
+    }
+    function previewEnd() {
+        if (!previewSaved) return
+        darkFlavor = previewSaved.dark
+        lightFlavor = previewSaved.light
+        forcedFlavor = previewSaved.forced
+        previewSaved = null
+        draft = null
+        gtkKick.restart()
+    }
+    function savePalette(id, q) {
+        if (!/^[a-z][a-z0-9-]{1,30}$/.test(id)) return "id: lowercase letters, digits and '-', starting with a letter"
+        if (id === "draft") return "'draft' is reserved"
+        if (!validPalette(q)) return "a palette needs the ten tones as #rrggbb"
+        const clean = { label: String(q.label || id).trim() || id }
+        for (const t of tones) clean[t] = String(q[t]).toLowerCase()
+        if (q.ansi && q.ansi.regular && q.ansi.regular.length === 8 && q.ansi.bright && q.ansi.bright.length === 8)
+            clean.ansi = { fg: q.ansi.fg || clean.text, bg: q.ansi.bg || clean.base, regular: q.ansi.regular, bright: q.ansi.bright }
+        const all = Object.assign({}, filePalettes)
+        all[id] = clean
+        filePalettes = all
+        writeFile(palettesPath, JSON.stringify(filePalettes, null, 2) + "\n")
+        return ""
+    }
+    function removePalette(id) {
+        if (!filePalettes[id]) return "unknown palette: " + id
+        const pinnedDark = previewSaved ? previewSaved.dark : darkFlavor, pinnedLight = previewSaved ? previewSaved.light : lightFlavor
+        if (id === pinnedDark || id === pinnedLight) return id + " is pinned; pin another palette first"
+        const all = Object.assign({}, filePalettes)
+        delete all[id]
+        filePalettes = all
+        writeFile(palettesPath, JSON.stringify(filePalettes, null, 2) + "\n")
+        return ""
     }
 
     // ================= cores =================
@@ -215,23 +267,10 @@ Singleton {
     function c(x) { return Qt.color(x) }
     function mix(a, b, t) { const B = Qt.color(b); return Qt.tint(Qt.color(a), Qt.rgba(B.r, B.g, B.b, t)) }
     function hx(x) { return Qt.color(x).toString().slice(1, 7) }     // sem "#", como o foot quer
-    function paletteIsDark(p) { return Qt.color(p.base).hslLightness < 0.5 }
+    function paletteIsDark(p) { return P.isDark(p) }
 
-    // 16 cores de terminal: as oficiais (campo "ansi") ou derivadas dos 10 tons
-    function terminal(p) {
-        if (p.ansi) return { fg: p.ansi.fg, bg: p.ansi.bg, regular: p.ansi.regular, bright: p.ansi.bright,
-                             selFg: p.text, selBg: p.overlay }
-        const dark = paletteIsDark(p)
-        const blue = p.accent, magenta = mix(p.red, p.accent, 0.5), cyan = mix(p.green, p.accent, 0.5)
-        const adj = x => dark ? Qt.lighter(Qt.color(x), 1.15) : Qt.darker(Qt.color(x), 1.15)
-        return {
-            fg: p.text, bg: p.base,
-            regular: [dark ? p.surface : p.text, p.red, p.green, p.yellow, blue, magenta, cyan, dark ? p.subtext : p.overlay],
-            bright:  [dark ? p.overlay : p.subtext, adj(p.red), adj(p.green), adj(p.yellow), adj(blue), adj(magenta), adj(cyan),
-                      dark ? p.text : p.surface],
-            selFg: p.text, selBg: dark ? p.overlay : p.surface
-        }
-    }
+    // 16 cores de terminal: as oficiais (campo "ansi") ou derivadas dos 10 tons (palette.js)
+    function terminal(p) { return P.terminal(p) }
 
     property bool footNewSections: true     // foot >= 1.26 usa [colors-dark]/[colors-light]
     Process {
@@ -735,5 +774,31 @@ Singleton {
             return "following the system: " + (root.isDark ? "dark" : "light")
         }
         function list(): string { return Object.keys(root.palettes).join(", ") }
+        // ---- editor de paletas (JSON) ----
+        function get(id: string): string {
+            const q = root.filePalettes[id]
+            return q ? JSON.stringify({ ok: true, id: id, palette: q, dark: root.paletteIsDark(q) })
+                     : JSON.stringify({ ok: false, error: "unknown palette: " + id })
+        }
+        function preview(json: string): string {
+            let q
+            try { q = JSON.parse(json) } catch (e) { return JSON.stringify({ ok: false, error: "invalid JSON: " + e }) }
+            const err = root.previewPalette(q)
+            return err ? JSON.stringify({ ok: false, error: err }) : JSON.stringify({ ok: true, dark: root.paletteIsDark(q) })
+        }
+        function previewEnd(): string {
+            root.previewEnd()
+            return JSON.stringify({ ok: true, dark: root.darkFlavor, light: root.lightFlavor })
+        }
+        function save(id: string, json: string): string {
+            let q
+            try { q = JSON.parse(json) } catch (e) { return JSON.stringify({ ok: false, error: "invalid JSON: " + e }) }
+            const err = root.savePalette(id, q)
+            return err ? JSON.stringify({ ok: false, error: err }) : JSON.stringify({ ok: true, id: id, dark: root.paletteIsDark(q) })
+        }
+        function remove(id: string): string {
+            const err = root.removePalette(id)
+            return err ? JSON.stringify({ ok: false, error: err }) : JSON.stringify({ ok: true, id: id })
+        }
     }
 }

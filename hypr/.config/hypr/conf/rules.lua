@@ -74,6 +74,15 @@ hl.window_rule({
     move  = "monitor_w-500 monitor_h-290",
 })
 
+-- Editor de paletas (quickshell/palette, `barch theme edit`): flutuando e centralizado.
+hl.window_rule({
+    name  = "palette-editor",
+    match = { title = "^BArch palettes$" },
+    float  = true,
+    center = true,
+    size   = "1120 720",
+})
+
 -- Diálogos de arquivo: flutuando e centralizados, num tamanho fixo.
 hl.window_rule({
     name  = "file-dialogs",
