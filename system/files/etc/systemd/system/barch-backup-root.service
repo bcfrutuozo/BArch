@@ -1,0 +1,12 @@
+# Copies the root-only secrets (NetworkManager profiles, SMB credentials, sbctl keys, SSH host
+# keys, LUKS header) into the user's ~/.local/state/barch/backup/root/, which `barch backup`
+# then sends to the NAS. Script: /usr/local/bin/barch-backup-root. A failure goes through the
+# system OnFailure drop-in (service.d) to the desktop like any other service.
+[Unit]
+Description=Root-only secrets into the BArch backup
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/barch-backup-root
+Nice=10
+IOSchedulingClass=idle

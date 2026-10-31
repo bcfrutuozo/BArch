@@ -29,3 +29,9 @@ is waiting on upstream; remove it when it's solved.
   `#ifdef`. Report any update of cachyos/kernel-patches `7.3/sched/0001-bore-cachy.patch` or a
   firelzrd/bore-scheduler patch newer than `linux7.3-rc2`: `kernel-update` then prints
   "already upstream, skipped" and the fixup can be deleted.
+- **limine-snapper-sync: `flock: 200: Bad file descriptor` and "FAT32 boot partition not
+  found".** 1.32.1 logs the flock error at every `--delete` run (`mutex_unlock` releases fd 200
+  without having taken it on that path; harmless, the menu is updated anyway). On 2026-10-29 the
+  `--add 438`/`--add 439` runs failed with "FAT32 boot partition not found" during a hung reboot
+  (`/boot` already unmounted; `/etc/default/limine` sets no `ESP_PATH`). Report any
+  limine-snapper-sync release whose notes mention flock, mutex, ESP detection or `ESP_PATH`.

@@ -10,8 +10,11 @@ the system pieces that make this machine boot, update and recover the way it doe
 cd ~/BArch && ./scripts/sync.sh "what changed"     # never with sudo; it asks where needed
 ```
 
-Refreshes the package lists and the system snapshot (`system/files`), commits and pushes.
-Updates are done from the bar (**Update All**), not by hand: it shows unread Arch news first,
+Runs `scripts/check.sh` first (bash -n and shellcheck on every script, `luac -p` on the Lua
+config, jq on the JSON files, `systemd-analyze verify` on the user units, every agent task has
+its timer listed, `hyprctl configerrors`; it stops on the first problem, `BARCH_NO_CHECK=1`
+skips it), then refreshes the package lists and the system snapshot (`system/files`), commits
+and pushes. Updates are done from the bar (**Update All**), not by hand: it shows unread Arch news first,
 has Claude review the PKGBUILD changes of the AUR updates (and asks before going on if anything
 looks suspicious), runs `paru -Syu` and then `kernel-update` when there is a new CachyOS kernel.
 
@@ -193,7 +196,12 @@ Claude Code works on this machine on its own, read-only unless you are in the se
   terminal, already reading the log) and **Show log**. Every failure's log is kept, but a unit
   notifies at most once every 30 min; repeats inside that window are counted and the next
   notification says so ("failed (4× since 21:16)"). `agent/failure-ignore` skips units (apps
-  launched by uwsm, barch's own).
+  launched by uwsm, barch's own). When it was Hyprland that died (uwsm restarts it in place),
+  the user services that only lost their compositor (portals, cliphist, hyprsunset) are not
+  reported one by one: their logs are saved and, 30 s later, one notification says "Hyprland
+  crashed at 10:58" with the list, and its log (`failures/hyprland-<stamp>.log`: coredumps,
+  crash report, journal of the session unit) is what **Investigate** opens. `vdirsyncer` skips
+  its run quietly while iCloud cannot be resolved (VPN switching, link down) instead of failing.
 - **Safety snapshot.** Every Claude session started in `~/BArch` takes a snapper pre snapshot of
   `/` when it starts and a post one when it ends (hooks in `claude/.claude/settings.json` →
   `barch-agent-snapshot@.service`, which polkit lets you start without a password). The agent is
@@ -266,8 +274,15 @@ turns yellow when the last run failed or is more than two days old, and a failed
 through `barch failure` like any other service. `barch backup restore latest ~/.ssh` puts the
 files under `~/Restore/<snapshot>/` with their full paths, never in place.
 
-Not covered: anything only root can read (`/etc/NetworkManager/system-connections`, the
-Wi-Fi passwords) and the VM disk images.
+What only root can read goes in through `barch-backup-root.timer` (system unit, daily at 12:30,
+script `/usr/local/bin/barch-backup-root`, both in `system/`): the NetworkManager profiles (Wi-Fi
+passwords), the SMB credentials, the Secure Boot keys (`/var/lib/sbctl`), the SSH host keys,
+root's own keys and a `cryptsetup luksHeaderBackup` of the root disk, written as `system.tar`
+and `luks-header-<device>.img` into `~/.local/state/barch/backup/root/` (owned by you, mode
+600), which the 13:00 run then encrypts with the rest. Restore them with
+`barch backup restore latest .local/state/barch/backup/root` and untar as root.
+
+Not covered: the VM disk images.
 
 ## Theme
 
@@ -343,7 +358,10 @@ True for this machine only; review before using the repo elsewhere.
   (gamescope 3.17, Hyprland 0.56) — use the SDR brightness slider instead.
 - **NAS shares** are `x-systemd.automount` entries in `fstab`; `nas-mount.service` mounts them in the
   background after login (waits up to 60 s for the NAS, then leaves them to mount on first access).
-  Credentials are **not** in this repo.
+  The entries pin the NAS address (`ip=100.100.0.10`): its name also resolves to an IPv6 address
+  where SMB is not listening, and the first mount of every boot went there and was refused
+  (`CIFS: VFS: Error connecting to socket`, ten times in the kernel log) before the retry
+  succeeded. Credentials are **not** in this repo.
 
 ## Not stored here
 

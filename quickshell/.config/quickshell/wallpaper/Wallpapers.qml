@@ -70,7 +70,8 @@ Singleton {
     Process {
         id: renderProc
         property string target: ""
-        command: ["sh", "-c", 'pgrep -f make_wallpapers.py >/dev/null && exit 75; '
+        // [m]ake: the pattern must not match this sh itself (its command line holds the name)
+        command: ["sh", "-c", 'pgrep -f "[m]ake_wallpapers.py" >/dev/null && exit 75; '
                   + 'barch notify Wallpapers "$3" --low --app Wallpapers; '
                   + 'exec nice -n 10 python3 "$(readlink -f "$HOME/.config/quickshell")/../../../tools/make_wallpapers.py" "$1" $2',
                   "sh", root.dir, target === "all" ? "--all" : "-p " + target,
@@ -107,7 +108,11 @@ Singleton {
     // a paleta em uso sem pasta: manda renderizar (uma vez por vez; o catálogo avisa quando ficar pronta)
     function ensure() {
         if (catalog.length === 0) return                   // sem catálogo nenhum, o install ainda não gerou nada
-        if (!available && !rendering && !otherRunning && Theme.palettes[palette]) render(palette)
+        // `rendered` lido direto: quando onRenderedChanged chama isto, o binding `available` ainda
+        // pode não ter sido reavaliado (dava false com a paleta já na lista) e cada início da barra
+        // mandava renderizar de novo a paleta em uso
+        if (rendered.indexOf(palette) >= 0 || rendering || otherRunning || !Theme.palettes[palette]) return
+        render(palette)
     }
     onPaletteChanged: ensure()
     onRenderedChanged: ensure()

@@ -3,8 +3,8 @@
 
 # Converte prefixo (24) em máscara (255.255.255.0)
 prefix_to_mask() {
-  local p=$1 out=() i b
-  for i in 1 2 3 4; do
+  local p=$1 out=() b
+  for _ in 1 2 3 4; do
     b=$(( p >= 8 ? 8 : (p > 0 ? p : 0) ))
     out+=( $(( 256 - (1 << (8 - b)) )) )
     p=$(( p - 8 ))
