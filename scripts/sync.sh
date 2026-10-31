@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Everyday command: refresh package lists and system files, then commit and push.
-#   ./scripts/sync.sh "message"
+# Everyday command: check the repo (scripts/check.sh), refresh package lists and system files,
+# then commit and push.
+#   ./scripts/sync.sh "message"          # BARCH_NO_CHECK=1 skips the checks
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 [[ $EUID -eq 0 ]] && die "Run without sudo: the script asks for it only where needed."
+
+[[ ${BARCH_NO_CHECK:-} == 1 ]] || "$REPO/scripts/check.sh" || exit 1
 
 "$REPO/scripts/update-packages.sh"
 "$REPO/scripts/collect-system.sh"

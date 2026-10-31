@@ -72,7 +72,9 @@ reusing the widget's own functions.
 - Hyprland: `hyprctl reload`, then `hyprctl configerrors` must be empty. Live values:
   `hyprctl -j monitors`, `hyprctl binds -j`, `hyprctl eval '...'` (e.g. `BArch.monitors`).
 - Quickshell reloads QML on save; check its log for errors after every QML change.
-- Shell scripts: `bash -n` and, if installed, `shellcheck`.
+- Shell scripts: `bash -n` and, if installed, `shellcheck`. `./scripts/check.sh` runs every static
+  check of the repo at once (scripts, Lua, JSON, user units, agent timers, `hyprctl configerrors`);
+  `sync.sh` runs it before committing.
 - Keybindings: a new bind needs a `"Group|Description"` in `binds.lua` so it shows in the
   shortcut sheet (Super+/); group `Hidden` keeps it out.
 - When a user-visible feature changes, update `README.md` in the same change.

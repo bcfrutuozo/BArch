@@ -77,7 +77,8 @@ Agent:
                               verdicts (exit 4 if something needs a look)
   snapshot list               safety snapshots taken around Claude sessions in ~/BArch
   snapshot hook               Claude Code SessionStart/SessionEnd hook (reads JSON on stdin)
-  failure <unit> [--system]   OnFailure handler: save the log and notify (used by systemd)
+  failure <unit> [--system]   OnFailure handler: save the log and notify (used by systemd);
+                              a Hyprland crash groups its casualties into one notification
 
 Backup (restic, encrypted, to the NAS; list: backup/include.txt in the repo):
   backup init                 create the repository and the password (printed once: keep it in
@@ -440,17 +441,75 @@ cmd_snapshot() {
 
 # ---------------------------------------------------------------- failure
 
+# Hyprland died in the last two minutes. start-hyprland (uwsm) restarts it inside the same unit,
+# so the unit never fails: the trace is its "exit not-cleanly, restarting" line in the journal.
+session_crashed() {
+  journalctl --user -u 'wayland-wm@*.service' --since -120s -o cat --no-pager 2>/dev/null |
+    grep -q 'exit not-cleanly'
+}
+
+# failure --cascade-report: the one notification for a compositor crash, with its casualties
+# (collected by cmd_failure in failures/.cascade/). Writes failures/hyprland-<stamp>.log with the
+# coredumps, the newest Hyprland crash report and the journal of the session unit, then waits
+# for the bar (up to a minute: it is being relaunched by the new Hyprland) to post.
+cascade_report() {
+  local cdir=$STATE/failures/.cascade since units log stamp crash i
+  [[ -s $cdir/units ]] || return 0
+  since=$(<"$cdir/since")
+  mapfile -t units < <(sort -u "$cdir/units" | sed 's/\.service$//')
+  rm -rf "$cdir"
+  stamp=$(date -d "@$since" +%Y%m%d-%H%M%S)
+  log=$STATE/failures/hyprland-$stamp.log
+  crash=$(find "$HOME/.cache/hyprland" -maxdepth 1 -name 'hyprlandCrashReport*.txt' -newermt "@$((since - 120))" -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+  {
+    echo "Unit: Hyprland (wayland-wm@hyprland.desktop.service; start-hyprland restarted it in place)"
+    echo "Crashed: $(date -d "@$since" '+%Y-%m-%d %H:%M:%S') (time of the first user service that lost it)"
+    echo "Casualties (${#units[@]}): ${units[*]}"
+    echo
+    echo "=== coredumps from two minutes before the crash"
+    coredumpctl list --since "@$((since - 120))" --no-pager 2>&1
+    echo
+    if [[ -n $crash ]]; then
+      echo "=== $crash (first 60 lines)"
+      head -n 60 "$crash"
+    else
+      echo "=== no Hyprland crash report in ~/.cache/hyprland (SIGKILL leaves none)"
+    fi
+    echo
+    echo "=== journal of wayland-wm@* from two minutes before the crash"
+    journalctl --user -u 'wayland-wm@*.service' --since "@$((since - 120))" -o short-iso --no-pager 2>&1 | head -n 400
+  } >"$log"
+
+  local title body acts
+  title="Hyprland crashed at $(date -d "@$since" +%H:%M)"
+  body="${#units[@]} user service$( ((${#units[@]} > 1)) && echo s) restarted with it: ${units[*]}"
+  acts=$(jq -sc . <(action "Investigate" "$BARCH" agent investigate "$log") \
+                  <(action "Show log" foot -T "Hyprland" -e less +G "$log"))
+  for ((i = 0; i < 12; i++)); do
+    ipc_try notifs post "$title" "$body" critical "System" "$(actions_arg "$acts")" && return 0
+    sleep 5
+  done
+  post "$title" "$body" critical "System" "$acts"
+}
+
 # failure <unit> [--system]: OnFailure handler (user: barch-failure@.service; system:
 # barch-failure-relay). systemd passes MONITOR_* about the failed run. Saves status and journal
 # to ~/.local/state/barch/failures/ (every failure) and notifies with Investigate / Show log. At
 # most one notification per unit every 30 min: failures inside that window are counted in the
 # mark file (.last/<scope>-<unit>, whose mtime is the last notification) and the next notification
 # says how many there were. agent/failure-ignore lists units to skip.
+#
+# When it was Hyprland that died, the user services that only lost their compositor (portals,
+# cliphist, hyprsunset...) fail together within a second: each log is still saved, but instead of
+# one notification per service they are collected in .cascade/ and `failure --cascade-report`,
+# scheduled 30 s after the first one (the bar is back by then), posts one notification for the
+# crash with the list.
 cmd_failure() {
   local unit="" scope=--user glob
   while (($#)); do
     case $1 in
       --system) scope=--system ;;
+      --cascade-report) cascade_report; return ;;
       -*) usage_error "failure: unknown option '$1'" ;;
       *) unit=$1 ;;
     esac
@@ -467,7 +526,8 @@ cmd_failure() {
     done <"$REPO/agent/failure-ignore"
   fi
 
-  local dir=$STATE/failures stamp log mark quiet=0 count=0
+  local dir=$STATE/failures stamp log mark quiet=0 count=0 cascade=0
+  [[ $scope == --user ]] && session_crashed && cascade=1
   mkdir -p "$dir/.last"
   mark=$dir/.last/${scope#--}-$unit
   if [[ -e $mark ]]; then
@@ -501,6 +561,18 @@ cmd_failure() {
   } >"$log"
   # keep the last 50 logs
   find "$dir" -maxdepth 1 -name '*.log' -printf '%T@ %p\n' | sort -rn | tail -n +51 | cut -d' ' -f2- | xargs -r rm -f
+
+  if ((cascade)); then
+    # a casualty of the compositor: no notification of its own, the unit's mark stays untouched
+    mkdir -p "$dir/.cascade"
+    [[ -e $dir/.cascade/since ]] || date +%s >"$dir/.cascade/since"
+    echo "$unit" >>"$dir/.cascade/units"
+    # one report for the whole burst; fails quietly when the first casualty already scheduled it
+    systemd-run --user --quiet --collect --unit=barch-cascade --on-active=30 \
+      "$BARCH" failure --cascade-report 2>/dev/null || true
+    echo "$log"
+    return 0
+  fi
 
   if ((quiet)); then
     # inside the window: count it, keeping the mark's mtime (time of the last notification)

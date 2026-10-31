@@ -1,6 +1,6 @@
 ---
 description: Check after a new kernel (NVIDIA module, dmesg, NTSYNC, BORE)
-tools: Read Grep Glob Bash(journalctl *) Bash(dkms status*) Bash(modinfo *) Bash(systemctl status *)
+tools: Read Grep Glob Bash(journalctl *) Bash(dkms status*) Bash(modinfo *) Bash(systemctl status *) Bash(coredumpctl list *) Bash(jq *) Bash(grep *) Bash(head *) Bash(tail *) Bash(sort *) Bash(uniq *) Bash(wc *) Bash(cut *)
 notify: always
 ---
 This is the first boot with a new kernel (context.md has the before/after versions). Check that it

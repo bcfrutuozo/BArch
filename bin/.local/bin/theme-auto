@@ -15,9 +15,9 @@ hyprctl reload
 
 # Apps (GTK, Thunar, navegadores, Electron)
 if [[ $mode == dark ]]; then
-    gtk_theme=Adwaita-dark; scheme=prefer-dark; prefer=1
+    gtk_theme="Adwaita-dark"; scheme="prefer-dark"; prefer=1
 else
-    gtk_theme=Adwaita; scheme=prefer-light; prefer=0
+    gtk_theme="Adwaita"; scheme="prefer-light"; prefer=0
 fi
 
 gsettings set org.gnome.desktop.interface color-scheme "$scheme"

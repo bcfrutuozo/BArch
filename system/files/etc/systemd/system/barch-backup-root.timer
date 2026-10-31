@@ -1,0 +1,10 @@
+[Unit]
+Description=Root-only secrets into the BArch backup, daily (before the 13:00 backup)
+
+[Timer]
+OnCalendar=*-*-* 12:30:00
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

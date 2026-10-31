@@ -74,6 +74,7 @@ step "PATH"
 line='export PATH="$HOME/.local/bin:$PATH"'
 for f in "$HOME/.bashrc" "$HOME/.config/uwsm/env"; do
   mkdir -p "$(dirname "$f")"; touch "$f"
+  # shellcheck disable=SC2088  # the message shows ~ on purpose
   grep -qF '.local/bin' "$f" || { echo "$line" >> "$f"; ok "~/.local/bin added to PATH in ${f/#$HOME/\~}"; }
 done
 

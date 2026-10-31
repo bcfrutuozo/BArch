@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# /usr/local/bin/barch-backup-root — puts what only root can read into the user's backup.
+# `barch backup` runs as the user, so the Wi-Fi passwords (NetworkManager profiles), the SMB
+# credentials, the Secure Boot keys (sbctl), the SSH host keys, root's own keys and the LUKS
+# header would never reach the NAS. This runs as root (barch-backup-root.timer, daily at 12:30,
+# before the user's 13:00 backup) and writes them to ~/.local/state/barch/backup/root/ of the
+# user (system.tar and luks-header-<device>.img, owned by the user, mode 600); restic then
+# encrypts them with the rest of ~/.local/state/barch (backup/include.txt in the repo).
+# The copy is readable by that user: it sits on the LUKS disk, in the account that already
+# administers the machine with sudo. Without a LUKS root (a VM) the header is skipped.
+# Restore: `barch backup restore latest .local/state/barch/backup/root`, then untar as root.
+set -euo pipefail
+
+user=${BARCH_USER:-$(getent passwd 1000 | cut -d: -f1)}
+home=$(getent passwd "$user" 2>/dev/null | cut -d: -f6)
+[[ -n $user && -d $home ]] || { echo "no user with uid 1000 (set BARCH_USER)" >&2; exit 1; }
+dest=$home/.local/state/barch/backup/root
+luks=${BARCH_LUKS_NAME:-cryptroot}
+
+paths=(
+  /etc/NetworkManager/system-connections
+  /etc/samba/credentials
+  /var/lib/sbctl
+  /etc/ssh
+  /root/.ssh
+  /root/.gnupg
+  /etc/cryptsetup-keys.d
+  /etc/credstore
+  /etc/machine-id
+)
+existing=()
+for p in "${paths[@]}"; do [[ -e $p ]] && existing+=("$p"); done
+
+mkdir -p "$dest"
+chown "$user:$user" "$dest"
+chmod 700 "$dest"
+
+tmp=$(mktemp "$dest/.system.tar.XXXXXX")
+tar --create --file="$tmp" --xattrs --acls --one-file-system "${existing[@]}"
+chmod 600 "$tmp"
+chown "$user:$user" "$tmp"
+mv -f "$tmp" "$dest/system.tar"
+
+dev=$(cryptsetup status "$luks" 2>/dev/null | awk '/^ *device:/ {print $2}' || true)
+if [[ -n $dev ]]; then
+  tmp=$(mktemp "$dest/.luks-header.XXXXXX")
+  rm -f "$tmp"    # cryptsetup refuses to overwrite an existing file
+  cryptsetup luksHeaderBackup "$dev" --header-backup-file "$tmp"
+  chmod 600 "$tmp"
+  chown "$user:$user" "$tmp"
+  mv -f "$tmp" "$dest/luks-header-$(basename "$dev").img"
+fi
+echo "root backup written to $dest: ${#existing[@]} paths${dev:+, LUKS header of $dev}"

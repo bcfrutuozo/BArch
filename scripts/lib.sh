@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Shared settings and helpers for the BArch scripts.
+# shellcheck disable=SC2034  # sourced by the scripts: the variables below are theirs
 
 # Repository root (the folder that contains scripts/)
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -26,7 +27,7 @@ declare -A PACKAGES=(
 USER_SERVICES=(cliphist.service)
 
 # System services and timers to enable on a fresh install (apply-system.sh asks first)
-SYSTEM_SERVICES=(earlyoom.service smartd.service paccache.timer btrfs-scrub@-.timer setvtrgb.service nftables.service rtkit-daemon.service)
+SYSTEM_SERVICES=(earlyoom.service smartd.service paccache.timer btrfs-scrub@-.timer setvtrgb.service nftables.service rtkit-daemon.service barch-backup-root.timer)
 
 # System files copied into system/files/ (never symlinked).
 # Globs are allowed. Anything missing is skipped, and so are symlinks.
@@ -65,6 +66,7 @@ SYSTEM_FILES=(
   /usr/local/bin/barch-agent-snapshot
   /usr/local/bin/barch-failure-relay
   /usr/local/bin/barch-killswitch
+  /usr/local/bin/barch-backup-root
   /etc/polkit-1/rules.d/50-barch-agent-snapshot.rules
   /etc/polkit-1/rules.d/50-barch-killswitch.rules
   /etc/pam.d/barch-lock

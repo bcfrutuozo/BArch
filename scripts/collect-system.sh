@@ -28,6 +28,7 @@ for f in "${files[@]}"; do
     # text: copy as the current user, redacting inline passwords (e.g. cifs mounts in fstab)
     sudo cat "$f" | sed -E 's/((password|pass|passwd)=)[^,[:space:]]+/\1REDACTED/Ig' > "$dest$f"
   else
+    # shellcheck disable=SC2024  # the copy lands in the repo, owned by the user: no sudo on the redirect
     sudo cat "$f" > "$dest$f"     # binary (images of the boot theme): copied as is
   fi
   echo "$(sudo stat -c '%a' "$f") $f" >> "$modes"
