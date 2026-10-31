@@ -22,3 +22,10 @@ is waiting on upstream; remove it when it's solved.
   variable can go once that is in. Also report changes to `start-hyprland` or `--locked` /
   `--locked-cmd`: the safe-mode restart after a crash denies every lock client (session only
   recoverable from a tty).
+- **BORE patch behind linux-cachyos 7.3.1.** 7.3.1 added `update_protect_slice()` in
+  `kernel/sched/fair.c`, which uses `normalized_sysctl_sched_base_slice`, a variable the BORE
+  patch only keeps without `CONFIG_SCHED_BORE`; the build failed on 2026-10-31 and
+  `bin/.local/share/kernel-update/bore-7.3.1-update_protect_slice.patch` adds the missing
+  `#ifdef`. Report any update of cachyos/kernel-patches `7.3/sched/0001-bore-cachy.patch` or a
+  firelzrd/bore-scheduler patch newer than `linux7.3-rc2`: `kernel-update` then prints
+  "already upstream, skipped" and the fixup can be deleted.
