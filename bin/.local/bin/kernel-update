@@ -1,12 +1,21 @@
 #!/bin/bash
-# kernel-update — compila e instala o linux-cachyos do AUR com o agendador BORE.
-#   kernel-update      compila só se o AUR tiver versão diferente da instalada
-#   kernel-update -f   compila mesmo assim
-# A cópia do pacote fica em ~/.cache/paru/clone/linux-cachyos; se ela sumir (limpeza
-# de cache), é baixada de novo. O BORE vem da variável _cpusched=bore a cada compilação,
-# então não depende de nenhuma edição guardada no PKGBUILD.
+# kernel-update — builds and installs linux-cachyos from the AUR with the BORE scheduler.
+#   kernel-update      builds only when the AUR version differs from the installed one
+#   kernel-update -f   builds anyway
+# The package copy lives in ~/.cache/paru/clone/linux-cachyos; if it goes missing (cache
+# cleanup) it is cloned again. BORE comes from _cpusched=bore at every build, so nothing
+# depends on an edit kept in the PKGBUILD.
+# The BORE patch is not in the PKGBUILD's checksums (hence --skipchecksums) and makepkg never
+# downloads a file it already has, so the cached copy is deleted first: every build gets the
+# patch CachyOS ships today, not the one from the last build.
+# Local fixups in ~/.local/share/kernel-update/*.patch (repo: bin/.local/share/kernel-update)
+# are applied on top, after prepare(), for the days between a stable release and the BORE
+# patch catching up with it (7.3.1, 2026-10-31). A fixup that is already upstream is skipped
+# and can be deleted; one that no longer applies stops the build instead of hiding it.
 set -e
 dir=~/.cache/paru/clone/linux-cachyos
+fixups=~/.local/share/kernel-update
+bore_patch=0001-bore-cachy.patch
 
 if [[ ! -d "$dir/.git" ]]; then
     echo "==> Downloading linux-cachyos from the AUR (local copy was missing)"
@@ -18,7 +27,7 @@ fi
 cd "$dir"
 git pull --ff-only
 
-# versão do PKGBUILD (pkgver-pkgrel, com epoch se houver) x versão instalada
+# PKGBUILD version (pkgver-pkgrel, with epoch if any) vs. installed version
 want=$(makepkg --printsrcinfo | awk -F' = ' '
     /^\tepoch/ {e=$2} /^\tpkgver/ {v=$2} /^\tpkgrel/ {r=$2}
     END {printf "%s%s-%s", (e ? e ":" : ""), v, r}')
@@ -30,5 +39,29 @@ if [[ "$want" == "$have" && "$1" != "-f" ]]; then
 fi
 
 echo "==> Building linux-cachyos $want with BORE (installed: ${have:-none})"
-_cpusched=bore makepkg -si --skipchecksums --cleanbuild
+rm -f "$bore_patch"
+# download, extract and prepare() (BORE applied); build() and package() come after the fixups
+_cpusched=bore makepkg -so --skipchecksums --cleanbuild
+
+trees=(src/cachyos-*/)
+if [[ ${#trees[@]} -ne 1 || ! -d "${trees[0]}" ]]; then
+    echo "kernel-update: expected one source tree under src/, found: ${trees[*]}" >&2
+    exit 1
+fi
+src=${trees[0]%/}
+for p in "$fixups"/*.patch; do
+    [[ -e "$p" ]] || break
+    name=$(basename "$p")
+    if patch -d "$src" -p1 -R --dry-run -sf < "$p" >/dev/null 2>&1; then
+        echo "==> Fixup $name: already upstream, skipped (it can be removed from the repo)"
+    elif patch -d "$src" -p1 -N --dry-run -sf < "$p" >/dev/null 2>&1; then
+        patch -d "$src" -p1 -N -sf < "$p"
+        echo "==> Fixup $name applied"
+    else
+        echo "kernel-update: fixup $name does not apply to $(basename "$src"); check it against the BORE patch" >&2
+        exit 1
+    fi
+done
+
+_cpusched=bore makepkg -e -si --skipchecksums
 dkms status
