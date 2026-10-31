@@ -6,3 +6,8 @@ export GDK_SCALE=2
 export QT_QPA_PLATFORMTHEME=qt6ct
 export XCURSOR_THEME=Bibata-Modern-Classic
 export XCURSOR_SIZE=24
+# Hyprland 0.57 asks rtkit for SCHED_RR and arms RLIMIT_RTTIME (200 ms). The NVIDIA modeset
+# path (dpms off while locked, resume) spends longer than that on CPU without blocking, so the
+# kernel SIGKILLs the compositor with no trace (2026-10-31, six times in one morning). No
+# realtime until a release carries hyprwm/Hyprland#16737 (agent/watchlist.md).
+export HYPRLAND_NO_RT=1

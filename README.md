@@ -135,7 +135,10 @@ The main pieces:
   pre-blurred copies (`<palette>/<scene>/primary-lock.png`, `secondary-lock.png`, made by
   `make_wallpapers.py`), and everything fades in together. It is the only locker: if the
   process dies while locked, `lock.sh` starts it again and locks it again (Hyprland allows a new
-  lock to take over), slowing down to one try every 10 s after three quick failures;
+  lock to take over), slowing down to one try every 10 s after three quick failures. If it was
+  Hyprland that died, `start-hyprland` brings it back in safe mode with the session locked and
+  no lock client is accepted (safe mode ignores the config); `lock.sh` logs that and stops: log
+  in on a tty and run `uwsm stop`;
   **Super+Ctrl+Alt+L** kills and relaunches it by hand (works while locked, for a red/black or
   frozen screen; while unlocked it is how an edit under `lock/` is applied, since the resident
   process does not watch its files). `qs -p ~/.config/quickshell/lock ipc call lock state` shows
@@ -321,6 +324,11 @@ True for this machine only; review before using the repo elsewhere.
 - **Disk:** LUKS2 unlocked by the TPM bound to PCR 7. After firmware, dbx or Secure Boot changes
   the disk asks for the password; the bar warns and offers:
   `sudo systemd-cryptenroll /dev/nvme0n1p2 --wipe-slot=tpm2 --tpm2-device=auto --tpm2-pcrs=7`
+- **No realtime for Hyprland** (`HYPRLAND_NO_RT=1` in `uwsm/.config/uwsm/env`): Hyprland 0.57
+  asks rtkit for SCHED_RR with a 200 ms `RLIMIT_RTTIME`, and the NVIDIA modeset path (`dpms off`
+  with the session locked, resume) exceeds it without blocking, so the kernel killed the
+  compositor with no trace, six times on 2026-10-31. Drop the variable once a release carries
+  hyprwm/Hyprland#16737 (`agent/watchlist.md`).
 - **Monitors:** AW3225QF on `HDMI-A-2` (4K 240 Hz, 10-bit, HDR, scale 2, the bar lives here);
   P2723QE on `HDMI-A-1`, portrait, to the left. Values in `hypr/.config/hypr/conf/monitors.lua`
   (`BArch.monitors`); the bar changes HDR/SDR brightness through `BArch.set_monitor(...)`.
