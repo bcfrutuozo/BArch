@@ -70,13 +70,9 @@ Singleton {
     Process {
         id: renderProc
         property string target: ""
-        // [m]ake: the pattern must not match this sh itself (its command line holds the name)
-        command: ["sh", "-c", 'pgrep -f "[m]ake_wallpapers.py" >/dev/null && exit 75; '
-                  + 'barch notify Wallpapers "$3" --low --app Wallpapers; '
-                  + 'exec nice -n 10 python3 "$(readlink -f "$HOME/.config/quickshell")/../../../tools/make_wallpapers.py" "$1" $2',
-                  "sh", root.dir, target === "all" ? "--all" : "-p " + target,
-                  target === "all" ? "Rendering every palette in the background…"
-                                   : "Rendering the " + Theme.flavorLabel(target) + " set in the background (about a minute)…"]
+        // o próprio script sai com 75 quando outro gerador já está rodando (trava em <pasta>/.lock)
+        command: ["sh", "-c", 'exec nice -n 10 python3 "$(readlink -f "$HOME/.config/quickshell")/../../../tools/make_wallpapers.py" "$1" $2',
+                  "sh", root.dir, target === "all" ? "--all" : "-p " + target]
         stdout: StdioCollector {}
         stderr: StdioCollector { id: renderErr }
         onExited: code => {
@@ -98,11 +94,15 @@ Singleton {
     }
     property bool otherRunning: false       // um gerador de fora está rodando: espera o catálogo dele
     function render(target) {
-        if (rendering) return false
+        if (rendering || target === "draft") return false      // o rascunho do editor não tem pasta nem entra no JSON
         renderProc.target = target
         renderingPalette = target
         rendering = true
         renderProc.running = true
+        Quickshell.execDetached(["barch", "notify", "Wallpapers",
+            target === "all" ? "Rendering every palette in the background…"
+                             : "Rendering the " + Theme.flavorLabel(target) + " set in the background (about a minute)…",
+            "--low", "--app", "Wallpapers"])
         return true
     }
     // a paleta em uso sem pasta: manda renderizar (uma vez por vez; o catálogo avisa quando ficar pronta)
@@ -111,7 +111,9 @@ Singleton {
         // `rendered` lido direto: quando onRenderedChanged chama isto, o binding `available` ainda
         // pode não ter sido reavaliado (dava false com a paleta já na lista) e cada início da barra
         // mandava renderizar de novo a paleta em uso
-        if (rendered.indexOf(palette) >= 0 || rendering || otherRunning || !Theme.palettes[palette]) return
+        // "draft" (preview do editor) não está em palettes.json: o gerador saía com 2, a falha
+        // chamava ensure() de novo e cada volta mandava uma notificação
+        if (palette === "draft" || rendered.indexOf(palette) >= 0 || rendering || otherRunning || !Theme.palettes[palette]) return
         render(palette)
     }
     onPaletteChanged: ensure()
@@ -178,7 +180,7 @@ Singleton {
         function render(target: string): string {
             const t = target === "" ? root.palette : target
             if (t !== "all" && !Theme.palettes[t]) return JSON.stringify({ ok: false, error: "unknown palette: " + t })
-            if (!root.render(t)) return JSON.stringify({ ok: false, error: "already rendering " + root.renderingPalette })
+            if (!root.render(t)) return JSON.stringify({ ok: false, error: t === "draft" ? "'draft' is the editor's preview, save it first" : "already rendering " + root.renderingPalette })
             return JSON.stringify(root.state())
         }
     }

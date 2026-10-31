@@ -43,6 +43,12 @@ Desktop (through the bar):
                               appearance (Auto follows the theme-auto schedule)
   theme dark <palette>, theme light <palette>, theme palettes
                               the palette pinned to each mode (everything generated follows it)
+  theme edit [<palette>]      the palette editor (quickshell/palette): ten tones with live
+                              preview on the whole desktop; Save pins it and renders its wallpapers
+  theme from-image <image> [--id ID] [--label NAME] [--dark|--light]
+                              a palette from the image's colors, opened in the editor
+  theme delete <palette>      remove it from theme/palettes.json (not while pinned)
+  theme export <palette>      its JSON (theme/palettes.json entry)
   wallpaper list|status       the scenes in ~/Pictures/Wallpapers, which is on the desktop and the lock
   wallpaper <scene> [--lock|--desktop]
                               use a scene (both by default; a lock-only choice stays until changed)
@@ -235,9 +241,49 @@ cmd_theme() {
       show "$OUT" '(["dark:"] + [.dark[] | "  \(.id)\t\(.label)" + (if .active then "  (pinned)" else "" end)]
                    + ["light:"] + [.light[] | "  \(.id)\t\(.label)" + (if .active then "  (pinned)" else "" end)]) | .[]'
       return ;;
-    *) usage_error "theme light|dark|auto|status | theme dark|light <palette> | theme palettes" ;;
+    edit) theme_edit "${2:-}"; return ;;
+    from-image) shift; theme_from_image "$@"; return ;;
+    delete)
+      [[ -n ${2:-} ]] || usage_error "theme delete <palette>"
+      ipc theme remove "$2"; show "$OUT" '"removed \(.id)"'; return ;;
+    export)
+      [[ -n ${2:-} ]] || usage_error "theme export <palette>"
+      ipc theme get "$2"; show "$OUT" '.palette'; return ;;
+    *) usage_error "theme light|dark|auto|status | theme dark|light <palette> | theme palettes | theme edit [<palette>] | theme from-image <image> | theme delete|export <palette>" ;;
   esac
   show "$OUT" "$text"
+}
+
+# theme edit [id]: the palette editor, its own Quickshell config (quickshell/palette). One window:
+# a running editor gets the request over its own IPC.
+theme_edit() {
+  local cfg=$HOME/.config/quickshell/palette
+  need qs
+  if qs -p "$cfg" ipc show >/dev/null 2>&1; then
+    if [[ -n ${1:-} ]]; then qs -p "$cfg" ipc call editor open "$1" >/dev/null; fi
+    return 0
+  fi
+  BARCH_PALETTE_EDIT=${1:-} setsid -f qs -p "$cfg" >/dev/null 2>&1
+}
+
+# theme from-image <image> [--id ID] [--label NAME] [--dark|--light]: tools/palette_from_image.py
+# writes a draft (~/.local/state/quickshell/palette-draft.json) that the editor opens unsaved.
+theme_from_image() {
+  local img=${1:-}
+  [[ -n $img ]] || usage_error "theme from-image <image> [--id ID] [--label NAME] [--dark|--light]"
+  shift
+  [[ -r $img ]] || die 2 "cannot read $img"
+  need python3
+  need qs
+  local draft=${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/palette-draft.json cfg=$HOME/.config/quickshell/palette
+  mkdir -p "$(dirname "$draft")"
+  python3 -I "$REPO/tools/palette_from_image.py" "$img" "$@" >"$draft" || die 1 "the generator failed (python3 + Pillow)"
+  if ((JSON)); then cat "$draft"; else jq -r '"\(.id) (\(if .dark then "dark" else "light" end)): base \(.base), text \(.text), accent \(.accent)  → editor"' "$draft"; fi
+  if qs -p "$cfg" ipc show >/dev/null 2>&1; then
+    qs -p "$cfg" ipc call editor draft "$draft" >/dev/null
+  else
+    BARCH_PALETTE_DRAFT=$draft setsid -f qs -p "$cfg" >/dev/null 2>&1
+  fi
 }
 
 cmd_wallpaper() {

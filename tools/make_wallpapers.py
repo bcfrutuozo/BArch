@@ -8,7 +8,7 @@ Uso: make_wallpapers.py <pasta> [-p PALETA]... [cena ...]
      make_wallpapers.py <pasta> lock      só as versões lock/thumb (a partir das já geradas)
      make_wallpapers.py <pasta> list      cenas e paletas disponíveis
 
-As paletas (os 10 tons de cada uma) são lidas do próprio Theme.qml do bar, que é a fonte única;
+As paletas (os 10 tons de cada uma) são lidas do theme/palettes.json do bar, que é a fonte única;
 cada cena deriva todas as suas cores desses tons, então uma paleta escura rende a noite (lua,
 estrelas) e uma clara rende o dia (sol). Cada cena vai para <pasta>/<paleta>/<cena>/:
   primary.png          3840x2160 (paisagem, AW3225QF)
@@ -29,6 +29,7 @@ gerar aqui, em segundo plano, a de uma paleta que ainda não existe; a cena de c
 """
 import argparse
 import colorsys
+import fcntl
 import json
 import os
 import re
@@ -41,7 +42,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 RNG_SEED = 7
 LANDSCAPE = (3840, 2160)
 PORTRAIT = (2160, 3840)
-THEME_QML = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "quickshell", ".config", "quickshell", "theme", "Theme.qml")
+PALETTES_JSON = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "quickshell", ".config", "quickshell", "theme", "palettes.json")
 DEFAULT_PALETTES = ("dracula", "latte")
 
 WHITE = np.array([255, 255, 255], dtype=np.float32)
@@ -68,28 +69,25 @@ def lightness(c):
     return colorsys.rgb_to_hls(*(np.clip(c, 0, 255) / 255))[1]
 
 
-# ============================================================ paletas (do Theme.qml)
+# ============================================================ paletas (do palettes.json)
 
-def load_palettes(path=THEME_QML):
-    """Lê o bloco `palettes: ({ ... })` do Theme.qml: id → {tom: "#hex", ansi?: [...]}."""
+TONES = {"crust", "base", "surface", "overlay", "subtext", "text", "accent", "green", "yellow", "red"}
+
+
+def load_palettes(path=PALETTES_JSON):
+    """Lê theme/palettes.json do bar: id → {tom: "#hex", ansi: [8 cores regulares] | None}."""
     with open(path) as f:
-        qml = f.read()
-    m = re.search(r"readonly property var palettes:\s*\(\{(.*?)\n\s*\}\)", qml, re.S)
-    if not m:
-        raise SystemExit(f"palettes not found in {path}")
-    body = re.sub(r"//[^\n]*", "", m.group(1))              # fora os comentários
+        data = json.load(f)
     out = {}
-    for pm in re.finditer(r"(\w+):\s*\{((?:[^{}]|\{[^{}]*\})*)\}", body):
-        pid, inner = pm.group(1), pm.group(2)
-        tones = dict(re.findall(r"(\w+):\s*\"(#[0-9a-fA-F]{6})\"", re.sub(r"ansi:\s*\{[^{}]*\}", "", inner)))
-        am = re.search(r"ansi:\s*\{([^{}]*)\}", inner)
-        if am:
-            reg = re.search(r"regular:\s*\[([^\]]*)\]", am.group(1))
-            tones["ansi"] = re.findall(r"\"(#[0-9a-fA-F]{6})\"", reg.group(1)) if reg else None
-        if {"crust", "base", "surface", "overlay", "subtext", "text", "accent", "green", "yellow", "red"} <= set(tones):
-            out[pid] = tones
+    for pid, q in data.items():
+        if not isinstance(q, dict) or not TONES <= set(q):
+            continue
+        tones = {k: q[k] for k in TONES}
+        ansi = q.get("ansi")
+        tones["ansi"] = ansi.get("regular") if isinstance(ansi, dict) else None
+        out[pid] = tones
     if not out:
-        raise SystemExit(f"no palettes parsed from {path}")
+        raise SystemExit(f"no palettes in {path}")
     return out
 
 
@@ -853,7 +851,7 @@ def main(argv):
     ap.add_argument("out")
     ap.add_argument("-p", "--palette", action="append", default=[], help="paleta do Theme.qml (repetível)")
     ap.add_argument("--all", action="store_true", help="todas as paletas")
-    ap.add_argument("--theme", default=THEME_QML, help="Theme.qml de onde ler as paletas")
+    ap.add_argument("--theme", default=PALETTES_JSON, help="palettes.json de onde ler as paletas")
     ap.add_argument("what", nargs="*", help="cenas, ou: boot | lock | list")
     a = ap.parse_args(argv[1:])
     palettes = load_palettes(a.theme)
@@ -864,6 +862,14 @@ def main(argv):
         print("palettes:", ", ".join(palettes))
         return 0
     os.makedirs(out, exist_ok=True)
+    # um gerador por vez: o bar (Wallpapers.qml) trata 75 como "outro está rodando, espero o
+    # catálogo dele" (a trava fica em <pasta>/.lock e cai sozinha com o processo)
+    lock = open(os.path.join(out, ".lock"), "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print("another make_wallpapers.py is rendering into", out, file=sys.stderr)
+        return 75
     if a.what == ["boot"]:
         boot(out, palettes)
         return 0

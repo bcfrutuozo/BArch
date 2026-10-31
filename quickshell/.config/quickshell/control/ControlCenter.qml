@@ -609,6 +609,29 @@ Item {
                             }
                         }
                     }
+                    // o editor (quickshell/palette): paletas novas, a partir de uma imagem, ajustes ao vivo
+                    Rectangle {
+                        implicitWidth: editRow.implicitWidth + 20
+                        implicitHeight: 30
+                        radius: 15
+                        color: editMouse.containsMouse ? Theme.hover : "transparent"
+                        border.width: 1
+                        border.color: Theme.border
+                        RowLayout {
+                            id: editRow
+                            anchors.centerIn: parent
+                            spacing: 7
+                            Text { text: root.glyph(0xF03EB); color: Theme.accent; font.family: Theme.iconFont; font.pixelSize: Theme.fontSize }   // md-pencil
+                            Text { text: "Edit palettes…"; color: Theme.fg; font.family: Theme.font; font.pixelSize: Theme.fontSize - 2 }
+                        }
+                        MouseArea {
+                            id: editMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: { Quickshell.execDetached(["barch", "theme", "edit"]); Popups.hide(popup) }
+                        }
+                    }
                 }
 
                 Text {

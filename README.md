@@ -27,7 +27,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | Folder | Goes to | What it is |
 |---|---|---|
 | `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, `scripts/lock.sh` (locks; starts and supervises the resident lock process) |
-| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/Theme.qml` is the central theme |
+| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor |
 | `foot/` | `~/.config/foot` | Terminal |
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
 | `mpv/` | `~/.config/mpv` | Video player (HDR, NVDEC) |
@@ -106,8 +106,8 @@ The main pieces:
   bar while connected (click: IP, time, Change region, Disconnect). Credentials go in `~/.config/pia/credentials`
   (username and password, one per line, `chmod 600`), never in the repo.
 - **Wallpapers** on every monitor (a background layer, no hyprpaper), drawn by
-  `tools/make_wallpapers.py` in the colors of every palette of the theme: it reads the twelve
-  palettes from `Theme.qml` and derives sky, light, water, trees and so on from their ten tones, so
+  `tools/make_wallpapers.py` in the colors of every palette of the theme: it reads the palettes
+  from `theme/palettes.json` and derives sky, light, water, trees and so on from their ten tones, so
   a dark palette renders the night (moon, stars) and a light one the day (sun). Sixteen scenes
   (Mountains, Waves, Dunes, Forest, City, Aurora, Lake, Hills, Clouds, Mesa, Retro, Polygons, Mesh,
   Nebula, Bokeh, Contours), each in `~/Pictures/Wallpapers/<palette>/<scene>/` as `primary.png`
@@ -121,7 +121,8 @@ The main pieces:
   screen only), Shift+Enter applies it to both. The choice lives in
   `~/.local/state/quickshell/wallpaper.json` (`barch wallpaper`), which the lock screen watches,
   so the two can differ. `make_wallpapers.py ~/Pictures/Wallpapers [-p palette]... [scene...]`
-  regenerates them (a new scene is a function in `SCENES`; a new palette in `Theme.qml` is enough).
+  regenerates them (a new scene is a function in `SCENES`; a new palette in `palettes.json` is
+  enough, and a palette saved in the editor renders its set by itself).
 - **Polkit agent** (`Quickshell.Services.Polkit`, no hyprpolkitagent): the password dialog apps get
   when they ask for privileges (`pkexec`, GNOME Disks, …), in the bar's theme.
 - **Own notification server** with history, DND, sounds and app actions; privacy indicator
@@ -167,6 +168,9 @@ IPC, so it does exactly what the Control Center does; the bar has to be running.
 ```bash
 barch notify "Backup" "Finished in 4 min" [--critical|--low] [--app NAME] [--action "Label=command"]
 barch theme light|dark|auto|status   barch theme dark|light <palette>   barch theme palettes
+barch theme edit [<palette>]       # the palette editor (own window), live preview on the whole desktop
+barch theme from-image <image> [--id ID] [--label NAME] [--dark|--light]   # a palette from a picture → editor
+barch theme delete|export <palette>
 barch wallpaper list|status        barch wallpaper <scene> [--lock|--desktop]   # both by default
 barch wallpaper render [<palette>|all]   # the scenes in a palette's colors (automatic when pinned)
 barch hdr on|off|status            barch sdr <nits>|status
@@ -286,13 +290,40 @@ Not covered: the VM disk images.
 
 ## Theme
 
-`quickshell/.config/quickshell/theme/Theme.qml` is the single source. It holds twelve palettes,
-eight dark (OLED, Dracula, Catppuccin Mocha / Macchiato / Frappé, Tokyo Night, Nord, Gruvbox) and
-four light (Catppuccin Latte, Nord Light, Snow, Paper), and one of each side is pinned: the dark
-one is what Dark mode shows, the light one what Light mode shows. The **Themes** tile in the
-Control Center lists them in the two groups with their colors; a click pins it (`barch theme dark
-nord`, `barch theme light snow`, `barch theme palettes`; saved in
-`~/.local/state/quickshell/flavors.json`). From the pinned pair it generates the colors for
+`quickshell/.config/quickshell/theme/palettes.json` holds the palettes and `theme/Theme.qml`
+derives everything from them. A palette is ten tones (`crust`, `base`, `surface`, `overlay`,
+`subtext`, `text`, `accent`, `green`, `yellow`, `red`, the Catppuccin names) plus a label and,
+optionally, sixteen official terminal colors (`ansi`); without them the terminal colors are
+derived (`palette/palette.js`, shared with the editor). It ships with forty, each with the
+official colors of its theme: twenty-six dark (OLED, Dracula, Catppuccin Mocha / Macchiato /
+Frappé, Tokyo Night and Storm, Nord, Gruvbox, Solarized, Rosé Pine and Moon, Everforest,
+Kanagawa and Dragon, One Dark, Ayu Dark and Mirage, GitHub Dark, Monokai Pro, Flexoki, Night
+Owl, Palenight, Oxocarbon, Horizon, Nightfox) and fourteen light (Catppuccin Latte, Nord Light,
+Snow, Paper, Solarized Light, Rosé Pine Dawn, Everforest Light, One Light, Ayu Light, GitHub
+Light, Flexoki Light, Gruvbox Light, Tokyo Night Day, Dayfox). A tone that failed the editor's
+contrast checks with its official value was moved in lightness just enough to pass (mostly
+accents and yellows of the light ones). Whether a palette is dark comes from its `base`. One
+of each side is pinned: the dark one is what Dark mode shows, the light one what Light mode
+shows. The **Themes** tile in the Control Center lists them in the two groups with their colors;
+a click pins it (`barch theme dark nord`, `barch theme light snow`, `barch theme palettes`; saved
+in `~/.local/state/quickshell/flavors.json`).
+
+**Palette editor** (`quickshell/palette/`, its own Quickshell window: **Edit palettes…** in the
+Themes tile, `barch theme edit [palette]`, or "Palette Editor" in the launcher): the ten tones
+with hex fields and hue / saturation / lightness sliders, contrast checks (text, subtext and
+accent on base, crust on accent, the three state colors), a sample (bar island, buttons, the
+sixteen terminal colors, a focused border) and the window itself painted with the draft. Every
+change goes to the bar as `theme preview`, so the bar, the Hyprland borders, GTK and the lock
+show the draft live (a light draft is shown even in Dark mode); **Save** writes it through the
+bar (`theme save`, the bar is the only writer of `palettes.json`), pins it on its side and
+renders its wallpapers in the background; **Close** puts everything back. **From an image…**
+(also `barch theme from-image photo.jpg --id praia`) runs `tools/palette_from_image.py`: the
+picture's dominant colors become the background ramp, the most present saturated color the
+accent, the nearest hues the green / yellow / red, each pushed to the minimum contrast, and the
+result opens in the editor unsaved. Delete refuses a pinned palette. Custom palettes live in the
+same `palettes.json`, so they are saved with the repo.
+
+From the pinned pair it generates the colors for
 foot, Neovim, the lock screen, the Hyprland borders, GTK 3 (`BArch-dark/light` themes over adw-gtk3),
 GTK 4/libadwaita, qt6ct, fontconfig and MangoHud. Changing the pinned palette of the mode in use
 repaints the bar, the borders, the lock and the open GTK apps at once; terminals, Neovim and Qt
