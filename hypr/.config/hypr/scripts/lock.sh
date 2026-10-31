@@ -44,6 +44,12 @@ session_locked() {
 
 lock_pid() { pgrep -fx -o "$cmd"; }
 
+# Hyprland died and start-hyprland brought it back with `--safe-mode --locked`: it is locked by
+# itself (no client) and, since safe mode loads a recovery config instead of ours,
+# misc:allow_session_lock_restore is off and every lock client gets `denied` (Hyprland 0.57,
+# 2026-10-31). No lock can take over; the daemon stops instead of trying every 10 s forever.
+hyprland_restored_locked() { pgrep -f -- '^Hyprland .*--locked( |$)' >/dev/null; }
+
 ipc() { timeout 3 qs -p "$lock" ipc call lock "$1" 2>/dev/null; }   # ipc lock|state -> JSON
 
 kill_lock() {   # kill_lock <pid>: TERM, then KILL after 2 s
@@ -103,7 +109,9 @@ case ${1:-} in
       started=$SECONDS
       # BARCH_LOCK_RELOCK: a previous instance died with the session locked (red screen): the new
       # one locks itself as soon as it is up; the ipc call below is only the fallback
-      BARCH_LOCK_RELOCK=$relock $cmd 9>&- &     # without the daemon's flock fd
+      # without the daemon's flock fd; its output goes to the journal (barch-lock-qs), the
+      # reason for an exit must not be lost
+      BARCH_LOCK_RELOCK=$relock systemd-cat -t barch-lock-qs --stderr-priority=warning $cmd 9>&- &
       qspid=$!
       if (( relock )) && wait_ready 8; then
         logger -t $tag "session still locked: locking again with the new instance"
@@ -115,6 +123,10 @@ case ${1:-} in
         rm -f "$runtime/relaunch"
         logger -t $tag "quickshell lock exited with status $rc after a relaunch request; starting it again"
         continue
+      fi
+      if hyprland_restored_locked; then
+        logger -p user.err -t $tag "quickshell lock exited with status $rc: Hyprland was restarted by start-hyprland in safe mode with the session locked, and in safe mode it denies every lock client; giving up. Log in on a tty and run: uwsm stop"
+        exit 1
       fi
       (( SECONDS - started > 60 )) && failures=0
       failures=$((failures + 1))
