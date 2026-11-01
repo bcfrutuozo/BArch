@@ -101,6 +101,27 @@ if ! compgen -G "$HOME/Pictures/Wallpapers/dracula/mountains/thumb.png" >/dev/nu
   python3 "$REPO/tools/make_wallpapers.py" "$HOME/Pictures/Wallpapers" lock || warn "couldn't generate the lock screen wallpapers"
 fi
 
+step "AirPods daemon (librepods)"
+# The bar's AirPods widget (quickshell/pods/, from thisisgm/omarchy-pods) talks to librepods and
+# librepods-ctl, built from that project's daemon/ into ~/.local (the unit runs %h/.local/bin/librepods).
+# Pinned: Service.qml and Model.js in pods/ match this commit; bump both together.
+PODS_REPO=https://github.com/thisisgm/omarchy-pods
+PODS_COMMIT=fff7fec6
+if [[ -x "$HOME/.local/bin/librepods" && -x "$HOME/.local/bin/librepods-ctl" ]]; then
+  ok "already installed"
+else
+  sudo pacman -S --needed --noconfirm cmake ninja qt6-connectivity qt6-tools qt6-declarative pkgconf libpulse >/dev/null
+  src="$HOME/.cache/barch/omarchy-pods"
+  rm -rf "$src"
+  if git clone -q "$PODS_REPO" "$src" && git -C "$src" checkout -q "$PODS_COMMIT" \
+    && cmake -S "$src/daemon" -B "$src/build" -G Ninja -DBUILD_TESTING=OFF >/dev/null \
+    && cmake --build "$src/build" >/dev/null && cmake --install "$src/build" --prefix "$HOME/.local" >/dev/null; then
+    ok "librepods built from omarchy-pods@$PODS_COMMIT"
+  else
+    warn "couldn't build librepods (the AirPods widget stays empty); the build tree is in ${src/#$HOME/\~}"
+  fi
+fi
+
 step "User services"
 systemctl --user daemon-reload || true
 # os listados em lib.sh + os que estavam ligados na máquina original (packages/user-services.txt)

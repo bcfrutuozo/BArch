@@ -63,6 +63,7 @@ khal
 lib32-gamemode
 lib32-mangohud
 lib32-nvidia-utils
+libnotify
 libva-nvidia-driver
 libva-utils
 libvirt
@@ -78,6 +79,7 @@ mpv
 neovim
 networkmanager
 nextcloud-client
+nftables
 ninja
 nmap
 noto-fonts
@@ -99,6 +101,7 @@ pipewire-pulse
 playerctl
 plymouth
 poppler
+psmisc
 python-xlib
 qemu-full
 qt5-wayland
@@ -158,6 +161,7 @@ vulkan-utility-libraries
 vulkan-validation-layers
 wireplumber
 wl-clip-persist
+wl-clipboard
 wofi
 wtype
 xdg-desktop-portal-gtk

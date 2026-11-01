@@ -33,7 +33,8 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `mpv/` | `~/.config/mpv` | Video player (HDR, NVDEC) |
 | `uwsm/`, `environment/` | `~/.config/uwsm`, `~/.config/environment.d` | Session environment (Qt theme, cursor) |
 | `systemd/` | `~/.config/systemd/user` | User services (cliphist, replay, NAS mount) |
-| `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `apps-theme`, `papirus-accent`, `nas-mount`, `keyring-wait` |
+| `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `apps-theme`, `papirus-accent`, `nas-mount`, `keyring-wait`, `gsr-replay-saved` (the notification after a replay or recording is saved) |
+| `claude/` | `~/.claude/settings.json` | Claude Code settings: the hooks that take the safety snapshots (see Agent) |
 | `games/` | `~/Games/battle.net/run.sh`, `~/.config/gamemode.ini`, `~/.local/share/applications/steam.desktop` | Battle.net launcher (umu + Proton-GE), gamemode rules, Steam launcher without `GDK_SCALE` (Steam would scale twice) |
 | `calendar/` | `~/.config/khal`, `~/.config/vdirsyncer/config` | iCloud calendar sync (the app password stays out of the repo) |
 | `audio/` | `~/.config/pipewire`, `~/.config/wireplumber` | PipeWire rates and resampler, onboard output at 32-bit/192 kHz, Bluetooth output-only at AAC (below), fifine mic as input only |
@@ -43,6 +44,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, sixteen scenes in the colors of each palette), Limine theme (`limine-theme.py`) |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
 | `packages/` | — | Explicitly installed packages (`pacman.txt`, `aur.txt`, `aur-ignore.txt`) |
+| `scripts/` | — | `sync.sh` (save), `check.sh` (static checks), `collect-system.sh` / `apply-system.sh` (`system/`), `update-packages.sh`, `lib.sh` (`PACKAGES`, `SYSTEM_FILES`, services); `bootstrap.sh` adopts configs that already exist on a configured machine into the repo (`--dry-run` first) |
 
 Folders that don't exist on a machine are simply skipped.
 
@@ -159,6 +161,12 @@ The main pieces:
   so an app opening the microphone (Discord, a call) never degrades the music: the fifine is the
   microphone. The connected device shows its codec in the Bluetooth tile and in the bar's device list.
 - **Updates:** pending packages, unread Arch news (also enforced by a pacman hook) and the kernel.
+- **Smaller widgets:** media player in the clock island (MPRIS, shows only while something plays);
+  system monitor (CPU, GPU, RAM bars; click for temperatures, VRAM, GPU power; right-click btop);
+  disks (turns yellow/red as one fills; click a mount to open it); virtual machines (libvirt: start,
+  console, pause, reboot, shut down); AirPods (`pods/`, from [omarchy-pods](https://github.com/thisisgm/omarchy-pods): battery,
+  listening mode; its daemon `librepods`/`librepods-ctl` is built into `~/.local` by `install.sh`
+  at the commit pinned there, `PODS_COMMIT`).
 
 ## barch CLI
 
@@ -181,6 +189,10 @@ barch vpn on [region]|off|toggle|status|regions|region <id>|auto
 barch health [--refresh]           # .pacnew, failed services, TPM, backup, cleanup
 barch backup init|run|status|list|restore [SNAPSHOT] <path>...   # restic to the NAS (see Backup)
 barch agent ask "why is X slow?"   # Claude in a terminal in ~/BArch (the launcher's "a ")
+barch agent list|run|report|continue <task>   # scheduled tasks (see Agent)
+barch failure <unit> [--system]    # what OnFailure= calls: log + notification (see Agent)
+barch snapshot list                # safety snapshot pairs of the agent sessions
+barch aur review                   # verdict on the pending AUR updates
 barch finance import [--dry-run]   # C6 Bank statements → Firefly (see Finance)
 barch replay share [file] [--from 12 --to 40]
                                    # newest replay (or FILE) → <name>-share.mp4 for WhatsApp status:
@@ -342,7 +354,7 @@ sudo pacman -S --needed git github-cli openssh
 gh auth login                                    # SSH, upload a new key (in a test VM: -p https -w)
 git clone git@github.com:bcfrutuozo/BArch.git ~/BArch
 cd ~/BArch
-./install.sh                    # packages (+ paru), configs, wallpapers, user services
+./install.sh                    # packages (+ paru), configs, wallpapers, AirPods daemon, user services
 ./scripts/apply-system.sh       # system files one by one, with a diff and a prompt; services
 ```
 
