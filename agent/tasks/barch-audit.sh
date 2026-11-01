@@ -6,7 +6,7 @@ cd "$BARCH_REPO" || exit 1
 section() { printf '\n## %s\n\n```\n' "$1"; shift; "$@" 2>&1; printf '```\n'; }
 
 scripts() { git ls-files | while read -r f; do
-  [[ $f == *.sh || $(head -c 40 "$f" 2>/dev/null) == '#!'*sh* ]] && echo "$f"; done; }
+  [[ $f == *.sh || $(head -c 40 "$f" 2>/dev/null | tr -d '\0') == '#!'*sh* ]] && echo "$f"; done; }
 
 {
   echo "# BArch audit facts — $(date '+%Y-%m-%d')"

@@ -1,6 +1,0 @@
-10/27 07:08:19.574  vendor: AuthenticAMD
-10/27 07:08:19.574  branding: AMD Ryzen 7 5800X3D 8-Core Processor           
-10/27 07:08:19.574  features: lahf64 cmpxchg16b sse sse2 sse3 ssse3 sse41 sse42 avx avx2 aesni clmul sha rdrand 
-10/27 07:08:19.574  sockets: 1
-10/27 07:08:19.574  cores: 7
-10/27 07:08:19.574  threads: 14

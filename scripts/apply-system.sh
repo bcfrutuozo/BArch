@@ -13,7 +13,7 @@ mode_of() { awk -v f="$1" '$2 == f { print $1; exit }' "$modes" 2>/dev/null || t
 # Numa VM (teste do repositório), arquivos ligados ao disco, ao boot e ao hardware desta
 # máquina ficam de fora: aplicá-los deixaria a VM sem boot.
 VIRT=$(systemd-detect-virt 2>/dev/null || true)
-VM_SKIP='^/(etc/fstab|etc/crypttab|etc/kernel/cmdline|etc/default/limine|boot/|etc/mkinitcpio|etc/initcpio/|etc/modprobe\.d/nvidia|etc/hostname|etc/vconsole\.conf|etc/systemd/system/getty@)'
+VM_SKIP='^/(etc/fstab|etc/crypttab|etc/kernel/cmdline|etc/default/limine|boot/|etc/mkinitcpio|etc/initcpio/|etc/modprobe\.d/nvidia|etc/docker/daemon\.json|etc/hostname|etc/vconsole\.conf|etc/systemd/system/getty@)'
 [[ -n "$VIRT" && "$VIRT" != none ]] && warn "running in a VM ($VIRT): disk, boot and NVIDIA files are skipped"
 
 changed=()
@@ -35,6 +35,17 @@ while IFS= read -r -d '' file; do
     ok "installed"
   fi
 done < <(find "$src" -type f -print0 | sort -z)
+
+step "Snapper"
+# snap-pac, the snapshot entries in Limine and the agent's safety snapshots all use config "root"
+if sudo test -f /etc/snapper/configs/root; then
+  ok "config root already exists"
+elif findmnt -no FSTYPE / | grep -qx btrfs; then
+  ask "Create the snapper config for / (snapper -c root create-config /)?" \
+    && sudo snapper -c root create-config / && ok "config root created"
+else
+  warn "/ is not btrfs: no snapper config"
+fi
 
 step "System services"
 for s in "${SYSTEM_SERVICES[@]}"; do

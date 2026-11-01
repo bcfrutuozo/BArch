@@ -10,6 +10,7 @@ systemd/.config/systemd/user/*.wants/
 # Editor and backup leftovers
 *.bak
 *.bak-*
+*.bkp
 *.pre-barch
 *.swp
 *~
@@ -24,3 +25,6 @@ __pycache__/
 
 # Claude Code: per-machine project settings
 .claude/settings.local.json
+
+# Written by apps started with ~/BArch as the working directory (Battle.net)
+/Logs/

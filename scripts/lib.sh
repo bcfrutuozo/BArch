@@ -18,7 +18,7 @@ declare -A PACKAGES=(
   [environment]=".config/environment.d"
   [systemd]=".config/systemd/user"
   [games]="Games/battle.net/run.sh .config/gamemode.ini .local/share/applications/steam.desktop"
-  [bin]=".local/bin/kernel-update .local/share/kernel-update .local/bin/theme-auto .local/bin/apps-theme .local/bin/papirus-accent .local/bin/barch .local/bin/nas-mount .local/bin/keyring-wait"
+  [bin]=".local/bin/kernel-update .local/bin/gsr-replay-saved .local/share/kernel-update .local/bin/theme-auto .local/bin/apps-theme .local/bin/papirus-accent .local/bin/barch .local/bin/nas-mount .local/bin/keyring-wait"
   [calendar]=".config/khal .config/vdirsyncer/config"
   [audio]=".config/pipewire .config/wireplumber"
 )
@@ -27,7 +27,7 @@ declare -A PACKAGES=(
 USER_SERVICES=(cliphist.service)
 
 # System services and timers to enable on a fresh install (apply-system.sh asks first)
-SYSTEM_SERVICES=(earlyoom.service smartd.service paccache.timer btrfs-scrub@-.timer setvtrgb.service nftables.service rtkit-daemon.service barch-backup-root.timer)
+SYSTEM_SERVICES=(earlyoom.service smartd.service paccache.timer fstrim.timer btrfs-scrub@-.timer setvtrgb.service numlock.service nftables.service rtkit-daemon.service bluetooth.service snapper-timeline.timer snapper-cleanup.timer limine-snapper-sync.service libvirtd.socket docker.socket barch-backup-root.timer)
 
 # System files copied into system/files/ (never symlinked).
 # Globs are allowed. Anything missing is skipped, and so are symlinks.
@@ -55,6 +55,9 @@ SYSTEM_FILES=(
   /etc/hostname
   /etc/bluetooth/main.conf
   /etc/default/earlyoom
+  /etc/systemd/zram-generator.conf
+  "/etc/modules-load.d/*"
+  /etc/docker/daemon.json
   /etc/smartd.conf
   /etc/nftables.conf
   "/etc/brave/policies/managed/*"
@@ -67,6 +70,7 @@ SYSTEM_FILES=(
   /usr/local/bin/barch-failure-relay
   /usr/local/bin/barch-killswitch
   /usr/local/bin/barch-backup-root
+  /usr/local/bin/numlock
   /etc/polkit-1/rules.d/50-barch-agent-snapshot.rules
   /etc/polkit-1/rules.d/50-barch-killswitch.rules
   /etc/pam.d/barch-lock

@@ -6,6 +6,7 @@
 600 /etc/crypttab
 644 /etc/default/earlyoom
 644 /etc/default/limine
+644 /etc/docker/daemon.json
 644 /etc/fstab
 644 /etc/hostname
 644 /etc/initcpio/acpi_override/apic.aml
@@ -17,6 +18,7 @@
 644 /etc/mkinitcpio.d/linux.preset
 644 /etc/modprobe.d/kvm.conf
 644 /etc/modprobe.d/nvidia.conf
+644 /etc/modules-load.d/ntsync.conf
 644 /etc/nftables.conf
 644 /etc/pacman.conf
 644 /etc/pacman.d/hooks/00-archnews.hook
@@ -40,10 +42,11 @@
 644 /etc/systemd/system/dirmngr@.service.d/barch-stop-timeout.conf
 644 /etc/systemd/system/getty@tty1.service.d/autologin.conf
 644 /etc/systemd/system/nftables.service.d/remain.conf
-664 /etc/systemd/system/numlock.service
+644 /etc/systemd/system/numlock.service
 644 /etc/systemd/system/paccache.service.d/override.conf
 644 /etc/systemd/system/service.d/barch-onfailure.conf
 644 /etc/systemd/system/setvtrgb.service
+644 /etc/systemd/zram-generator.conf
 644 /etc/vconsole.conf
 644 /etc/vtrgb-dracula
 755 /usr/local/bin/archnews
@@ -53,6 +56,7 @@
 755 /usr/local/bin/barch-killswitch
 755 /usr/local/bin/btrfs-scrub-report
 755 /usr/local/bin/desktop-notify
+755 /usr/local/bin/numlock
 755 /usr/local/bin/smartd-alert
 644 /usr/share/plymouth/themes/barch/background.png
 644 /usr/share/plymouth/themes/barch/barch.plymouth
