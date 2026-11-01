@@ -28,6 +28,7 @@
 644 /etc/polkit-1/rules.d/50-barch-agent-snapshot.rules
 644 /etc/polkit-1/rules.d/50-barch-killswitch.rules
 644 /etc/smartd.conf
+644 /etc/sysctl.d/10-barch-net.conf
 644 /etc/systemd/system/archlinux-keyring-wkd-sync.service.d/barch-timeout.conf
 644 /etc/systemd/system/barch-agent-snapshot@.service
 644 /etc/systemd/system/barch-backup-root.service
