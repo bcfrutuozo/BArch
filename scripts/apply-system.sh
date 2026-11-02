@@ -41,8 +41,31 @@ step "Snapper"
 if sudo test -f /etc/snapper/configs/root; then
   ok "config root already exists"
 elif findmnt -no FSTYPE / | grep -qx btrfs; then
-  ask "Create the snapper config for / (snapper -c root create-config /)?" \
-    && sudo snapper -c root create-config / && ok "config root created"
+  # create-config makes /.snapshots a subvolume of its own and fails when it already exists.
+  # With @snapshots mounted there (INSTALL.md): let snapper create its subvolume, delete it and
+  # mount @snapshots back, so the snapshots stay outside @ and survive a rollback.
+  if ask "Create the snapper config for / (snapper -c root create-config /)?"; then
+    if mountpoint -q /.snapshots; then
+      if sudo umount /.snapshots && sudo rmdir /.snapshots \
+        && sudo snapper -c root create-config / \
+        && sudo btrfs subvolume delete /.snapshots \
+        && sudo mkdir /.snapshots \
+        && sudo mount /.snapshots \
+        && sudo chmod 750 /.snapshots; then
+        ok "config root created, /.snapshots is the @snapshots subvolume again"
+      else
+        warn "snapper setup did not finish: check /.snapshots (fstab entry, sudo mount -a)"
+      fi
+    elif [[ -d /.snapshots ]] && ! sudo btrfs subvolume show /.snapshots >/dev/null 2>&1; then
+      if sudo rmdir /.snapshots 2>/dev/null && sudo snapper -c root create-config /; then
+        ok "config root created"
+      else
+        warn "/.snapshots is a non-empty folder: move it away and run this again"
+      fi
+    else
+      sudo snapper -c root create-config / && ok "config root created"
+    fi
+  fi
 else
   warn "/ is not btrfs: no snapper config"
 fi

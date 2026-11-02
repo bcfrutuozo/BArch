@@ -38,6 +38,8 @@ SYSTEM_FILES=(
   "/etc/mkinitcpio.d/*.preset"
   "/etc/initcpio/**"
   /etc/default/limine
+  /etc/limine-entry-tool.conf
+  /etc/limine-snapper-sync.conf
   /boot/limine.conf
   /boot/limine/limine.conf
   /boot/limine/wallpaper.png
