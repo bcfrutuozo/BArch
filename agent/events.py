@@ -472,6 +472,33 @@ class Daemon:
             return
         self.emit(up if value else down, data or {})
 
+    def vpn_transition(self, on: bool, d: dict, armed: bool):
+        """vpn.up; vpn.off when the tunnel was turned off (pia.sh disconnect ran after it came up:
+        the bar's Disconnect, Anonymous Mode off, a voice command); vpn.down only when it dropped.
+        The down events carry the tunnel that went away (the status after it is empty) and
+        whether the kill switch is holding the traffic."""
+        old = self.flags.get("vpn")
+        self.flags["vpn"] = on
+        if on:
+            self.vpn_up = {"region": d.get("region", ""), "name": d.get("name", ""), "country": d.get("country", ""),
+                           "preferred": d.get("preferred", "")}
+            if old is not True:
+                self.vpn_up_at = time.time()
+            if old is False:
+                self.emit("vpn.up", dict(self.vpn_up))
+            return
+        if old is not True:
+            return
+        last = getattr(self, "vpn_up", {}) or {}
+        data = {**last, "preferred": d.get("preferred", last.get("preferred", "")),
+                "killswitch": "armed" if armed else "off",
+                "note": "O kill switch está segurando o tráfego." if armed else "O tráfego está saindo sem a VPN."}
+        stopped = float(d.get("stopped") or 0)
+        if stopped and stopped > getattr(self, "vpn_up_at", 0):
+            self.emit("vpn.off", data)
+        else:
+            self.emit("vpn.down", data)
+
     # -- samplers
     def sample_system(self) -> list[tuple[str, float]]:
         rows = []
@@ -560,23 +587,23 @@ class Daemon:
     def sample_bar(self) -> list[tuple[str, float]]:
         """What only the bar knows: VPN, Anonymous Mode, the health check (every few minutes)."""
         rows = []
+        armed = False
+        try:
+            r = run([str(BARCH), "--json", "anon", "status"], timeout=10)
+            if r.returncode in (0, 1) and r.stdout.strip():
+                d = json.loads(r.stdout)
+                on = bool(d.get("on") if "on" in d else d.get("active") if "active" in d else d.get("enabled"))
+                armed = bool((d.get("killswitch") or {}).get("armed"))
+                self.transition("anon", on, "anon.on", "anon.off", {})
+        except Exception:  # noqa: BLE001
+            pass
         try:
             r = run([str(BARCH), "--json", "vpn", "status"], timeout=10)
             if r.returncode in (0, 1) and r.stdout.strip():
                 d = json.loads(r.stdout)
                 on = bool(d.get("connected"))
                 rows.append(("vpn.connected", 1.0 if on else 0.0))
-                self.transition("vpn", on, "vpn.up", "vpn.down",
-                                {"region": d.get("region", ""), "name": d.get("name", ""), "country": d.get("country", ""),
-                                 "preferred": d.get("preferred", "")})
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            r = run([str(BARCH), "--json", "anon", "status"], timeout=10)
-            if r.returncode in (0, 1) and r.stdout.strip():
-                d = json.loads(r.stdout)
-                on = bool(d.get("on") if "on" in d else d.get("active") if "active" in d else d.get("enabled"))
-                self.transition("anon", on, "anon.on", "anon.off", {})
+                self.vpn_transition(on, d, armed)
         except Exception:  # noqa: BLE001
             pass
         now = time.time()
