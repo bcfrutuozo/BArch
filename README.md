@@ -600,7 +600,10 @@ True for this machine only; review before using the repo elsewhere.
   (`BArch.monitors`); the bar changes HDR/SDR brightness through `BArch.set_monitor(...)`.
   After a resume the driver can refuse every mode above 60 Hz on the AW without logging anything;
   `hypr/scripts/hdr-kick.sh` (run by hypridle after sleep) checks the refresh rate it got and, when it
-  is low, disables and re-enables the output, which renegotiates the link. It notifies if even that fails.
+  is low, disables and re-enables the output, which renegotiates the link. It notifies if even that fails
+  or the output does not come back; one resume gets one kick (hypridle calls it twice, the second is dropped).
+  Waking from DPMS the HDMI 2.1 link training (FRL) often fails (`HDMI FRL link training failed` in the
+  kernel log) and the driver falls back to 60 Hz: then it goes straight to the reconnect.
 - **Games:** Battle.net in its own prefix at `~/Games/battle.net` (games on drive `G:`).
   WoW has no native HDR; gamescope's inverse tone mapping didn't work nested in Hyprland
   (gamescope 3.17, Hyprland 0.56) — use the SDR brightness slider instead.
