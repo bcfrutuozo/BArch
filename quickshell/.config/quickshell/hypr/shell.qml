@@ -74,6 +74,8 @@ ShellRoot {
         implicitHeight: 820
         minimumSize: Qt.size(980, 600)
         color: Ui.base
+        // closing the window ends the app (the next `barch hypr` starts a fresh one)
+        onVisibleChanged: if (!visible) Qt.quit()
 
         RowLayout {
             anchors.fill: parent
