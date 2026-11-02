@@ -258,6 +258,7 @@ Scope {
         { title: "Auto Theme", glyph: 0xF050E, keywords: "schedule appearance light dark mode", cmd: ["qs", "ipc", "call", "theme", "mode", "auto"] },
         { title: "Palette Editor", alias: "palette", sub: "New palettes, from an image, live preview", glyph: 0xF03D8, keywords: "theme colors palette editor create", cmd: ["barch", "theme", "edit"] },
         { title: "Hyprland Settings", alias: "hypr", sub: "Every option, monitors, binds, rules, animations", glyph: 0xF1B9A, keywords: "hyprland settings config options monitors binds rules animations", cmd: ["barch", "hypr"] },
+        { title: "System Center", alias: "center", sub: "Services, timers, failures, agent reports, snapshots, journal", glyph: 0xF0493, keywords: "system center services systemd timers failures agent reports snapshots journal health", cmd: ["barch", "center"] },
         // ferramentas de tela (launcher/tools.sh): digite o atalho (ocr, pick, qr)
         { title: "Copy Text from Screen", alias: "ocr",  sub: "Select an area · OCR",          glyph: 0xF113A, keywords: "ocr text extract recognize read", cmd: ["bash", Quickshell.shellDir + "/launcher/tools.sh", "ocr"] },
         { title: "Pick Color",            alias: "pick", sub: "Click any pixel · copies hex",  glyph: 0xF020A, keywords: "color picker eyedropper hex colour", cmd: ["bash", Quickshell.shellDir + "/launcher/tools.sh", "pick"] },
