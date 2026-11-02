@@ -568,8 +568,10 @@ of the palette in use (see Wallpapers). Generated files inside the repo are git-
 
 ## Fresh install
 
-1. Install Arch with the layout described in the project notes (LUKS2 + btrfs subvolumes, Limine,
-   UKI, Secure Boot with sbctl).
+1. Install Arch with the layout of this machine: **[INSTALL.md](INSTALL.md)**, step by step (GPT +
+   LUKS2, btrfs subvolumes, snapper, the systemd initramfs, UKIs with Limine, Secure Boot with
+   sbctl, the TPM unlock), including which files of `system/` must not be applied to other
+   hardware. Its steps 10–14 overlap with the ones below.
 2. Then:
 
 ```bash

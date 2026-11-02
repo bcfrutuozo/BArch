@@ -11,6 +11,8 @@
 644 /etc/hostname
 644 /etc/initcpio/acpi_override/apic.aml
 644 /etc/kernel/cmdline
+644 /etc/limine-entry-tool.conf
+644 /etc/limine-snapper-sync.conf
 644 /etc/locale.conf
 644 /etc/locale.gen
 644 /etc/makepkg.conf
@@ -21,7 +23,6 @@
 644 /etc/nftables.conf
 644 /etc/pacman.conf
 644 /etc/pacman.d/hooks/00-archnews.hook
-644 /etc/pacman.d/hooks/05-uki-prev.hook
 644 /etc/pacman.d/hooks/90-limine-copy.hook
 644 /etc/pacman.d/hooks/90-mkinitcpio-install.hook
 644 /etc/pam.d/barch-lock
