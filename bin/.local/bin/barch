@@ -88,6 +88,28 @@ Desktop (through the bar):
                               the VPN alone: PIA over WireGuard (what Anonymous Mode uses)
   vpn regions                 regions, fastest first; vpn region <id>|auto picks the one to use
   health [--refresh]          system health summary (.pacnew, failed services, TPM, cleanup)
+  voice on|off|toggle|status  always-on voice control (quickshell/voice, barch-voice.service):
+                              say "barch" and the command, in Portuguese
+  voice pause|resume          keep the service but ignore the microphone / listen again
+  voice say <text>            speak TEXT (piper)
+  voice match <text>          which command TEXT would run, running nothing (to test commands.json)
+  voice test <text>           run TEXT as if it had been heard (no wake word; it does act)
+  voice reload                reload commands.json and the app/project lists
+  voice log                   the daemon's journal
+  voice setup [--install]     what is missing (whisper.cpp, model, piper, voice); --install asks paru
+
+Automation (agent/rules.json + agent/events.py, barch-events.service):
+  rules list                  the rules, enabled or not, when each fired last
+  rules test <event> [k=v..]  which rules an event would hit (nothing runs); rules test metric <name> <value>
+  rules fire <id> [k=v..]     run a rule's actions now (what the "Run" button of an ask rule does)
+  rules enable|disable <id>   flip a rule in rules.json (the daemon reloads it)
+  events status|log [n] [--filter text] [--since 24h]
+                              the daemon, the last events (windows, monitors, VPN, network, lock,
+                              failures, boots, Claude cost, rules fired)
+  metrics list                every metric with its last value
+  metrics series <metric> [--since 24h|7d|30d] [--points N]
+                              a time series (raw for a week, hourly averages for a year)
+  metrics summary             boot time, failures per week, Claude cost, temperatures now
 
 Agent:
   agent list                  scheduled tasks, last result and next run
@@ -133,7 +155,7 @@ Finance:
   help                        this text
 
   --json   machine-readable output (desktop commands, agent list/run, aur review, snapshot list,
-           replay share)
+           replay share, rules/events/metrics)
 
 Exit codes: 0 ok, 1 refused or failed, 2 usage error, 3 the bar is not reachable,
 4 (aur review) something needs a look before updating.
@@ -729,6 +751,144 @@ cmd_failure() {
   echo "$log"
 }
 
+# ---------------------------------------------------------------- voice
+
+# voice: the daemon is voice.py (quickshell/voice); on/off/toggle go through systemd, pause/
+# resume/say/test/reload through its socket, match runs offline, status merges both.
+cmd_voice() {
+  local py=$REPO/quickshell/.config/quickshell/voice/voice.py unit=barch-voice.service sub=${1:-status}
+  (($#)) && shift
+  need python3
+  case $sub in
+    on) systemctl --user start "$unit" || die 1 "could not start $unit"; cmd_voice status ;;
+    off) systemctl --user stop "$unit" || die 1 "could not stop $unit"; cmd_voice status ;;
+    toggle)
+      if systemctl --user is-active --quiet "$unit"; then cmd_voice off; else cmd_voice on; fi ;;
+    status)
+      local active out
+      active=$(systemctl --user is-active "$unit" 2>/dev/null)
+      out=$(python3 -I "$py" status 2>/dev/null) || out='{"ok":false}'
+      out=$(jq -c --arg a "$active" '. + {service: $a}' <<<"$out")
+      show "$out" 'if .service != "active" then "voice: off (service \(.service))"
+                   else "voice: \(.state)" + (if .paused then " (paused)" else "" end)
+                     + (if .whisper then "" else " — whisper.cpp or model missing" end)
+                     + (if .tts then "" else " — piper missing (no spoken answers)" end)
+                     + (if .heard != "" then "\nheard: \(.heard)" else "" end)
+                     + (if .said != "" then "\nsaid: \(.said)" else "" end)
+                     + (if .error != "" then "\nerror: \(.error)" else "" end) end'
+      [[ $active == active ]] ;;
+    pause | resume | reload)
+      local out
+      out=$(python3 -I "$py" "$sub") || die 1 "$(jq -r '.error // "failed"' <<<"$out" 2>/dev/null)"
+      show "$out" '"voice: \(if .paused == true then "paused" elif .paused == false then "listening" else "reloaded (\(.intents) commands)" end)"' ;;
+    say)
+      [[ -n ${1:-} ]] || usage_error "voice say <text>"
+      local out
+      out=$(python3 -I "$py" say "$*") || die 1 "$(jq -r '.error // "failed"' <<<"$out" 2>/dev/null)"
+      show "$out" '"said: \(.said)"' ;;
+    test)
+      [[ -n ${1:-} ]] || usage_error "voice test <text>"
+      local out rc=0
+      out=$(python3 -I "$py" run "$*") || rc=$?
+      ((rc == 3)) && die 3 "$(jq -r .error <<<"$out")"
+      show "$out" 'if .locked then "ignored: the session is locked" else "\(if .matched then .intent else "no command (Claude)" end)" + (if .say != "" then ": \(.say)" else "" end) end'
+      return "$rc" ;;
+    match)
+      [[ -n ${1:-} ]] || usage_error "voice match <text>"
+      local out rc=0
+      out=$(python3 -I "$py" match "$*" 2>/dev/null) || rc=$?
+      show "$out" 'if .matched then "\(.intent) (\(.kind))" + (if .run then ": \(.run | join(" "))" elif .dispatch then ": hyprctl dispatch \(.dispatch)" elif .app then ": app \(.app)" elif .project then ": \(.with // "terminal") in \(.project)" elif .palette then ": palette \(.palette)" elif .scene then ": scene \(.scene)" elif .region then ": \(.what) region \(.region)" elif .window then ": \(.action) window \(.window)" elif .repeats then ": \(.how) → \(.repeats)" else "" end) + (if .say != "" then "  → \"\(.say)\"" else "" end) else "no command: " + (if .intent == "claude" then "would ask Claude" else "would say it did not understand" end) + " (\(.normalized))" end'
+      return "$rc" ;;
+    log) journalctl --user -u "$unit" -n "${1:-60}" --no-pager -o short ;;
+    setup) bash "$REPO/quickshell/.config/quickshell/voice/setup.sh" "$@" ;;
+    *) usage_error "voice on|off|toggle|status|pause|resume|say|match|test|reload|log|setup" ;;
+  esac
+}
+
+# ---------------------------------------------------------------- automation (events.py)
+
+# cost_log <source> <usd> [note]: one line per Claude call, read by barch-events (metrics summary)
+cost_log() { [[ -n ${2:-} ]] && echo "$(date +%s) $1 $2 ${3:-}" >>"$STATE/claude-cost.log"; return 0; }
+
+events_py() { need python3; python3 -I "$REPO/agent/events.py" "$@"; }
+
+cmd_rules() {
+  local sub=${1:-list} out rc=0
+  (($#)) && shift
+  case $sub in
+    list)
+      out=$(events_py rules) || rc=$?
+      show "$out" '.rules[] | "\(if .enabled then "●" else "○" end) \(.id | . + " " * (18 - length))  \(.description)"
+        + "\n     when: " + (.when | if .event then "event \(.event)" + ([to_entries[] | select(.key != "event") | " \(.key)~\(.value)"] | join(""))
+                              else "metric \(.metric) " + (if .above != null then "> \(.above)" else "< \(.below)" end) end)
+        + (if (.do | length) > 0 then "\n     do: " + (.do | join("; ")) else "" end)
+        + (if .notify != "" then "\n     notify: \(.notify)" else "" end)
+        + "\n     last: " + (if .last then (.last | strflocaltime("%Y-%m-%d %H:%M")) + (if .last_ok == false then " (failed)" else "" end) else "never" end)
+        + "  ·  fired \(.fired_7d)× in 7 days  ·  cooldown \(.cooldown)"' ;;
+    test)
+      [[ -n ${1:-} ]] || usage_error "rules test <event> [key=value...] | rules test metric <name> <value>"
+      out=$(events_py test "$@") || rc=$?
+      show "$out" 'if .rules | length > 0 then "would fire: \(.rules | join(", "))" else "no rule matches" end' ;;
+    fire)
+      [[ -n ${1:-} ]] || usage_error "rules fire <id> [key=value...]"
+      out=$(events_py fire "$@") || rc=$?
+      show "$out" 'if .error then "error: \(.error)" else "\(.rule): " + (if .ok then "ok" else "failed: \(.failed | join("; "))" end) + (if (.ran | length) > 0 then "\n  " + (.ran | join("\n  ")) else "" end) end' ;;
+    enable | disable)
+      [[ -n ${1:-} ]] || usage_error "rules $sub <id>"
+      out=$(events_py "$sub" "$1") || rc=$?
+      show "$out" 'if .ok then "\(.id): \(if .enabled then "enabled" else "disabled" end)" else "error: \(.error)" end' ;;
+    edit) ${EDITOR:-nvim} "$REPO/agent/rules.json" ;;
+    *) usage_error "rules list|test|fire|enable|disable|edit" ;;
+  esac
+  return "$rc"
+}
+
+cmd_events() {
+  local sub=${1:-status} out rc=0 unit=barch-events.service
+  (($#)) && shift
+  case $sub in
+    status)
+      out=$(events_py status) || rc=$?
+      show "$out" '"events: service \(.service), \(.rules) rules (\(.enabled) enabled), \(.metrics) metrics, last sample "
+        + (if .last_sample > 0 then (.last_sample | strflocaltime("%H:%M:%S")) else "never" end)
+        + ", \(.events_24h) events in 24 h, db \(.db_bytes / 1048576 | floor) MB"' ;;
+    log)
+      out=$(events_py events "$@") || rc=$?
+      show "$out" '.events[] | "\(.ts | strflocaltime("%m-%d %H:%M:%S"))  \(.event | . + " " * (18 - length))  "
+        + (.data | to_entries | map(select(.value != "" and .value != null) | "\(.key)=\(.value | tostring | .[0:60])") | join("  "))' ;;
+    on) systemctl --user start "$unit" || die 1 "could not start $unit"; cmd_events status ;;
+    off) systemctl --user stop "$unit" || die 1 "could not stop $unit"; cmd_events status ;;
+    reload) systemctl --user reload "$unit" || die 1 "could not reload $unit"; cmd_events status ;;
+    journal) journalctl --user -u "$unit" -n "${1:-60}" --no-pager -o short ;;
+    *) usage_error "events status|log|on|off|reload|journal" ;;
+  esac
+  return "$rc"
+}
+
+cmd_metrics() {
+  local sub=${1:-list} out rc=0
+  (($#)) && shift
+  case $sub in
+    list)
+      out=$(events_py metrics) || rc=$?
+      show "$out" '.metrics[] | "\(.metric | . + " " * (22 - length))  " + (if .value != null then (.value * 10 | round / 10 | tostring) else "-" end)' ;;
+    series)
+      [[ -n ${1:-} ]] || usage_error "metrics series <metric> [--since 24h] [--points N]"
+      out=$(events_py series "$@") || rc=$?
+      show "$out" '"\(.metric): \(.points | length) points since \(.since | strflocaltime("%Y-%m-%d %H:%M")), min \(.min) avg \(.avg) max \(.max) last \(.last)"' ;;
+    summary)
+      out=$(events_py summary) || rc=$?
+      show "$out" '"boot: " + (if .boot.seconds then "\(.boot.seconds)s (\(.boot.kernel)), average \(.boot.avg_seconds)s over \(.boot.count_90d) boots" else "unknown" end)
+        + "\nfailures: \(.failures.today) today, \(.failures.week) this week (\(.failures.last_week) last week), \(.failures.month) in 30 days"
+        + "\nclaude: US$ \(.claude.today) today, \(.claude.week) this week, \(.claude.month) in 30 days"
+        + "\nvpn: " + (if .vpn.connected then "connected, \(.vpn.latency_ms) ms" else "off" end) + ", \(.vpn.drops_7d) drops in 7 days"
+        + "\nnow: cpu \(.now["cpu.temp"]) °C \(.now["cpu.pct"] // 0 | floor)%, gpu \(.now["gpu.temp"]) °C \(.now["gpu.util"] // 0 | floor)%, ram \(.now["ram.pct"] // 0 | floor)%, disk \(.now["disk.root.pct"] // 0 | floor)%, ping \(.now["net.latency_ms"]) ms"
+        + "\nrules fired: \(.rules.fired_24h) in 24 h, \(.rules.fired_7d) in 7 days"' ;;
+    *) usage_error "metrics list|series|summary" ;;
+  esac
+  return "$rc"
+}
+
 # ---------------------------------------------------------------- agent
 
 # frontmatter field of a task file: task_field <file> <key>
@@ -845,6 +1005,7 @@ agent_run() {
     "$rundir/result.json" >"$meta"
   ln -sfn "$stamp.md" "$out/latest.md"
   ln -sfn "$stamp.json" "$out/latest.json"
+  cost_log "$task" "$(jq -r '.total_cost_usd // empty' "$rundir/result.json")" "$(jq -r '.structured_output.title // empty' "$rundir/result.json")"
 
   [[ -f $helper ]] && { bash "$helper" finish "$rundir" "$rundir/result.json" "$report" >>"$rundir/prepare.log" 2>&1 ||
     echo "$PROG: $task: finish step failed (see $rundir/prepare.log)" >&2; }
@@ -1203,6 +1364,10 @@ case $cmd in
   anon) cmd_anon "$@" ;;
   vpn) cmd_vpn "$@" ;;
   health) cmd_health "$@" ;;
+  rules) cmd_rules "$@" ;;
+  events) cmd_events "$@" ;;
+  metrics) cmd_metrics "$@" ;;
+  voice) cmd_voice "$@" ;;
   snapshot) cmd_snapshot "$@" ;;
   failure) cmd_failure "$@" ;;
   agent) cmd_agent "$@" ;;

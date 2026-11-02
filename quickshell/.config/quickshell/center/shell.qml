@@ -3,7 +3,7 @@
 // in one window (own Shell ID, like the palette editor and Hyprland Settings).
 //
 //   qs -p ~/.config/quickshell/center            barch center [page]
-//   BARCH_CENTER_PAGE=<page>                     overview | services | timers | failures | agent | snapshots | journal
+//   BARCH_CENTER_PAGE=<page>                     overview | services | timers | failures | agent | automation | history | snapshots | journal
 //   qs -p ~/.config/quickshell/center ipc call app open <page> | close
 //
 // Reads what systemctl, journalctl and `barch --json` give; actions are the same commands
@@ -25,6 +25,8 @@ ShellRoot {
         { id: "timers",    label: "Timers",    icon: "󰔛" },
         { id: "failures",  label: "Failures",  icon: "󰀦" },
         { id: "agent",     label: "Agent",     icon: "󰚩" },
+        { id: "automation", label: "Automation", icon: "󱐋" },
+        { id: "history",   label: "History",   icon: "󰄨" },
         { id: "snapshots", label: "Snapshots", icon: "󰁯" },
         { id: "journal",   label: "Journal",   icon: "󰌱" }
     ]
@@ -130,6 +132,8 @@ ShellRoot {
                             case "timers": return timersC
                             case "failures": return failuresC
                             case "agent": return agentC
+                            case "automation": return automationC
+                            case "history": return historyC
                             case "snapshots": return snapshotsC
                             case "journal": return journalC
                             default: return overviewC
@@ -143,6 +147,8 @@ ShellRoot {
                 Component { id: timersC; TimersPage {} }
                 Component { id: failuresC; FailuresPage {} }
                 Component { id: agentC; AgentPage {} }
+                Component { id: automationC; AutomationPage {} }
+                Component { id: historyC; HistoryPage {} }
                 Component { id: snapshotsC; SnapshotsPage {} }
                 Component { id: journalC; JournalPage {} }
 

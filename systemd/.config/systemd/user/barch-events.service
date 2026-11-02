@@ -1,0 +1,17 @@
+# The desktop's event bus and metrics history (agent/events.py): samples CPU/GPU/RAM/disks/network
+# into ~/.local/state/barch/metrics.db, turns Hyprland, VPN, network, AirPods, lock and failure
+# changes into events and runs the rules of agent/rules.json. `barch rules|events|metrics`.
+[Unit]
+Description=BArch events, metrics and rules (barch-events)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/python3 -I %h/BArch/agent/events.py
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=graphical-session.target

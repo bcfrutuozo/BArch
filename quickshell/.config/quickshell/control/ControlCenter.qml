@@ -21,6 +21,7 @@ import "../record"
 import "../vpn"
 import "../anon"
 import "../wallpaper"
+import "../voice"
 
 Item {
     id: root
@@ -731,6 +732,13 @@ Item {
                         onClicked: root.regionTile()
                     }
 
+                    Tile {
+                        icon: Voice.running && !Voice.paused ? root.glyph(0xF036C) : root.glyph(0xF036D)   // microphone / microphone_off
+                        label: "Voice"
+                        sublabel: !Voice.running ? "Off  ·  say \"barch\" when on" : Voice.label
+                        active: Voice.running && !Voice.paused && !Voice.degraded
+                        onClicked: Voice.toggleService()
+                    }
                     Tile {
                         icon: root.glyph(0xF0A6D)   // selection_drag
                         label: "Screenshot"

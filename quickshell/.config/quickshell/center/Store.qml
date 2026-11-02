@@ -27,6 +27,12 @@ Singleton {
     property var failures: []                               // [{ path, name, unit, stamp, time, size }]
     property var ignore: []                                 // agent/failure-ignore lines
     property string journal: ""
+    // barch-events: the metrics history, the rules and the event log (barch --json metrics|rules|events)
+    property var summary: ({})
+    property var metricList: []
+    property var rules: []
+    property var events: []
+    property string eventsService: ""
     property string status: ""
     property bool statusBad: false
     property bool ready: false
@@ -112,12 +118,28 @@ Singleton {
     function refreshJournal(args) {
         run(["journalctl", "--no-pager", "-o", "short-iso"].concat(args || ["-b", "-p", "warning", "-n", "400"]), (out, err) => journal = out || err)
     }
+    function refreshAutomation() {
+        run([barch, "--json", "events", "status"], out => eventsService = json(out, {}).service || "")
+        run([barch, "--json", "metrics", "summary"], out => summary = json(out, {}))
+        run([barch, "--json", "metrics", "list"], out => metricList = json(out, {}).metrics || [])
+        run([barch, "--json", "rules", "list"], out => rules = json(out, {}).rules || [])
+        run([barch, "--json", "events", "log", "80"], out => events = json(out, {}).events || [])
+    }
+    function series(metric, since, cb) {
+        run([barch, "--json", "metrics", "series", metric, "--since", since, "--points", "240"], out => cb(json(out, {})))
+    }
+    function ruleEnable(id, on) { run([barch, "--json", "rules", on ? "enable" : "disable", id], () => refreshAutomation()) }
+    function ruleFire(id) {
+        say("running " + id + "…")
+        run([barch, "--json", "rules", "fire", id], (out, err, code) => { const r = json(out, {}); say(id + ": " + (r.ok ? "done" : "failed"), !r.ok); refreshAutomation() })
+    }
+    function editPath(path) { Quickshell.execDetached(["sh", "-c", 'exec uwsm app -- foot -e "${EDITOR:-nvim}" "$1"', "sh", path]) }
     function refreshAll() {
-        refreshUnits(); refreshHealth(false); refreshAgent(); refreshSnapshots(); refreshFailures()
+        refreshUnits(); refreshHealth(false); refreshAgent(); refreshSnapshots(); refreshFailures(); refreshAutomation()
         ready = true
     }
     Component.onCompleted: refreshAll()
-    Timer { interval: 30000; running: true; repeat: true; onTriggered: { store.refreshUnits(); store.refreshFailures() } }
+    Timer { interval: 30000; running: true; repeat: true; onTriggered: { store.refreshUnits(); store.refreshFailures(); store.refreshAutomation() } }
 
     // ---------- failure-ignore (a file of the repo) ----------
     FileView {

@@ -27,12 +27,12 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | Folder | Goes to | What it is |
 |---|---|---|
 | `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, `scripts/lock.sh` (locks; starts and supervises the resident lock process); `settings.json` is what the Hyprland Settings app saved (below) |
-| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/` and `mixer/` the other apps, `ui/` the controls they all share (linked into each) |
+| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/` and `mixer/` the other apps, `voice/` the voice control daemon, `ui/` the controls they all share (linked into each) |
 | `foot/` | `~/.config/foot` | Terminal |
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
 | `mpv/` | `~/.config/mpv` | Video player (HDR, NVDEC) |
 | `uwsm/`, `environment/` | `~/.config/uwsm`, `~/.config/environment.d` | Session environment (Qt theme, cursor) |
-| `systemd/` | `~/.config/systemd/user` | User services (cliphist, replay, NAS mount) |
+| `systemd/` | `~/.config/systemd/user` | User services (cliphist, replay, NAS mount, voice control) |
 | `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `apps-theme`, `papirus-accent`, `nas-mount`, `keyring-wait`, `gsr-replay-saved` (the notification after a replay or recording is saved) |
 | `claude/` | `~/.claude/settings.json` | Claude Code settings: the hooks that take the safety snapshots (see Agent) |
 | `games/` | `~/Games/battle.net/run.sh`, `~/.config/gamemode.ini`, `~/.local/share/applications/steam.desktop` | Battle.net launcher (umu + Proton-GE), gamemode rules, Steam launcher without `GDK_SCALE` (Steam would scale twice) |
@@ -40,7 +40,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `audio/` | `~/.config/pipewire`, `~/.config/wireplumber` | PipeWire rates and resampler, onboard output at 32-bit/192 kHz, Bluetooth output-only at AAC (below), fifine mic as input only |
 | `backup/` | — | `barch backup`: what restic saves to the NAS (`include.txt`, `exclude.txt`), see Backup |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
-| `agent/` | — | Scheduled agent tasks (`tasks/`), the failure ignore list and the upstream watch list; used by `barch` |
+| `agent/` | — | Scheduled agent tasks (`tasks/`), the reactive rules (`rules.json`) and their daemon (`events.py`), the failure ignore list and the upstream watch list; used by `barch` |
 | `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, sixteen scenes in the colors of each palette), Limine theme (`limine-theme.py`) |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
 | `packages/` | — | Explicitly installed packages (`pacman.txt`, `aur.txt`, `aur-ignore.txt`) |
@@ -164,7 +164,11 @@ The main pieces:
   **Failures** (the logs `barch failure` saved, grouped by unit: view, Investigate with Claude,
   delete; the ignore list `agent/failure-ignore` editable), **Agent** (ask Claude, each task with
   its timer, last result, Run now, the report in a side panel, Continue the session, history of
-  reports), **Snapshots** (the pre/post pairs of the Claude sessions: Status and Undo open a
+  reports), **Automation** (the rules of `agent/rules.json` with a switch each, Run now, when
+  each fired last, and the event log of `barch-events`, see Automation below), **History**
+  (the machine over time from `metrics.db`: boot time, failures per week, what Claude cost,
+  temperatures, load, GPU power, network latency, disk, any metric, in 1 h to 30 d ranges),
+  **Snapshots** (the pre/post pairs of the Claude sessions: Status and Undo open a
   terminal with the `sudo snapper` command, copy it, resume that session) and **Journal** (this
   boot, by priority, unit and regex). Nothing is reimplemented: it runs `systemctl`, `journalctl`
   and `barch --json …` and refreshes every 30 s.
@@ -191,6 +195,13 @@ The main pieces:
   **Settings**: the graph rate and a forced sample rate or quantum (`pw-metadata` settings,
   live, until PipeWire restarts; the permanent values stay in `audio/`), the Bluetooth codec and
   profile of a connected headset, pavucontrol / qpwgraph if installed.
+- **Voice control** (`quickshell/voice/`, `barch voice`, tile **Voice** in the Control Center): the
+  microphone is always open, like in a car, and nothing happens until a sentence starts with
+  "barch" (see Voice below). A microphone shows in the bar while the service runs: dim while it
+  only listens, pulsing in the accent color after "barch" alone (it chimes and waits for the
+  sentence), steady while it understands or asks Claude, green while it speaks, red when
+  whisper.cpp or the microphone is missing; what it understood shows next to it for a few
+  seconds. Click pauses and resumes the listening, right-click shows the last sentence and answer.
 - **Polkit agent** (`Quickshell.Services.Polkit`, no hyprpolkitagent): the password dialog apps get
   when they ask for privileges (`pkexec`, GNOME Disks, …), in the bar's theme.
 - **Own notification server** with history, DND, sounds and app actions; privacy indicator
@@ -221,7 +232,9 @@ The main pieces:
   instead of asking for the keyring password at every login.
   To look at it without locking: `lock/preview.sh` (a normal window with its own Shell ID).
 - **System health:** `.pacnew` files, failed services, TPM fallback warning, the daily backup (failed
-  or more than two days old) and a monthly cleanup.
+  or more than two days old) and a monthly cleanup. **Automation** (`barch-events`, see below):
+  metrics history, the event log and the rules of `agent/rules.json` (disk full, VPN dropped,
+  game opened, monitor plugged…), shown in the System Center.
 - **Bluetooth audio** (`audio/`): headsets are output only, AAC first (then SBC-XQ, SBC); the
   headset profile (HFP/HSP, 16 kHz mono) is out of the roles and the automatic switch to it is off,
   so an app opening the microphone (Discord, a call) never degrades the music: the fifine is the
@@ -259,7 +272,13 @@ barch nightlight on|off|status     barch dnd on|off|status
 barch anon on [region]|off|toggle|status   # Anonymous Mode: VPN + kill switch + Mullvad Browser as default + hostname out of DHCP
 barch vpn on [region]|off|toggle|status|regions|region <id>|auto
 barch health [--refresh]           # .pacnew, failed services, TPM, backup, cleanup
+barch voice on|off|toggle|status   # always-on voice control (see Voice); pause|resume keep the service
+barch voice match "abre o terminal"  # which command a sentence hits, running nothing · test "..." runs it
+barch voice say "texto"            # speak · reload (commands.json) · log · setup [--install]
 barch backup init|run|status|list|restore [SNAPSHOT] <path>...   # restic to the NAS (see Backup)
+barch rules list|test <event> [k=v..]|fire <id>|enable|disable <id>   # agent/rules.json (see Automation)
+barch events status|log [n] [--filter x] [--since 7d]   # the daemon and what happened (windows, VPN, boots, costs…)
+barch metrics list|series <metric> [--since 24h]|summary   # metrics.db: temperatures, load, boots, failures, Claude cost
 barch agent ask "why is X slow?"   # Claude in a terminal in ~/BArch (the launcher's "a ")
 barch agent list|run|report|continue <task>   # scheduled tasks (see Agent)
 barch failure <unit> [--system]    # what OnFailure= calls: log + notification (see Agent)
@@ -272,7 +291,7 @@ barch replay share [file] [--from 12 --to 40]
 ```
 
 Every command takes `--json`. Exit codes: `0` ok, `1` the bar refused, `2` usage, `3` bar not reachable.
-On the QML side these are the `IpcHandler`s `control`, `theme`, `wallpaper`, `notifs`, `health`, `vpn` and `anon` (`qs ipc show`).
+On the QML side these are the `IpcHandler`s `control`, `theme`, `wallpaper`, `notifs`, `health`, `vpn`, `anon` and `voice` (`qs ipc show`).
 
 ## Agent
 
@@ -320,6 +339,49 @@ barch aur review                       # what Update All shows before paru -Syu
 ```
 
 Each run uses Claude like a conversation would (a task costs roughly what a short session does).
+
+## Automation
+
+`barch-events.service` (`agent/events.py`) is the desktop's event bus, its memory and its reflexes,
+without any AI:
+
+- **Metrics**, every 30 s into `~/.local/state/barch/metrics.db` (SQLite; raw samples for a week,
+  hourly averages for a year): CPU and GPU temperature, load and power, every hwmon sensor
+  (`temp.<name>`), RAM and zram, the disks (`disk.root.pct`, `disk.home.pct`, free GB), ping and
+  VPN latency, whether the VPN is up, AirPods battery per side, the health check's issue count,
+  and the boot time of every boot (`systemd-analyze`, once per boot).
+- **Events**, stored and matched as they happen: Hyprland's socket2 (`window.open`,
+  `window.close` with class and title, `window.fullscreen`, `window.urgent`, `monitor.added`,
+  `monitor.removed`), `vpn.up`/`vpn.down`, `anon.on`/`anon.off`, `net.up`/`net.down` (default
+  route), `pods.connected`/`pods.disconnected`, `session.locked`/`unlocked`, `failure` (a new
+  log from `barch failure`), `boot`, `claude.cost` (every agent task run and voice fallback writes
+  a line to `~/.local/state/barch/claude-cost.log`), `startup`.
+- **Rules** in `agent/rules.json`: `when` is an event name plus regexes on its fields
+  (`{"event": "window.open", "class": "^steam_app_"}`) or a metric with `above`/`below` and a
+  `clear` value for hysteresis (`{"metric": "disk.root.pct", "above": 90, "clear": 85}` fires once
+  when crossed and re-arms below 85); `do` is a list of shell commands with `{field}` placeholders
+  (shell-quoted; the fields also come as `EVENT_*` variables), `notify` a notification, `say` a
+  sentence through `barch voice say`, `ask` a notification with a **Run** button instead of acting,
+  `cooldown` how long before it may fire again, `critical` and `enabled`. The daemon reloads the
+  file when it changes. It ships with: disk above 90 %, CPU above 90 °C, GPU above 85 °C, VPN
+  dropped (spoken), network down and back, AirPods below 20 % per side, monitor connected or
+  removed, a boot over 60 s and a Claude call over a dollar; two disabled ones keep caffeine on
+  while a game window is open (Bruno wants notifications while playing, so no DND there).
+
+```bash
+barch rules list                              # every rule, enabled or not, when it fired last
+barch rules test window.open class=steam_app_1 # which rules would fire (nothing runs)
+barch rules test metric disk.root.pct 95
+barch rules fire game-opened                  # run a rule's actions now (the Run button)
+barch rules disable monitor-added             # flips "enabled" in rules.json
+barch events log 30 --filter vpn              # what happened; --since 7d
+barch metrics summary                         # boot, failures per week, Claude cost, temperatures now
+barch metrics series gpu.temp --since 7d
+```
+
+The System Center shows the same: **Automation** (rules with a switch each, Run, the event log)
+and **History** (the charts). Rules are plain commands, so a rule can also run a scheduled agent
+task (`barch agent run …`) or open Claude on something (`barch agent ask "…"`).
 
 ## Finance
 
@@ -371,6 +433,77 @@ and `luks-header-<device>.img` into `~/.local/state/barch/backup/root/` (owned b
 `barch backup restore latest .local/state/barch/backup/root` and untar as root.
 
 Not covered: the VM disk images.
+
+## Voice
+
+`barch-voice.service` (`quickshell/voice/voice.py`) keeps the fifine open through PipeWire (its own
+node, `barch-voice`, which the privacy indicator ignores) and cuts the audio into sentences with an
+energy VAD. Everything runs on this machine: the first two seconds of every sentence go through
+[whisper.cpp](https://github.com/ggml-org/whisper.cpp) (`whisper-server`, kept warm, on the GPU
+through `ggml-cuda`) only to see whether it starts with **"barch"**; everything else in the room is
+dropped right there. A sentence that does start with it is transcribed whole and goes through
+`commands.json`, a table of intents in Portuguese (regexes over the sentence normalized to lower
+case without accents, fillers like "por favor" removed) that reach `barch`, `hyprctl dispatch`,
+`uwsm app`, `wpctl`, `playerctl` and the bar's IPC without any AI: themes and palettes, wallpapers,
+HDR and SDR brightness, side monitor, caffeine, night light, Do Not Disturb, Anonymous Mode and VPN
+(with the region: "entra no modo anônimo na alemanha"), windows (close, fullscreen, float, minimize,
+pin, swap, focus), workspaces (go, move, next, scratchpad), volume and media, apps ("abre o spotify",
+by the name in its `.desktop`, plus the aliases in `app_aliases`: navegador, terminal, arquivos,
+mixer, pacotes…), projects ("abre o claude no fragmenta" opens a terminal in `~/Source/Fragmenta`
+running `claude`; also a plain terminal, Neovim or the folder of any repo under `~/Source`,
+`~/Projects` and `~/BArch`), the bar (launcher, clipboard, notes, shortcuts, overview), lock, suspend,
+reboot and shutdown (the last three ask "Confirma?" and wait for a "sim"), the time, the date,
+the agenda, updates, disk, what is playing, reminders ("me lembra em dez minutos de tirar o bolo"
+through `systemd-run`), and "para de escutar" (pause). "barch" alone chimes and waits up to eight
+seconds for the sentence, as in a car.
+
+What the table does not know goes to **Claude** (`claude -p`, `dontAsk`, the tools limited to `barch`,
+`hyprctl`, `uwsm app`, `qs ipc`, `wpctl`, `playerctl`, `foot`, `xdg-open`, `systemctl --user` and
+reading; `voice/fallback.md` is the prompt, `claude_model` in `config.json` the model, Sonnet by
+default), which acts and answers with one spoken sentence; "pergunta ao claude …" forces it. Those
+sentences are logged in `~/.local/state/barch/voice/unmatched.log`, which is where new intents come
+from. It keeps a short memory, so it works like a conversation: after every answer the microphone
+stays open for a few seconds (`followup_s`, 8 by default; the bar's mic pulses slowly) and the next
+sentence needs no "barch", but in that window only sentences the table knows are acted on, so talk
+in the room is dropped instead of reaching Claude (a follow-up to a Claude answer does reach him,
+with the previous exchanges as context: "como está o tempo" … "e amanhã?"). "Ele", "ela", "essa
+janela", "isso" are the window it opened or acted on last ("abre o spotify" … "coloca ele no
+workspace dois" … "fecha ele"; the window of an app just launched is found by watching for the
+new client), and windows can be named ("fecha o spotify", "volta pro brave", "cadê o terminal":
+class, alias or a word of the title). "Mais", "menos", "de novo" repeat the last command a step
+further or in the other direction (volume, SDR brightness, tracks, workspaces: `adjust`,
+`inverse` and `direction` in `commands.json`); the same answer twice in a row becomes a chime. When
+the fallback is about to do something he may regret (close or kill something, suspend, leave
+Anonymous Mode, change Hyprland options, delete files) Claude does not act: it answers with
+`confirm`, the daemon says it with "Confirma?" and only a "sim" in the follow-up window sends the
+request back, confirmed. Answers are spoken with [Piper](https://github.com/OHF-Voice/piper1-gpl) (`pt_BR-faber-medium`,
+downloaded once into `~/.local/share/piper`); commands that need no answer only get a short chime
+(`confirm_sound` in `config.json`), the ones that do (anonymous mode, VPN, the time, errors) a
+sentence. While the session is locked every sentence is ignored. Nothing is done while the daemon
+itself speaks, so it does not hear itself.
+
+```bash
+barch voice setup --install        # whisper-cpp, ggml-cuda, the model (AUR), piper-tts (AUR), the pt_BR voice
+barch voice match "liga o hdr"     # hdr (exec): barch hdr on        — tests commands.json, runs nothing
+barch voice test "que horas são"   # runs it for real, as if heard (no "barch" needed)
+barch voice say "Pronto."          # the voice
+barch voice status · log · pause · resume · reload
+BARCH_VOICE_DEBUG=1 python3 quickshell/.config/quickshell/voice/voice.py   # in a terminal: every utterance and what whisper heard
+```
+
+Packages: `whisper-cpp` and `ggml-cuda` (extra), `whisper.cpp-model-large-v3-turbo-q5_0` and
+`piper-tts` (AUR); another ggml model works with `whisper_model` in `config.json`. Thresholds of the
+VAD (`vad_min_rms`, `vad_floor_mult`, `vad_end_ms`), the wake variants whisper tends to write
+("bartch", "bark", "barque"…), the microphone (`mic_target`, empty = default source) and the Claude
+fallback (`claude: false` turns it off) are in `config.json`. `whisper_prompt` must stay a bare
+"Barch.": whisper writes the prompt back word for word when it hears only noise, so a prompt
+with example commands in it runs them (that is how a keyboard click once closed a window); what
+it writes to silence ("Obrigado", the prompt, subtitle credits) is dropped before matching. A new
+command is an entry in `commands.json`: `patterns` (what is said, normalized), a `kind` (`exec`, `spawn`, `hypr`, `app`,
+`project`, `palette`, `scene`, `region`, `confirm`, `say`, `remind`, `claude`…) and what to run, with
+`{group}` placeholders from the pattern's named groups (`n_` prefix: a number, in words or digits);
+`barch voice reload` picks it up. The state the bar shows is `~/.local/state/barch/voice/state.json`;
+every sentence handled is appended to `history.log` there.
 
 ## Theme
 

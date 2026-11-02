@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # O que está usando microfone, câmera e tela agora (usado pelo PrivacyWidget), em JSON:
 #   {"mic":["Firefox"],"cam":["zoom"],"screen":["Screen"]}
-# - microfone: streams de captura de áudio ativos no PipeWire (ignora medidores de volume
-#   e capturas do som do sistema, que não são o microfone);
+# - microfone: streams de captura de áudio ativos no PipeWire (ignora medidores de volume,
+#   capturas do som do sistema, que não são o microfone, e a escuta do barch-voice, que tem o
+#   próprio indicador na barra);
 # - câmera: processos com /dev/video* aberto (navegadores e apps que não passam pelo PipeWire)
 #   e câmeras do PipeWire em uso;
 # - tela: compartilhamentos ativos pelo portal do Hyprland (xdg-desktop-portal-hyprland).
 # Depende de: pipewire (pw-dump), jq, psmisc (fuser).
 
-IGNORE='pavucontrol|PulseAudio Volume Control|cava|easyeffects|quickshell|wireplumber'
+IGNORE='pavucontrol|PulseAudio Volume Control|cava|easyeffects|quickshell|wireplumber|barch-voice'
 
 pw=$(timeout 3 pw-dump 2>/dev/null || echo '[]')
 

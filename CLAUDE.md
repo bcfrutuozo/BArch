@@ -28,7 +28,7 @@ and commit messages stay in English, like the rest of the repo.
 Prefer `barch` (`bin/.local/bin/barch`, see `barch help`) over editing state files, calling
 `hyprctl`/`gsettings` or `notify-send` whenever a subcommand exists: notifications, theme, HDR and
 SDR brightness, side monitor, caffeine, night light, Do Not Disturb, system health, agent tasks,
-AUR review, safety snapshots. Use `--json` to
+AUR review, safety snapshots, voice control (`barch voice`). Use `--json` to
 read state and check the exit code (`3` = the bar is not running). A new bar feature that scripts
 should reach gets an `IpcHandler` function answering JSON (`{"ok": ...}`) plus a `barch` subcommand,
 reusing the widget's own functions.
@@ -47,6 +47,11 @@ reusing the widget's own functions.
   `systemd/.config/systemd/user/barch-agent@<task>.timer` listed in `packages/user-services.txt`.
   Tasks are read-only (`dontAsk` + an allow list): gather facts in the `.sh`, not by widening
   `tools`. Reports: `barch agent report <task>`.
+- **Reactive rules and metrics:** `agent/events.py` (`barch-events.service`) samples the machine
+  into `~/.local/state/barch/metrics.db`, turns Hyprland/VPN/network/AirPods/lock/failure changes
+  into events and runs `agent/rules.json` (`barch rules|events|metrics`, README "Automation").
+  A new automatic reaction is a rule there, not a new timer or script; a new source of events or
+  metrics is a sampler in `events.py` (and its name in the `_doc` of `rules.json`).
 
 ## How the repo works
 
@@ -74,6 +79,10 @@ reusing the widget's own functions.
   with `readlink -f` (`Quickshell.shellDir/../../../..` only works physically, the shell dir is a
   symlink). `hypridle.conf` and `hyprsunset.conf` are edited by the Hyprland app's Idle and Night
   light pages (hyprlang parser in `hypr/hypr.js`, comments kept).
+- **Voice control** (`quickshell/voice/`): `voice.py` is the daemon, `commands.json` the intents in
+  Portuguese (regex on normalized text: lower case, no accents). Test a sentence with
+  `barch voice match "..."` (prints what would run, runs nothing); `barch voice test "..."` runs it
+  for real on the live desktop, so never use it on a list of examples.
 - **Theme:** `quickshell/.config/quickshell/theme/palettes.json` holds the palettes (ten tones
   each) and `theme/Theme.qml` derives everything else from them. Change colors there (or with
   `barch theme edit`), never in the generated files (they are git-ignored and get overwritten).
