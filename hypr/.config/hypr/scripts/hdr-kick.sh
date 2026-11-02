@@ -19,15 +19,36 @@
 # given up, the AW vanished from `hyprctl monitors` and the empty rate read as success
 # (2026-11-02). So the runs are serialized, a call within 30 s of the last one's start is
 # dropped, and a monitor missing after the reconnect counts as a failure.
+#
+# Suspend: restoring the AW's 240 Hz link at resume fails (EINVAL on the restore, no 10-bit
+# buffer, 60 Hz) and even a reconnect left it black until the monitor replugged itself
+# (2026-11-02 14:31). So `sleep` (hypridle before_sleep_cmd) turns the output off before the
+# machine sleeps, and `resume` (after_sleep_cmd) waits until the GPU and the side monitor are
+# back and only then turns the AW on, as if it had been plugged in later: a fresh connect.
 MON="HDMI-A-2"
-METHOD="${1:-modeset}"   # modeset | dpms
+SIDE="HDMI-A-1"
+METHOD="${1:-modeset}"   # modeset | dpms | sleep | resume
 
 RUNDIR="${XDG_RUNTIME_DIR:-/tmp}"
+SLEPT="$RUNDIR/barch-hdr-kick.slept"   # the AW was turned off for a suspend
+
+if [ "$METHOD" = "sleep" ]; then
+  touch "$SLEPT"
+  hyprctl eval "hl.monitor({ output = '$MON', disabled = true })" >/dev/null
+  logger -t hdr-kick "$MON turned off for the suspend"
+  exit 0
+fi
+
 exec 9>"$RUNDIR/barch-hdr-kick.lock"
 flock 9
+if [ -f "$SLEPT" ] && [ "$METHOD" != "resume" ]; then
+  # the dpms listener's on-resume also fires after a suspend: the resume run owns the AW
+  logger -t hdr-kick "$MON is off for the suspend; leaving it to the resume run"
+  exit 0
+fi
 STAMP="$RUNDIR/barch-hdr-kick.last"
 now=$(date +%s)
-if [ -f "$STAMP" ] && [ $((now - $(cat "$STAMP" 2>/dev/null || echo 0))) -lt 30 ]; then
+if [ "$METHOD" != "resume" ] && [ -f "$STAMP" ] && [ $((now - $(cat "$STAMP" 2>/dev/null || echo 0))) -lt 30 ]; then
   logger -t hdr-kick "another kick ran less than 30 s ago; skipping"
   exit 0
 fi
@@ -98,16 +119,32 @@ wait_rate() {
   return 1
 }
 
-# espera o AW voltar (até ~10s)
-for _ in $(seq 20); do
-  hyprctl monitors | grep -A25 "Monitor $MON" | grep -q "dpmsStatus: 1" && break
-  sleep 0.5
-done
-sleep 2
+dpms_on() {  # $1 = output: present in `hyprctl monitors` with dpms on
+  hyprctl monitors | grep -A25 "Monitor $1" | grep -q "dpmsStatus: 1"
+}
+
+if [ "$METHOD" = "resume" ] && [ -f "$SLEPT" ]; then
+  # wait for the side monitor (the GPU and its outputs are back), then give it a moment
+  # more, so the AW is connected on a driver that has finished restoring: 8 s at most
+  for _ in $(seq 12); do dpms_on "$SIDE" && break; sleep 0.5; done
+  sleep 2
+  rm -f "$SLEPT"
+  drm_failed && give_up "before turning $MON on after the suspend"
+  logger -t hdr-kick "resumed; turning $MON on"
+  aw "" >/dev/null
+  want=$(refresh_wanted)
+  wait_rate "${want:-60}"
+else
+  # espera o AW voltar (até ~10s)
+  for _ in $(seq 20); do dpms_on "$MON" && break; sleep 0.5; done
+  sleep 2
+fi
 drm_failed && give_up "before the kick"
 want=$(refresh_wanted)
 
-if frl_failed && [ -n "$want" ]; then
+if [ "$METHOD" = "resume" ]; then
+  :   # just connected with its full config: no kick, only the check below
+elif frl_failed && [ -n "$want" ]; then
   # straight to the reconnect: the kick below would only be one more modeset on a dead link
   logger -t hdr-kick "HDMI FRL link training failed on wake; reconnecting $MON right away"
   reconnect "$want"
