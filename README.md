@@ -27,7 +27,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | Folder | Goes to | What it is |
 |---|---|---|
 | `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, `scripts/lock.sh` (locks; starts and supervises the resident lock process); `settings.json` is what the Hyprland Settings app saved (below) |
-| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `ui/` the controls both apps share (linked into each) |
+| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/` and `mixer/` the other apps, `ui/` the controls they all share (linked into each) |
 | `foot/` | `~/.config/foot` | Terminal |
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
 | `mpv/` | `~/.config/mpv` | Video player (HDR, NVDEC) |
@@ -142,7 +142,11 @@ The main pieces:
   the bezier curves drawn, new beziers and springs), **Rules** (window, layer and workspace: the
   files' ones read-only with their line, the app's ones editable as match + properties),
   **Devices** (`hl.device` per input device), **Startup** (commands at session start, environment,
-  gestures) and **Files** (the Lua files, config errors, the app's own file).
+  gestures), **Idle & lock** (`hypridle.conf`: lock, sleep and inhibit commands, the listeners
+  with their timeouts, presets for lock / screen off / suspend; edited in place, comments kept,
+  hypridle restarted), **Night light** (`hyprsunset.conf`: the profiles by time of day, no filter /
+  temperature / gamma, hyprsunset restarted) and **Files** (the Lua files, config errors, the
+  app's own file).
   The hand-written Lua is never edited: what you change goes to `hypr/.config/hypr/settings.json`
   (saved with the repo) and `conf/settings.lua`, required by `hyprland.lua`, applies it on top of
   the files, so a reload or a fresh install keeps it; a reset removes the entry and the files'
@@ -164,6 +168,29 @@ The main pieces:
   terminal with the `sudo snapper` command, copy it, resume that session) and **Journal** (this
   boot, by priority, unit and regex). Nothing is reimplemented: it runs `systemctl`, `journalctl`
   and `barch --json …` and refreshes every 30 s.
+- **Backup Browser** (`quickshell/backup/`, "Backup Browser" in the launcher, `barch backup browse`):
+  the restic repository on the NAS. Status of the last run (files, data added, snapshot, next
+  timer), every snapshot with its summary (size on demand), and **Browse & restore**: the files
+  of a snapshot as a tree listed on demand (`restic ls` per folder), a search (`restic find`),
+  tick files or folders and Restore puts them under `~/Restore/<snapshot>-<time>/` with their full
+  paths, never in place; Run backup now, check and unlock open a terminal. Same repository,
+  password file and cache as `barch backup`; it never deletes anything.
+- **Packages** (`quickshell/packages/`, "Packages" in the launcher, `barch packages`): what pacman
+  knows. **Installed**: explicit, AUR, orphans or everything, with description, size, install date,
+  details and file list on the right; remove (`pkexec pacman -Rns`, with the list of what would go
+  first; polkit asks the password), mark as explicit / dependency, install through paru in a
+  terminal. **Updates & lists**: pending updates (checkupdates and paru -Qua; Update All is the
+  bar's flow), `.pacnew` files (pacdiff in a terminal) and whether `packages/pacman.txt` and
+  `aur.txt` match what is explicitly installed, with a button that regenerates them (the
+  removal does it by itself). **History**: the pacman log, newest first, by action and name.
+- **Audio Mixer** (`quickshell/mixer/`, "Audio Mixer" in the launcher, `barch mixer`): PipeWire through
+  `Quickshell.Services.Pipewire`. **Devices**: outputs and inputs with volume, mute, a peak
+  meter, their format (`s32le 2ch 192000Hz`) and the default. **Apps**: every stream playing or
+  recording with its own volume and a combo that moves it to another device (`pactl
+  move-sink-input` with the object serial, which WirePlumber remembers for that app).
+  **Settings**: the graph rate and a forced sample rate or quantum (`pw-metadata` settings,
+  live, until PipeWire restarts; the permanent values stay in `audio/`), the Bluetooth codec and
+  profile of a connected headset, pavucontrol / qpwgraph if installed.
 - **Polkit agent** (`Quickshell.Services.Polkit`, no hyprpolkitagent): the password dialog apps get
   when they ask for privileges (`pkexec`, GNOME Disks, …), in the bar's theme.
 - **Own notification server** with history, DND, sounds and app actions; privacy indicator
@@ -223,6 +250,9 @@ barch wallpaper render [<palette>|all]   # the scenes in a palette's colors (aut
 barch hypr [edit] [<page>]         # Hyprland Settings (every option of the installed version, monitors, binds…)
 barch hypr get|set|reset|list|status [<option>] [<value>]   # the same file from a shell (see The bar)
 barch center [<page>]              # System Center: services, timers, failures, agent, snapshots, journal
+barch backup browse [<page>]       # Backup Browser: snapshots, files, restore into ~/Restore
+barch packages [<page>]            # Packages: installed, orphans, updates, pacnew, repo lists, history
+barch mixer [<page>]               # Audio Mixer: devices, per-app volume and routing, sample rate
 barch hdr on|off|status            barch sdr <nits>|status
 barch monitor side on|off|status   barch caffeine on|off|status
 barch nightlight on|off|status     barch dnd on|off|status

@@ -1,0 +1,16 @@
+singleton Ui Ui.qml
+singleton Store Store.qml
+Badge 1.0 Badge.qml
+BrowsePage 1.0 BrowsePage.qml
+Card 1.0 Card.qml
+ColorButton 1.0 ColorButton.qml
+* 1.0 *.qml
+SnapshotsPage 1.0 SnapshotsPage.qml
+StatusPage 1.0 StatusPage.qml
+Tip 1.0 Tip.qml
+UiButton 1.0 UiButton.qml
+UiCombo 1.0 UiCombo.qml
+UiField 1.0 UiField.qml
+UiNumber 1.0 UiNumber.qml
+UiSlider 1.0 UiSlider.qml
+UiSwitch 1.0 UiSwitch.qml
