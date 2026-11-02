@@ -91,6 +91,9 @@ Desktop (through the bar):
   voice on|off|toggle|status  always-on voice control (quickshell/voice, barch-voice.service):
                               say "barch" and the command, in Portuguese
   voice pause|resume          keep the service but ignore the microphone / listen again
+  voice lang [<code>|list]    the language it listens and answers in (pt, en, es, auto… every
+                              language whisper knows; only Portuguese has the command table,
+                              the rest goes to Claude; the Piper voice is downloaded when picked)
   voice say <text>            speak TEXT (piper)
   voice match <text>          which command TEXT would run, running nothing (to test commands.json)
   voice test <text>           run TEXT as if it had been heard (no wake word; it does act)
@@ -777,6 +780,18 @@ cmd_voice() {
                      + (if .said != "" then "\nsaid: \(.said)" else "" end)
                      + (if .error != "" then "\nerror: \(.error)" else "" end) end'
       [[ $active == active ]] ;;
+    lang | language)
+      local out
+      if [[ ${1:-} == list ]]; then
+        out=$(python3 -I "$py" languages)
+        show "$out" '.languages[] | "\(.code)\t\(.name)\(if .native != .name then " · \(.native)" else "" end)\(if .commands then "  (commands)" elif .code == "auto" then "" elif .voice == null then "  (no voice: notifications)" elif .downloaded then "" else "  (voice downloaded when picked)" end)"'
+        return
+      fi
+      out=$(python3 -I "$py" language ${1:+"$1"}) || {
+        [[ $? == 3 ]] && die 3 "barch-voice is not running"
+        die 1 "$(jq -r '.error // "failed"' <<<"$out" 2>/dev/null)"
+      }
+      show "$out" '"voice: listening in \(.language_name)\(if .language_native != "" and .language_native != .language_name then " (\(.language_native))" else "" end)" + (if .downloading != "" then " — downloading the voice \(.downloading)" elif .voice_ready then "" else " — no voice: answers go to notifications" end)' ;;
     pause | resume | reload)
       local out
       out=$(python3 -I "$py" "$sub") || die 1 "$(jq -r '.error // "failed"' <<<"$out" 2>/dev/null)"

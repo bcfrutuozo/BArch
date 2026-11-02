@@ -1,0 +1,712 @@
+{
+ "_doc": "Languages barch-voice can listen in: whisper.cpp's list (code = whisper's), the Piper voice that speaks the answers (null = none: answers go to a notification), and whether whisper writes it in Latin letters (otherwise the wake word is looked for in an English transcription of the start). Only Portuguese has the command table (commands.json); every other language goes to Claude.",
+ "languages": [
+  {
+   "code": "auto",
+   "name": "Automatic",
+   "native": "detect per sentence",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "en",
+   "name": "English",
+   "native": "English",
+   "voice": "en_US-ryan-medium",
+   "latin": true
+  },
+  {
+   "code": "zh",
+   "name": "Chinese",
+   "native": "中文",
+   "voice": "zh_CN-chaowen-medium",
+   "latin": false
+  },
+  {
+   "code": "de",
+   "name": "German",
+   "native": "Deutsch",
+   "voice": "de_DE-thorsten-medium",
+   "latin": true
+  },
+  {
+   "code": "es",
+   "name": "Spanish",
+   "native": "Español",
+   "voice": "es_ES-davefx-medium",
+   "latin": true
+  },
+  {
+   "code": "ru",
+   "name": "Russian",
+   "native": "Русский",
+   "voice": "ru_RU-irina-medium",
+   "latin": false
+  },
+  {
+   "code": "ko",
+   "name": "Korean",
+   "native": "한국어",
+   "voice": "ko_KR-kss-medium",
+   "latin": false
+  },
+  {
+   "code": "fr",
+   "name": "French",
+   "native": "Français",
+   "voice": "fr_FR-siwis-medium",
+   "latin": true
+  },
+  {
+   "code": "ja",
+   "name": "Japanese",
+   "native": "日本語",
+   "voice": "ja_JP-hi_fi_captain-medium",
+   "latin": false
+  },
+  {
+   "code": "pt",
+   "name": "Portuguese",
+   "native": "Português",
+   "voice": "pt_BR-faber-medium",
+   "latin": true
+  },
+  {
+   "code": "tr",
+   "name": "Turkish",
+   "native": "Türkçe",
+   "voice": "tr_TR-dfki-medium",
+   "latin": true
+  },
+  {
+   "code": "pl",
+   "name": "Polish",
+   "native": "Polski",
+   "voice": "pl_PL-darkman-medium",
+   "latin": true
+  },
+  {
+   "code": "ca",
+   "name": "Catalan",
+   "native": "Català",
+   "voice": "ca_ES-upc_ona-medium",
+   "latin": true
+  },
+  {
+   "code": "nl",
+   "name": "Dutch",
+   "native": "Nederlands",
+   "voice": "nl_NL-alex-medium",
+   "latin": true
+  },
+  {
+   "code": "ar",
+   "name": "Arabic",
+   "native": "العربية",
+   "voice": "ar_JO-kareem-medium",
+   "latin": false
+  },
+  {
+   "code": "sv",
+   "name": "Swedish",
+   "native": "Svenska",
+   "voice": "sv_SE-alma-medium",
+   "latin": true
+  },
+  {
+   "code": "it",
+   "name": "Italian",
+   "native": "Italiano",
+   "voice": "it_IT-paola-medium",
+   "latin": true
+  },
+  {
+   "code": "id",
+   "name": "Indonesian",
+   "native": "Bahasa Indonesia",
+   "voice": "id_ID-news_tts-medium",
+   "latin": true
+  },
+  {
+   "code": "hi",
+   "name": "Hindi",
+   "native": "हिन्दी",
+   "voice": "hi_IN-pratham-medium",
+   "latin": false
+  },
+  {
+   "code": "fi",
+   "name": "Finnish",
+   "native": "Suomi",
+   "voice": "fi_FI-harri-medium",
+   "latin": true
+  },
+  {
+   "code": "vi",
+   "name": "Vietnamese",
+   "native": "Tiếng Việt",
+   "voice": "vi_VN-vais1000-medium",
+   "latin": true
+  },
+  {
+   "code": "he",
+   "name": "Hebrew",
+   "native": "עברית",
+   "voice": "he_IL-saspeech-medium",
+   "latin": false
+  },
+  {
+   "code": "uk",
+   "name": "Ukrainian",
+   "native": "Українська",
+   "voice": "uk_UA-ukrainian_tts-medium",
+   "latin": false
+  },
+  {
+   "code": "el",
+   "name": "Greek",
+   "native": "Ελληνικά",
+   "voice": "el_GR-joy-medium",
+   "latin": false
+  },
+  {
+   "code": "ms",
+   "name": "Malay",
+   "native": "Bahasa Melayu",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "cs",
+   "name": "Czech",
+   "native": "Čeština",
+   "voice": "cs_CZ-jirka-medium",
+   "latin": true
+  },
+  {
+   "code": "ro",
+   "name": "Romanian",
+   "native": "Română",
+   "voice": "ro_RO-mihai-medium",
+   "latin": true
+  },
+  {
+   "code": "da",
+   "name": "Danish",
+   "native": "Dansk",
+   "voice": "da_DK-talesyntese-medium",
+   "latin": true
+  },
+  {
+   "code": "hu",
+   "name": "Hungarian",
+   "native": "Magyar",
+   "voice": "hu_HU-anna-medium",
+   "latin": true
+  },
+  {
+   "code": "ta",
+   "name": "Tamil",
+   "native": "தமிழ்",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "no",
+   "name": "Norwegian",
+   "native": "Norsk",
+   "voice": "no_NO-nvcc-medium",
+   "latin": true
+  },
+  {
+   "code": "th",
+   "name": "Thai",
+   "native": "ไทย",
+   "voice": "th_TH-tsync2-medium",
+   "latin": false
+  },
+  {
+   "code": "ur",
+   "name": "Urdu",
+   "native": "اردو",
+   "voice": "ur_PK-aegis_female-medium",
+   "latin": false
+  },
+  {
+   "code": "hr",
+   "name": "Croatian",
+   "native": "Hrvatski",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "bg",
+   "name": "Bulgarian",
+   "native": "Български",
+   "voice": "bg_BG-dimitar-medium",
+   "latin": false
+  },
+  {
+   "code": "lt",
+   "name": "Lithuanian",
+   "native": "Lietuvių",
+   "voice": "lt_LT-ingute-medium",
+   "latin": true
+  },
+  {
+   "code": "la",
+   "name": "Latin",
+   "native": "Latina",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "mi",
+   "name": "Maori",
+   "native": "Māori",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "ml",
+   "name": "Malayalam",
+   "native": "മലയാളം",
+   "voice": "ml_IN-arjun-medium",
+   "latin": false
+  },
+  {
+   "code": "cy",
+   "name": "Welsh",
+   "native": "Cymraeg",
+   "voice": "cy_GB-bu_tts-medium",
+   "latin": true
+  },
+  {
+   "code": "sk",
+   "name": "Slovak",
+   "native": "Slovenčina",
+   "voice": "sk_SK-lili-medium",
+   "latin": true
+  },
+  {
+   "code": "te",
+   "name": "Telugu",
+   "native": "తెలుగు",
+   "voice": "te_IN-maya-medium",
+   "latin": false
+  },
+  {
+   "code": "fa",
+   "name": "Persian",
+   "native": "فارسی",
+   "voice": "fa_IR-amir-medium",
+   "latin": false
+  },
+  {
+   "code": "lv",
+   "name": "Latvian",
+   "native": "Latviešu",
+   "voice": "lv_LV-aivars-medium",
+   "latin": true
+  },
+  {
+   "code": "bn",
+   "name": "Bengali",
+   "native": "বাংলা",
+   "voice": "bn_BD-google-medium",
+   "latin": false
+  },
+  {
+   "code": "sr",
+   "name": "Serbian",
+   "native": "Српски",
+   "voice": "sr_RS-serbski_institut-medium",
+   "latin": false
+  },
+  {
+   "code": "az",
+   "name": "Azerbaijani",
+   "native": "Azərbaycan",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "sl",
+   "name": "Slovenian",
+   "native": "Slovenščina",
+   "voice": "sl_SI-artur-medium",
+   "latin": true
+  },
+  {
+   "code": "kn",
+   "name": "Kannada",
+   "native": "ಕನ್ನಡ",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "et",
+   "name": "Estonian",
+   "native": "Eesti",
+   "voice": "et_EE-news-medium",
+   "latin": true
+  },
+  {
+   "code": "mk",
+   "name": "Macedonian",
+   "native": "Македонски",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "br",
+   "name": "Breton",
+   "native": "Brezhoneg",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "eu",
+   "name": "Basque",
+   "native": "Euskara",
+   "voice": "eu_ES-antton-medium",
+   "latin": true
+  },
+  {
+   "code": "is",
+   "name": "Icelandic",
+   "native": "Íslenska",
+   "voice": "is_IS-bui-medium",
+   "latin": true
+  },
+  {
+   "code": "hy",
+   "name": "Armenian",
+   "native": "Հայերեն",
+   "voice": "hy_AM-gor-medium",
+   "latin": false
+  },
+  {
+   "code": "ne",
+   "name": "Nepali",
+   "native": "नेपाली",
+   "voice": "ne_NP-chitwan-medium",
+   "latin": false
+  },
+  {
+   "code": "mn",
+   "name": "Mongolian",
+   "native": "Монгол",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "bs",
+   "name": "Bosnian",
+   "native": "Bosanski",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "kk",
+   "name": "Kazakh",
+   "native": "Қазақ",
+   "voice": "kk_KZ-issai-high",
+   "latin": false
+  },
+  {
+   "code": "sq",
+   "name": "Albanian",
+   "native": "Shqip",
+   "voice": "sq_AL-edon-medium",
+   "latin": true
+  },
+  {
+   "code": "sw",
+   "name": "Swahili",
+   "native": "Kiswahili",
+   "voice": "sw_CD-lanfrica-medium",
+   "latin": true
+  },
+  {
+   "code": "gl",
+   "name": "Galician",
+   "native": "Galego",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "mr",
+   "name": "Marathi",
+   "native": "मराठी",
+   "voice": "mr_IN-google-medium",
+   "latin": false
+  },
+  {
+   "code": "pa",
+   "name": "Punjabi",
+   "native": "ਪੰਜਾਬੀ",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "si",
+   "name": "Sinhala",
+   "native": "සිංහල",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "km",
+   "name": "Khmer",
+   "native": "ខ្មែរ",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "sn",
+   "name": "Shona",
+   "native": "chiShona",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "yo",
+   "name": "Yoruba",
+   "native": "Yorùbá",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "so",
+   "name": "Somali",
+   "native": "Soomaali",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "af",
+   "name": "Afrikaans",
+   "native": "Afrikaans",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "oc",
+   "name": "Occitan",
+   "native": "Occitan",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "ka",
+   "name": "Georgian",
+   "native": "ქართული",
+   "voice": "ka_GE-natia-medium",
+   "latin": false
+  },
+  {
+   "code": "be",
+   "name": "Belarusian",
+   "native": "Беларуская",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "tg",
+   "name": "Tajik",
+   "native": "Тоҷикӣ",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "sd",
+   "name": "Sindhi",
+   "native": "سنڌي",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "gu",
+   "name": "Gujarati",
+   "native": "ગુજરાતી",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "am",
+   "name": "Amharic",
+   "native": "አማርኛ",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "yi",
+   "name": "Yiddish",
+   "native": "ייִדיש",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "lo",
+   "name": "Lao",
+   "native": "ລາວ",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "uz",
+   "name": "Uzbek",
+   "native": "Oʻzbek",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "fo",
+   "name": "Faroese",
+   "native": "Føroyskt",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "ht",
+   "name": "Haitian Creole",
+   "native": "Kreyòl ayisyen",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "ps",
+   "name": "Pashto",
+   "native": "پښتو",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "tk",
+   "name": "Turkmen",
+   "native": "Türkmen",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "nn",
+   "name": "Nynorsk",
+   "native": "Nynorsk",
+   "voice": "no_NO-nvcc-medium",
+   "latin": true
+  },
+  {
+   "code": "mt",
+   "name": "Maltese",
+   "native": "Malti",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "sa",
+   "name": "Sanskrit",
+   "native": "संस्कृतम्",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "lb",
+   "name": "Luxembourgish",
+   "native": "Lëtzebuergesch",
+   "voice": "lb_LU-marylux-medium",
+   "latin": true
+  },
+  {
+   "code": "my",
+   "name": "Myanmar",
+   "native": "မြန်မာ",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "bo",
+   "name": "Tibetan",
+   "native": "བོད་ཡིག",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "tl",
+   "name": "Tagalog",
+   "native": "Tagalog",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "mg",
+   "name": "Malagasy",
+   "native": "Malagasy",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "as",
+   "name": "Assamese",
+   "native": "অসমীয়া",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "tt",
+   "name": "Tatar",
+   "native": "Татар",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "haw",
+   "name": "Hawaiian",
+   "native": "ʻŌlelo Hawaiʻi",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "ln",
+   "name": "Lingala",
+   "native": "Lingála",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "ha",
+   "name": "Hausa",
+   "native": "Hausa",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "ba",
+   "name": "Bashkir",
+   "native": "Башҡорт",
+   "voice": null,
+   "latin": false
+  },
+  {
+   "code": "jw",
+   "name": "Javanese",
+   "native": "Basa Jawa",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "su",
+   "name": "Sundanese",
+   "native": "Basa Sunda",
+   "voice": null,
+   "latin": true
+  },
+  {
+   "code": "yue",
+   "name": "Cantonese",
+   "native": "粵語",
+   "voice": null,
+   "latin": false
+  }
+ ]
+}

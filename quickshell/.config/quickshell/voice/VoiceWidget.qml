@@ -3,7 +3,8 @@
 // "barch" e espera a frase, fixo enquanto entende ou pergunta ao Claude, verde enquanto fala,
 // vermelho quando falta algo (whisper.cpp, microfone). Ao lado, por alguns segundos, o que
 // entendeu. Clique pausa e retoma a escuta; botão direito abre um painel com a última frase e a
-// resposta, pausa e desligar. Estado no singleton Voice (voice/Voice.qml).
+// resposta, o idioma (lista com filtro: todos os do whisper; fora do português tudo vai ao
+// Claude), pausa e desligar. Estado no singleton Voice (voice/Voice.qml).
 
 import QtQuick
 import QtQuick.Layouts
@@ -23,6 +24,17 @@ Item {
 
     visible: Voice.running
     onVisibleChanged: if (!visible) Popups.hide(popup)
+
+    // a lista de idiomas aberta no painel: o filtro precisa do teclado (shell.qml)
+    property bool chooseLang: false
+    property string langFilter: ""
+    readonly property bool wantsKeyboard: chooseLang && popup.visible
+    readonly property var langList: {
+        const q = langFilter.trim().toLowerCase()
+        if (q === "") return Voice.languages
+        return Voice.languages.filter(l => (l.name + " " + l.native + " " + l.code).toLowerCase().includes(q))
+    }
+    function pickLang(code) { Voice.setLanguage(code); chooseLang = false; langFilter = ""; langField.text = "" }
     implicitWidth: row.implicitWidth
     implicitHeight: row.implicitHeight
 
@@ -108,6 +120,7 @@ Item {
         color: "transparent"
 
         HyprlandFocusGrab { windows: [popup]; active: popup.visible; onCleared: Popups.hide(popup) }
+        onVisibleChanged: if (!visible) { root.chooseLang = false; root.langFilter = ""; langField.text = "" }
 
         Rectangle {
             anchors.fill: parent
@@ -157,6 +170,134 @@ Item {
                         Text {
                             text: parent.modelData.v; color: Theme.fg; font.family: Theme.font; font.pixelSize: Theme.fontSize - 1
                             wrapMode: Text.Wrap; Layout.fillWidth: true; maximumLineCount: 3; elide: Text.ElideRight
+                        }
+                    }
+                }
+                // idioma: o atual num campo; clique abre a lista com filtro
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+                    Text { text: "Language"; color: Theme.dim; font.family: Theme.font; font.pixelSize: Theme.fontSize - 3 }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 32
+                        radius: Theme.buttonRadius
+                        color: langMouse.containsMouse ? Theme.hover : Theme.surface
+                        border.width: 1
+                        border.color: root.chooseLang ? Theme.accent : "transparent"
+                        RowLayout {
+                            anchors { fill: parent; leftMargin: 10; rightMargin: 10 }
+                            spacing: 8
+                            Text { text: root.glyph(0xF05CA); color: Theme.dim; font.family: Theme.iconFont; font.pixelSize: Theme.fontSize }   // translate
+                            Text {
+                                text: Voice.languageLabel(Voice.language)
+                                color: Theme.fg; font.family: Theme.font; font.pixelSize: Theme.fontSize - 1
+                                elide: Text.ElideRight; Layout.fillWidth: true
+                            }
+                            Text {
+                                text: root.glyph(root.chooseLang ? 0xF0143 : 0xF0140)   // chevron_up / chevron_down
+                                color: Theme.dim; font.family: Theme.iconFont; font.pixelSize: Theme.fontSize
+                            }
+                        }
+                        MouseArea {
+                            id: langMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                root.chooseLang = !root.chooseLang
+                                if (root.chooseLang) langField.forceActiveFocus()
+                            }
+                        }
+                    }
+                    Text {
+                        visible: text !== ""
+                        text: Voice.downloading !== "" ? "downloading the voice " + Voice.downloading + "…"
+                            : Voice.language !== "pt" && Voice.language !== "auto" && !Voice.voiceReady ? "no voice for this language: answers go to notifications"
+                            : Voice.language === "auto" ? "Portuguese uses the command table, other languages go to Claude"
+                            : Voice.language !== "pt" ? "every sentence goes to Claude (the command table is Portuguese)"
+                            : ""
+                        color: Voice.downloading !== "" || !Voice.voiceReady ? Theme.warn : Theme.dim
+                        font.family: Theme.font; font.pixelSize: Theme.fontSize - 3
+                        wrapMode: Text.Wrap; Layout.fillWidth: true
+                    }
+
+                    ColumnLayout {
+                        visible: root.chooseLang
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Rectangle {
+                            Layout.fillWidth: true
+                            implicitHeight: 30
+                            radius: Theme.buttonRadius
+                            color: Theme.surface
+                            border.width: 1
+                            border.color: langField.activeFocus ? Theme.accent : "transparent"
+                            RowLayout {
+                                anchors { fill: parent; leftMargin: 10; rightMargin: 10 }
+                                spacing: 8
+                                Text { text: root.glyph(0xF0349); color: Theme.dim; font.family: Theme.iconFont; font.pixelSize: Theme.fontSize }   // magnify
+                                TextInput {
+                                    id: langField
+                                    Layout.fillWidth: true
+                                    color: Theme.fg; font.family: Theme.font; font.pixelSize: Theme.fontSize - 1
+                                    clip: true
+                                    onTextChanged: root.langFilter = text
+                                    Keys.onEscapePressed: { root.chooseLang = false; text = "" }
+                                    Keys.onReturnPressed: if (root.langList.length > 0) root.pickLang(root.langList[0].code)
+                                    Text {
+                                        anchors.fill: parent; verticalAlignment: Text.AlignVCenter
+                                        visible: langField.text === ""
+                                        text: "Filter languages (" + Math.max(0, Voice.languages.length - 1) + ")"
+                                        color: Theme.overlay; font.family: Theme.font; font.pixelSize: Theme.fontSize - 1
+                                    }
+                                }
+                            }
+                        }
+                        ListView {
+                            id: langView
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Math.min(contentHeight, 240)
+                            clip: true
+                            model: root.langList
+                            boundsBehavior: Flickable.StopAtBounds
+                            delegate: Rectangle {
+                                id: langRow
+                                required property var modelData
+                                readonly property bool selected: Voice.language === modelData.code
+                                width: langView.width
+                                implicitHeight: 30
+                                radius: Theme.buttonRadius
+                                color: rowMouse.containsMouse ? Theme.hover : "transparent"
+                                RowLayout {
+                                    anchors { fill: parent; leftMargin: 10; rightMargin: 10 }
+                                    spacing: 8
+                                    Text {
+                                        text: langRow.modelData.code === "auto" ? "Automatic" : langRow.modelData.name
+                                        color: langRow.selected ? Theme.accent : Theme.fg
+                                        font.family: Theme.font; font.pixelSize: Theme.fontSize - 1; font.bold: langRow.selected
+                                        elide: Text.ElideRight; Layout.fillWidth: true
+                                    }
+                                    Text {
+                                        text: langRow.modelData.native
+                                        color: Theme.dim; font.family: Theme.font; font.pixelSize: Theme.fontSize - 3
+                                        elide: Text.ElideRight; Layout.maximumWidth: 110
+                                    }
+                                    Text {
+                                        // sem voz do Piper: a resposta vira notificação
+                                        visible: langRow.modelData.code !== "auto" && !langRow.modelData.voice
+                                        text: root.glyph(0xF0581)   // volume_off
+                                        color: Theme.overlay; font.family: Theme.iconFont; font.pixelSize: Theme.fontSize - 2
+                                    }
+                                }
+                                MouseArea {
+                                    id: rowMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.pickLang(langRow.modelData.code)
+                                }
+                            }
                         }
                     }
                 }

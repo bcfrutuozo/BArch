@@ -80,7 +80,8 @@ reusing the widget's own functions.
   symlink). `hypridle.conf` and `hyprsunset.conf` are edited by the Hyprland app's Idle and Night
   light pages (hyprlang parser in `hypr/hypr.js`, comments kept).
 - **Voice control** (`quickshell/voice/`): `voice.py` is the daemon, `commands.json` the intents in
-  Portuguese (regex on normalized text: lower case, no accents). Test a sentence with
+  Portuguese (regex on normalized text: lower case, no accents); `languages.json` the other languages
+  it can listen in (`barch voice lang`), which skip the table and go straight to Claude. Test a sentence with
   `barch voice match "..."` (prints what would run, runs nothing); `barch voice test "..."` runs it
   for real on the live desktop, so never use it on a list of examples.
 - **Theme:** `quickshell/.config/quickshell/theme/palettes.json` holds the palettes (ten tones

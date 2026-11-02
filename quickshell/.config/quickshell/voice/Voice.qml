@@ -3,6 +3,8 @@
 // wake, hearing, processing, thinking, speaking, followup, paused, error, off), e pergunta ao systemd se o
 // serviço está ligado. Liga/desliga o serviço e pausa a escuta (socket do daemon, via voice.py).
 // Usado pelo VoiceWidget (ilha da barra), pelo tile Voice do Control Center e pelo barch (IPC "voice").
+// O idioma (languages.json: os do whisper, com a voz do Piper de cada um) vem no state.json e é
+// trocado por `voice.py language <code>`.
 pragma Singleton
 
 import QtQuick
@@ -27,6 +29,12 @@ Singleton {
     property bool tts: false                // piper encontrado
     property string model: ""
     property real changed: 0                // quando o estado mudou (ms), para o texto sumir sozinho
+    property string language: "pt"          // o idioma em que escuta e responde (código do whisper, ou "auto")
+    property string languageName: "Portuguese"
+    property string languageNative: "Português"
+    property bool voiceReady: true          // a voz do Piper desse idioma está baixada
+    property string downloading: ""         // a voz sendo baixada agora
+    property var languages: []              // languages.json: [{ code, name, native, voice, latin }]
     property bool busy: false
 
     // o que o daemon diz só vale com o serviço de pé (o state.json fica para trás quando ele morre)
@@ -66,9 +74,26 @@ Singleton {
                 root.whisper = s.whisper === true
                 root.tts = s.tts === true
                 root.model = s.model || ""
+                if (s.language) {
+                    root.language = s.language
+                    root.languageName = s.language_name || s.language
+                    root.languageNative = s.language_native || ""
+                    root.voiceReady = s.voice_ready !== false
+                    root.downloading = s.downloading || ""
+                }
                 root.changed = Date.now()
             } catch (e) {}
         }
+    }
+
+    FileView {
+        path: Quickshell.shellDir + "/voice/languages.json"
+        printErrors: false
+        onLoaded: { try { root.languages = JSON.parse(text()).languages || [] } catch (e) {} }
+    }
+    function languageLabel(code) {
+        const e = languages.find(l => l.code === code)
+        return !e ? code : e.code === "auto" ? "Automatic" : e.name === e.native ? e.name : e.name + " · " + e.native
     }
 
     Process {
@@ -106,11 +131,19 @@ Singleton {
     function resume() { control(["python3", "-I", script, "resume"]) }
     function togglePause() { if (paused) resume(); else pause() }
     function say(text) { Quickshell.execDetached(["python3", "-I", script, "say", text]) }
+    function setLanguage(code) {
+        if (!languages.some(l => l.code === code)) return false
+        root.language = code                  // na hora; o state.json confirma
+        root.languageName = (languages.find(l => l.code === code) || {}).name || code
+        control(["python3", "-I", script, "language", code])
+        return true
+    }
 
     // ---- IPC (barch voice ...) ----
     function status() {
         return { ok: true, running: running, enabled: enabled, state: current, paused: paused, heard: heard, said: said,
-                 error: error, whisper: whisper, tts: tts, model: model, label: label }
+                 error: error, whisper: whisper, tts: tts, model: model, label: label,
+                 language: language, language_name: languageName, voice_ready: voiceReady, downloading: downloading }
     }
     IpcHandler {
         target: "voice"
@@ -120,5 +153,12 @@ Singleton {
         function toggle(): string { root.toggleService(); return JSON.stringify(root.status()) }
         function pause(): string { root.pause(); return JSON.stringify(root.status()) }
         function resume(): string { root.resume(); return JSON.stringify(root.status()) }
+        function language(code: string): string {
+            if (!root.setLanguage(code)) return JSON.stringify({ ok: false, error: "unknown language " + code })
+            return JSON.stringify(root.status())
+        }
+        function languages(): string {
+            return JSON.stringify({ ok: true, language: root.language, languages: root.languages.map(l => ({ code: l.code, name: l.name, native: l.native, voice: l.voice })) })
+        }
     }
 }
