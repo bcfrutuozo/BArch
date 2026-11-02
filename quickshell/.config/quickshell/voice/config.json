@@ -1,0 +1,20 @@
+{
+  "_doc": "Settings of barch-voice (voice.py); every key here overrides DEFAULTS in voice.py. Restart the service after a change: systemctl --user restart barch-voice.",
+  "wake": ["barch", "bartch", "bark", "barque", "bach", "barche", "bart", "bash", "march", "parch", "barg", "barsh", "baarch"],
+  "wake_window_s": 8,
+  "head_s": 2.2,
+  "vad_floor_mult": 4.0,
+  "vad_min_rms": 220,
+  "vad_end_ms": 700,
+  "mic_target": "",
+  "whisper_model": "",
+  "whisper_threads": 4,
+  "tts_voice": "pt_BR-faber-medium",
+  "tts_speed": 1.05,
+  "confirm_sound": true,
+  "claude": true,
+  "claude_model": "claude-sonnet-5-5",
+  "claude_timeout_s": 120,
+  "project_roots": ["~/Source", "~/Projects", "~/BArch"],
+  "debug": false
+}

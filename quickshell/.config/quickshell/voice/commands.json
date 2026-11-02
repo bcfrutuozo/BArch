@@ -1,0 +1,1071 @@
+{
+  "_doc": [
+    "Intents of barch-voice (voice.py). The sentence is normalized before matching: lower case,",
+    "no accents, no punctuation, fillers like 'por favor' removed, the wake word gone. Write the",
+    "patterns that way (regex, matched whole, case-insensitive is not needed). Named groups feed",
+    "the templates: {app}, {proj}, {palette}, {scene}, {region}, {n_x} (a number, in words or",
+    "digits), {verb} with 'onoff' → {onoff} on|off and {onoff_pt}. kinds: exec (run, argv),",
+    "spawn (detached), hypr (dispatch, Lua expression), app, project (with: claude|nvim|files|''),",
+    "palette, scene, region, confirm (ask, then run on 'sim'), say, time, date, health, remind,",
+    "claude (force the fallback), pause, hush. 'say' is spoken; without it a short chime plays.",
+    "Test without a microphone: barch voice test \"abre o terminal\"."
+  ],
+  "app_aliases": {
+    "terminal": "foot",
+    "console": "foot",
+    "shell": "foot",
+    "navegador": "browser",
+    "browser": "browser",
+    "internet": "browser",
+    "mullvad": "mullvad-browser.desktop",
+    "brave": "brave-origin.desktop",
+    "chromium": "chromium.desktop",
+    "arquivos": "thunar.desktop",
+    "gerenciador de arquivos": "thunar.desktop",
+    "pasta": "thunar.desktop",
+    "thunar": "thunar.desktop",
+    "steam": "steam.desktop",
+    "discord": "discord.desktop",
+    "spotify": "spotify-launcher.desktop",
+    "musica": "spotify-launcher.desktop",
+    "maquinas virtuais": "virt-manager.desktop",
+    "virt manager": "virt-manager.desktop",
+    "nextcloud": "com.nextcloud.desktopclient.nextcloud.desktop",
+    "battle net": "sh -c ~/Games/battle.net/run.sh",
+    "battlenet": "sh -c ~/Games/battle.net/run.sh",
+    "wow": "sh -c ~/Games/battle.net/run.sh",
+    "configuracoes do hyprland": "barch hypr",
+    "configuracoes": "barch hypr",
+    "hyprland": "barch hypr",
+    "painel de controle do hyprland": "barch hypr",
+    "painel do hyprland": "barch hypr",
+    "configuracao do hyprland": "barch hypr",
+    "ajustes do hyprland": "barch hypr",
+    "opcoes do hyprland": "barch hypr",
+    "hyprland settings": "barch hypr",
+    "settings do hyprland": "barch hypr",
+    "central do sistema": "barch center",
+    "system center": "barch center",
+    "central": "barch center",
+    "centro do sistema": "barch center",
+    "centro de sistema": "barch center",
+    "system center do barch": "barch center",
+    "mixer": "barch mixer",
+    "mixer de audio": "barch mixer",
+    "mixer de som": "barch mixer",
+    "volume dos aplicativos": "barch mixer",
+    "pacotes": "barch packages",
+    "packages": "barch packages",
+    "backup": "barch backup browse",
+    "editor de paletas": "barch theme edit",
+    "paletas": "barch theme edit",
+    "monitor do sistema": "foot -e btop",
+    "btop": "foot -e btop",
+    "claude": "barch agent ask"
+  },
+  "intents": [
+    {
+      "name": "again",
+      "kind": "again",
+      "how": "again",
+      "patterns": [
+        "(de novo|outra vez|mais uma vez|repete|repetir|repete isso|faz de novo|faz isso de novo|novamente)"
+      ]
+    },
+    {
+      "name": "more",
+      "kind": "again",
+      "how": "more",
+      "patterns": [
+        "(mais|mais um pouco|um pouco mais|mais ainda|mais um pouquinho|um pouquinho mais|aumenta mais|sobe mais)"
+      ]
+    },
+    {
+      "name": "less",
+      "kind": "again",
+      "how": "less",
+      "patterns": [
+        "(menos|um pouco menos|menos um pouco|um pouquinho menos|volta um pouco|diminui um pouco|abaixa um pouco|exagerou|demais)"
+      ]
+    },
+    {
+      "name": "hush",
+      "kind": "hush",
+      "patterns": [
+        "(cala a boca|quieto|silencio|chega|para de falar|shh+)"
+      ]
+    },
+    {
+      "name": "pause",
+      "kind": "pause",
+      "say": "Pausado. Me chame pela barra para voltar.",
+      "patterns": [
+        "(para|pare|parar) de (escutar|ouvir)",
+        "(pausa|pausar|desliga|desligar) (a )?(escuta|voz|audicao)",
+        "nao (me )?escuta mais",
+        "dorme|durma|boa noite"
+      ]
+    },
+    {
+      "name": "thanks",
+      "kind": "say",
+      "say": "De nada.",
+      "sound": null,
+      "patterns": [
+        "(muito )?obrigad[oa]( barch)?",
+        "valeu( barch)?",
+        "(bom|boa|otimo|perfeito|show|legal|isso|beleza)( barch)?"
+      ]
+    },
+    {
+      "name": "hello",
+      "kind": "say",
+      "say": "Oi, Bruno. Pode falar.",
+      "patterns": [
+        "(oi|ola|ola|bom dia|boa tarde|e ai|tudo bem|voce (ta|esta) (ai|me ouvindo)|ta (ai|me ouvindo|escutando))( barch)?( \\?)?"
+      ]
+    },
+    {
+      "name": "help",
+      "kind": "say",
+      "say": "Eu troco o tema, abro aplicativos e projetos, controlo janelas, volume e música, ligo o HDR, o modo anônimo e a VPN, aviso a hora e lembretes. O que eu não souber, pergunto ao Claude.",
+      "patterns": [
+        "(o que voce (faz|sabe fazer)|ajuda|me ajuda|quais (sao )?(os )?comandos|que comandos (tem|existem))"
+      ]
+    },
+    {
+      "name": "time",
+      "kind": "time",
+      "patterns": [
+        "(que|qual) (horas? (sao|e)|hora e|e a hora)( agora)?",
+        "me (diz|diga|fala|fale) a hora",
+        "hora"
+      ]
+    },
+    {
+      "name": "date",
+      "kind": "date",
+      "patterns": [
+        "(que|qual) (dia|data) e hoje",
+        "que dia (da semana )?e( hoje)?",
+        "data de hoje",
+        "hoje e que dia"
+      ]
+    },
+    {
+      "name": "health",
+      "kind": "health",
+      "patterns": [
+        "(como (esta|ta|anda) o (sistema|computador|pc)|saude do sistema|tem (algum )?problema|tudo (bem|certo|ok) (com o|no) (sistema|computador|pc)|status do sistema)"
+      ]
+    },
+    {
+      "name": "remind",
+      "kind": "remind",
+      "patterns": [
+        "(me )?(lembra|lembre|avisa|avise)( me)? (em|daqui a|daqui) (?P<n_min>[a-z0-9 ]+?) (minutos?|min) (de |para |pra |que )?(?P<what>.+)",
+        "(me )?(lembra|lembre|avisa|avise)( me)? (de |para |pra |que )?(?P<what>.+?) (em|daqui a|daqui) (?P<n_min>[a-z0-9 ]+?) (minutos?|min)",
+        "(timer|cronometro|temporizador) de (?P<n_min>[a-z0-9 ]+?) (minutos?|min)(?P<what>)"
+      ]
+    },
+    {
+      "name": "theme-dark",
+      "kind": "exec",
+      "run": [
+        "barch",
+        "theme",
+        "dark"
+      ],
+      "patterns": [
+        "((ativa|ativar|liga|ligar|coloca|colocar|poe|por|bota|botar|muda|mudar|troca|trocar|passa|passar|vai|volta|voltar) (para |pra |no |o |em )?)?(modo |tema )?(escuro|noturno|dark|escuridao)( mode)?",
+        "escurece( a tela| tudo)?"
+      ]
+    },
+    {
+      "name": "theme-light",
+      "kind": "exec",
+      "run": [
+        "barch",
+        "theme",
+        "light"
+      ],
+      "patterns": [
+        "((ativa|ativar|liga|ligar|coloca|colocar|poe|por|bota|botar|muda|mudar|troca|trocar|passa|passar|vai|volta|voltar) (para |pra |no |o |em )?)?(modo |tema )?(claro|light|diurno|dia)( mode)?",
+        "clareia( a tela| tudo)?"
+      ]
+    },
+    {
+      "name": "theme-auto",
+      "kind": "exec",
+      "run": [
+        "barch",
+        "theme",
+        "auto"
+      ],
+      "patterns": [
+        "((ativa|ativar|liga|ligar|coloca|colocar|poe|por|bota|botar|muda|mudar|troca|trocar|passa|passar|vai|volta|voltar) (para |pra |no |o |em )?)?(modo |tema )?(automatico|auto)( mode)?"
+      ]
+    },
+    {
+      "name": "theme-toggle",
+      "kind": "exec",
+      "run": [
+        "sh",
+        "-c",
+        "m=$(barch --json theme status | jq -r .mode); [ \"$m\" = dark ] && barch theme light || barch theme dark"
+      ],
+      "patterns": [
+        "(inverte|inverter|alterna|alternar|troca|trocar|muda|mudar|inverta) (o )?(tema|modo|cores)( do sistema)?"
+      ]
+    },
+    {
+      "name": "palette",
+      "kind": "palette",
+      "patterns": [
+        "((usa|usar|aplica|aplicar|coloca|colocar|poe|por|bota|botar|muda|mudar|troca|trocar|passa|passar|ativa|ativar|fixa|fixar) (para |pra |o |a |no |na )?)?(tema|paleta|cores|esquema de cores|palette|theme) (?P<palette>.+)"
+      ]
+    },
+    {
+      "name": "wallpaper",
+      "kind": "scene",
+      "patterns": [
+        "((usa|usar|aplica|aplicar|coloca|colocar|poe|por|bota|botar|muda|mudar|troca|trocar|passa|passar|cena) (para |pra |o |a |no |na )?)?(papel de parede|wallpaper|fundo de tela|fundo|cena) (para |pra |de |do |da )?(?P<scene>[a-z0-9 ]+?)( (na|no|da|do|para|pra) (tela de bloqueio|lock|bloqueio|desktop|area de trabalho))?"
+      ]
+    },
+    {
+      "name": "hdr",
+      "kind": "exec",
+      "onoff": true,
+      "run": [
+        "barch",
+        "hdr",
+        "{onoff}"
+      ],
+      "patterns": [
+        "(?P<verb>liga|ligar|ativa|ativar|habilita|habilitar|desliga|desligar|desativa|desativar|tira|tirar) (o )?hdr",
+        "hdr (?P<verb>on|off|ligado|desligado)"
+      ]
+    },
+    {
+      "name": "sdr",
+      "kind": "exec",
+      "run": [
+        "barch",
+        "sdr",
+        "{n_nits}"
+      ],
+      "patterns": [
+        "(brilho|sdr|brilho do sdr|branco)( da tela| do sdr)? (em |para |pra |de )?(?P<n_nits>[a-z0-9 ]+?)( nits)?",
+        "(coloca|colocar|poe|por|bota|ajusta|ajustar|muda|mudar) (o )?brilho (em |para |pra |de )?(?P<n_nits>[a-z0-9 ]+?)( nits)?"
+      ],
+      "adjust": {
+        "group": "n_nits",
+        "by": 50
+      }
+    },
+    {
+      "name": "side-monitor",
+      "kind": "exec",
+      "onoff": true,
+      "run": [
+        "barch",
+        "monitor",
+        "side",
+        "{onoff}"
+      ],
+      "patterns": [
+        "(?P<verb>liga|ligar|acende|acender|ativa|ativar|desliga|desligar|apaga|apagar|desativa|desativar) (o |a )?(monitor|tela|segundo monitor|segunda tela) ?(lateral|do lado|vertical|secundari[oa]|de lado|em pe|pequen[oa])?",
+        "(monitor|tela) (lateral|vertical|secundari[oa]) (?P<verb>on|off|ligad[oa]|desligad[oa])"
+      ]
+    },
+    {
+      "name": "caffeine",
+      "kind": "exec",
+      "onoff": true,
+      "run": [
+        "barch",
+        "caffeine",
+        "{onoff}"
+      ],
+      "patterns": [
+        "(?P<verb>liga|ligar|ativa|ativar|desliga|desligar|desativa|desativar|tira|tirar) (a |o )?(cafeina|caffeine|cafe)",
+        "(nao deixa|nao deixe|nao pode|impede) (a tela|o monitor|o pc|o computador) (apagar|dormir|desligar|bloquear|travar)(?P<verb>)",
+        "(mantem|mantenha|deixa|deixe) (a tela|o monitor) (ligad[oa]|acesa|aceso|acordad[oa])(?P<verb>)"
+      ]
+    },
+    {
+      "name": "caffeine-off",
+      "kind": "exec",
+      "onoff": "off",
+      "run": [
+        "barch",
+        "caffeine",
+        "off"
+      ],
+      "patterns": [
+        "(pode|deixa|deixe) (a tela|o monitor) (apagar|dormir|desligar)( de novo| agora)?"
+      ]
+    },
+    {
+      "name": "nightlight",
+      "kind": "exec",
+      "onoff": true,
+      "run": [
+        "barch",
+        "nightlight",
+        "{onoff}"
+      ],
+      "patterns": [
+        "(?P<verb>liga|ligar|ativa|ativar|desliga|desligar|desativa|desativar|tira|tirar) (a |o )?(luz noturna|filtro (de luz )?azul|modo noturno|night light|luz quente)"
+      ]
+    },
+    {
+      "name": "dnd",
+      "kind": "exec",
+      "onoff": true,
+      "run": [
+        "barch",
+        "dnd",
+        "{onoff}"
+      ],
+      "patterns": [
+        "(?P<verb>liga|ligar|ativa|ativar|desliga|desligar|desativa|desativar|tira|tirar) (o )?(nao perturbe|nao pertube|modo silencioso|silencioso|dnd|modo foco)",
+        "(?P<verb>silencia|silenciar|desativa|desativar|liga|ligar|ativa|ativar|mostra|mostrar) (as )?notificacoes",
+        "nao (me )?(perturba|perturbe|incomoda|incomode)(?P<verb>)"
+      ]
+    },
+    {
+      "name": "dnd-off",
+      "kind": "exec",
+      "onoff": "off",
+      "run": [
+        "barch",
+        "dnd",
+        "off"
+      ],
+      "patterns": [
+        "(pode|volta a|volte a) (me )?(perturbar|incomodar|notificar)",
+        "(volta|voltar|ativa|ativar|liga|ligar) (as )?notificacoes",
+        "(pode|volta a|volte a) (me )?(perturbar|incomodar|notificar)( de novo| agora)?"
+      ]
+    },
+    {
+      "name": "anon",
+      "kind": "exec",
+      "onoff": true,
+      "run": [
+        "barch",
+        "anon",
+        "{onoff}"
+      ],
+      "say": "Modo anônimo {onoff_pt}.",
+      "timeout": 90,
+      "patterns": [
+        "(?P<verb>liga|ligar|ativa|ativar|entra|entrar|desliga|desligar|desativa|desativar|sai|sair|tira|tirar) (no |do |o |em )?(modo )?(anonimo|anonymous|anonimato|incognito|invisivel)",
+        "(modo )?(anonimo|anonymous|invisivel) (?P<verb>on|off|ligado|desligado)",
+        "(me )?(esconde|esconder|some|sumir)(?P<verb>)",
+        "(fica|ficar|deixa|deixar) (me )?(anonimo|invisivel)(?P<verb>)"
+      ]
+    },
+    {
+      "name": "anon-region",
+      "kind": "region",
+      "say": "Modo anônimo, região {region}.",
+      "timeout": 90,
+      "patterns": [
+        "(liga|ligar|ativa|ativar|entra|entrar) (no |o |em )?(modo )?(anonimo|anonymous|invisivel) (em|no|na|nos|nas|pela|pelo|por) (?P<region>.+)",
+        "(modo )?(anonimo|anonymous|invisivel) (em|no|na|nos|nas|pelo|pela|por) (?P<region>.+)"
+      ],
+      "what": "anon"
+    },
+    {
+      "name": "vpn",
+      "kind": "exec",
+      "onoff": true,
+      "run": [
+        "barch",
+        "vpn",
+        "{onoff}"
+      ],
+      "say": "VPN {onoff_pt}.",
+      "timeout": 90,
+      "patterns": [
+        "(?P<verb>liga|ligar|ativa|ativar|conecta|conectar|sobe|subir|desliga|desligar|desativa|desativar|desconecta|desconectar|derruba|derrubar|tira|tirar) (a |o )?(vpn|vpn do pia|pia|tunel)",
+        "vpn (?P<verb>on|off|ligada|desligada)"
+      ]
+    },
+    {
+      "name": "vpn-region",
+      "kind": "region",
+      "say": "VPN em {region}.",
+      "timeout": 90,
+      "patterns": [
+        "(liga|ligar|ativa|ativar|conecta|conectar|sobe|subir|muda|mudar|troca|trocar|coloca|colocar) (a |o )?(vpn|regiao|regiao da vpn|pia)( para| pra| em| no| na| nos| nas| pelo| pela| por)? (?P<region>.+)",
+        "vpn (em|no|na|nos|nas|pelo|pela|por|para|pra) (?P<region>.+)"
+      ],
+      "what": "vpn"
+    },
+    {
+      "name": "lock",
+      "kind": "exec",
+      "run": [
+        "loginctl",
+        "lock-session"
+      ],
+      "sound": null,
+      "patterns": [
+        "(trava|travar|bloqueia|bloquear|tranca|trancar) (a |o )?(tela|sessao|computador|pc)",
+        "(trava|bloqueia|tranca)( tudo)?",
+        "tela de bloqueio"
+      ]
+    },
+    {
+      "name": "suspend",
+      "kind": "confirm",
+      "ask": "Vou suspender o computador.",
+      "run": [
+        "systemctl",
+        "suspend",
+        "-i"
+      ],
+      "say": "Até depois.",
+      "patterns": [
+        "(suspende|suspender|hiberna|hibernar|dorme|dormir|coloca para dormir|poe para dormir|bota para dormir) ?(o )?(computador|pc|sistema|maquina)?",
+        "(modo )?(de )?(suspensao|descanso|standby)"
+      ]
+    },
+    {
+      "name": "reboot",
+      "kind": "confirm",
+      "ask": "Vou reiniciar o computador.",
+      "run": [
+        "systemctl",
+        "reboot"
+      ],
+      "say": "Reiniciando.",
+      "patterns": [
+        "(reinicia|reiniciar|reboot|restart|da um reboot|da um restart) ?(o )?(computador|pc|sistema|maquina)?"
+      ]
+    },
+    {
+      "name": "poweroff",
+      "kind": "confirm",
+      "ask": "Vou desligar o computador.",
+      "run": [
+        "systemctl",
+        "poweroff"
+      ],
+      "say": "Desligando. Até mais.",
+      "patterns": [
+        "(desliga|desligar|apaga|apagar|shutdown|poweroff) (o )?(computador|pc|sistema|maquina)( agora)?",
+        "desliga tudo"
+      ]
+    },
+    {
+      "name": "claude-project",
+      "kind": "project",
+      "with": "claude",
+      "patterns": [
+        "(abre|abra|abrir|chama|chamar|inicia|iniciar|roda|rodar|lanca|lancar|comeca|comecar|starta|startar) (o )?(claude|cloud|claud|claudio|clode|agente|codigo com o claude) (no|na|em|do|da|de|dentro do|dentro de|para o|pro|pra|para) (projeto |pasta |repositorio |repo )?(?P<proj>.+)",
+        "(claude|cloud|claud|claudio|clode) (no|na|em|do|da|de) (projeto |pasta |repo )?(?P<proj>.+)"
+      ]
+    },
+    {
+      "name": "terminal-project",
+      "kind": "project",
+      "with": "",
+      "patterns": [
+        "(abre|abra|abrir|chama|lanca) (o |um )?(terminal|console|shell|foot) (no|na|em|do|da|de|dentro do|dentro de|para o|pro) (projeto |pasta |repositorio |repo )?(?P<proj>.+)"
+      ]
+    },
+    {
+      "name": "nvim-project",
+      "kind": "project",
+      "with": "nvim",
+      "patterns": [
+        "(abre|abra|abrir|edita|editar) (o )?(projeto|repositorio|repo|codigo|codigo do|codigo de) (?P<proj>.+?)( no (neovim|vim|editor))?",
+        "(abre|abra|abrir) (o |um )?(neovim|vim|editor) (no|na|em|do|da|de) (projeto |pasta |repo )?(?P<proj>.+)"
+      ]
+    },
+    {
+      "name": "files-project",
+      "kind": "project",
+      "with": "files",
+      "patterns": [
+        "(abre|abra|abrir|mostra|mostrar) (a |os )?(pasta|arquivos) (do |de |da )?(projeto |repo )?(?P<proj>.+)"
+      ]
+    },
+    {
+      "name": "claude-here",
+      "kind": "spawn",
+      "run": [
+        "barch",
+        "agent",
+        "ask"
+      ],
+      "patterns": [
+        "(abre|abra|abrir|chama|chamar|inicia|iniciar) (o )?(claude|cloud|claud|claudio|clode|agente)( no barch| aqui)?"
+      ]
+    },
+    {
+      "name": "launcher",
+      "kind": "exec",
+      "run": [
+        "qs",
+        "ipc",
+        "call",
+        "launcher",
+        "toggle"
+      ],
+      "sound": null,
+      "patterns": [
+        "(abre|abra|abrir|mostra|mostrar|fecha|fechar) (o )?(launcher|lancador|menu|menu de aplicativos|busca)"
+      ]
+    },
+    {
+      "name": "clipboard",
+      "kind": "exec",
+      "run": [
+        "qs",
+        "ipc",
+        "call",
+        "launcher",
+        "openWith",
+        "c "
+      ],
+      "sound": null,
+      "patterns": [
+        "(abre|abra|abrir|mostra|mostrar) (o |a )?(clipboard|area de transferencia|historico (do clipboard|de copias|da area de transferencia))"
+      ]
+    },
+    {
+      "name": "notes",
+      "kind": "exec",
+      "run": [
+        "qs",
+        "ipc",
+        "call",
+        "notes",
+        "toggle"
+      ],
+      "sound": null,
+      "patterns": [
+        "(abre|abra|abrir|mostra|mostrar|fecha|fechar) (as |o |minhas )?(notas|anotacoes|bloco de notas|quick notes)"
+      ]
+    },
+    {
+      "name": "shortcuts",
+      "kind": "exec",
+      "run": [
+        "qs",
+        "ipc",
+        "call",
+        "keys",
+        "toggle"
+      ],
+      "sound": null,
+      "patterns": [
+        "(abre|abra|abrir|mostra|mostrar|fecha|fechar) (os |a |as )?(atalhos|teclas de atalho|folha de atalhos|lista de atalhos)"
+      ]
+    },
+    {
+      "name": "overview",
+      "kind": "exec",
+      "run": [
+        "qs",
+        "ipc",
+        "call",
+        "overview",
+        "toggle"
+      ],
+      "sound": null,
+      "patterns": [
+        "(abre|abra|abrir|mostra|mostrar|fecha|fechar) (a |o )?(visao geral|overview|todas as (janelas|areas de trabalho|workspaces))"
+      ]
+    },
+    {
+      "name": "control-center",
+      "kind": "exec",
+      "run": [
+        "qs",
+        "ipc",
+        "call",
+        "control",
+        "open"
+      ],
+      "sound": null,
+      "patterns": [
+        "(abre|abra|abrir|mostra|mostrar) (a |o |os )?(central de controle|control center|controles|painel de controle|painel da barra)"
+      ]
+    },
+    {
+      "name": "window-close",
+      "kind": "hypr",
+      "dispatch": "hl.dsp.window.close()",
+      "sound": null,
+      "patterns": [
+        "(fecha|feche|fechar|mata|encerra|encerre) (essa |esta |a |o )?(janela|aba|aplicativo|app|programa|isso|isto)( atual| ativa| ativo)?"
+      ]
+    },
+    {
+      "name": "window-fullscreen",
+      "kind": "hypr",
+      "dispatch": "hl.dsp.window.fullscreen({ mode = \"fullscreen\", action = \"toggle\" })",
+      "sound": null,
+      "patterns": [
+        "(tela cheia|fullscreen|maximiza|maximizar|maximize|sai da tela cheia|tira da tela cheia)( (a |essa |na )?janela)?",
+        "(coloca|poe|bota) (a |essa )?janela em tela cheia"
+      ]
+    },
+    {
+      "name": "window-float",
+      "kind": "hypr",
+      "dispatch": "hl.dsp.window.float({ action = \"toggle\" })",
+      "sound": null,
+      "patterns": [
+        "(flutua|flutuar|solta|desencaixa|encaixa|ancora) (a |essa )?janela",
+        "janela flutuante",
+        "(tiling|tile|flutuante|float)"
+      ]
+    },
+    {
+      "name": "window-minimize",
+      "kind": "exec",
+      "run": [
+        "qs",
+        "ipc",
+        "call",
+        "minimize",
+        "window"
+      ],
+      "sound": null,
+      "patterns": [
+        "(minimiza|minimizar|minimize|esconde|esconder|guarda|guardar) (a |essa |esta )?janela"
+      ]
+    },
+    {
+      "name": "window-restore",
+      "kind": "exec",
+      "run": [
+        "qs",
+        "ipc",
+        "call",
+        "minimize",
+        "restoreLast"
+      ],
+      "sound": null,
+      "patterns": [
+        "(restaura|restaurar|traz de volta|volta|devolve|mostra) (a )?(ultima )?janela( minimizada)?"
+      ]
+    },
+    {
+      "name": "window-pin",
+      "kind": "exec",
+      "run": [
+        "qs",
+        "ipc",
+        "call",
+        "pin",
+        "toggle"
+      ],
+      "sound": null,
+      "patterns": [
+        "(fixa|fixar|desfixa|prende|pina|pinar) (a |essa )?janela( (em cima|no topo|por cima|sempre visivel))?",
+        "(sempre (no topo|visivel|por cima)|always on top)"
+      ]
+    },
+    {
+      "name": "window-swap",
+      "kind": "hypr",
+      "dispatch": "hl.dsp.window.swap({ direction = \"{dir}\" })",
+      "sound": null,
+      "patterns": [
+        "(troca|move|mover|empurra|joga) (a |essa )?janela (para |pra )?(a )?(?P<dir>esquerda|direita|cima|baixo)"
+      ],
+      "map": {
+        "dir": {
+          "esquerda": "left",
+          "direita": "right",
+          "cima": "up",
+          "baixo": "down"
+        }
+      }
+    },
+    {
+      "name": "focus-dir",
+      "kind": "hypr",
+      "dispatch": "hl.dsp.focus({ direction = \"{dir}\" })",
+      "sound": null,
+      "patterns": [
+        "(foca|focar|foco|vai|va|ir) (na |para a |pra |para |a )?(janela (da |de |a )?)?(?P<dir>esquerda|direita|cima|baixo)"
+      ],
+      "map": {
+        "dir": {
+          "esquerda": "left",
+          "direita": "right",
+          "cima": "up",
+          "baixo": "down"
+        }
+      }
+    },
+    {
+      "name": "workspace-go",
+      "kind": "hypr",
+      "dispatch": "hl.dsp.focus({ workspace = {n_ws} })",
+      "sound": null,
+      "patterns": [
+        "(vai|va|ir|muda|mudar|troca|trocar|pula|pular|foca|focar) (para|pra|no|na|ao|a|o)( o| a)? ?(workspace|area de trabalho|area|espaco|tela|desktop|ws) ?(numero )?(?P<n_ws>[a-z0-9]+)",
+        "(workspace|area de trabalho|area|espaco) (numero )?(?P<n_ws>[a-z0-9]+)"
+      ]
+    },
+    {
+      "name": "workspace-move",
+      "kind": "hypr",
+      "dispatch": "hl.dsp.window.move({ workspace = {n_ws} })",
+      "sound": null,
+      "patterns": [
+        "(move|mover|manda|mandar|leva|levar|joga|jogar|envia|enviar|coloca|colocar|poe|bota) (a |essa |esta |isso )?(janela )?(para|pra|pro|ao|no|na)( o| a)? ?(workspace|area de trabalho|area|espaco|tela|desktop|ws) ?(numero )?(?P<n_ws>[a-z0-9]+)"
+      ]
+    },
+    {
+      "name": "workspace-next",
+      "kind": "hypr",
+      "dispatch": "hl.dsp.focus({ workspace = \"e+1\" })",
+      "sound": null,
+      "patterns": [
+        "(proximo|proxima|avanca|avancar) (workspace|area de trabalho|area|espaco|tela)",
+        "(workspace|area de trabalho) seguinte"
+      ],
+      "inverse": "workspace-prev",
+      "direction": "more"
+    },
+    {
+      "name": "workspace-prev",
+      "kind": "hypr",
+      "dispatch": "hl.dsp.focus({ workspace = \"e-1\" })",
+      "sound": null,
+      "patterns": [
+        "(anterior|volta|voltar|retorna) (o |a |para o |para a |pro |pra )?(workspace|area de trabalho|area|espaco|tela)( anterior)?",
+        "(workspace|area de trabalho) anterior"
+      ],
+      "inverse": "workspace-next",
+      "direction": "less"
+    },
+    {
+      "name": "scratchpad",
+      "kind": "hypr",
+      "dispatch": "hl.dsp.workspace.toggle_special(\"magic\")",
+      "sound": null,
+      "patterns": [
+        "(abre|abra|mostra|esconde|fecha|alterna) (o )?(scratchpad|rascunho|workspace especial|gaveta)",
+        "scratchpad"
+      ]
+    },
+    {
+      "name": "scratchpad-move",
+      "kind": "hypr",
+      "dispatch": "hl.dsp.window.move({ workspace = \"special:magic\" })",
+      "sound": null,
+      "patterns": [
+        "(move|mover|manda|mandar|leva|levar|joga|jogar|guarda|guardar) (a |essa |esta )?(janela )?(para o|pro|no|para a|pra) (scratchpad|rascunho|gaveta)"
+      ]
+    },
+    {
+      "name": "close-named",
+      "kind": "winref",
+      "action": "close",
+      "patterns": [
+        "(fecha|feche|fechar|mata|encerra|encerre) (o |a |as |os )?(janela d[oa] |aba d[oa] )?(?P<win>.+)"
+      ]
+    },
+    {
+      "name": "focus-named",
+      "kind": "winref",
+      "action": "focus",
+      "patterns": [
+        "(foca|focar|foco|vai|va|ir|volta|voltar|mostra|mostrar|traz|trazer|pula|pular) (no|na|para o|para a|pro|pra|ao|de volta para o|de volta pro|de volta para a|de volta pra) (janela d[oa] )?(?P<win>.+)",
+        "(cade|onde (esta|ta)) (o |a )?(?P<win>.+)"
+      ]
+    },
+    {
+      "name": "volume-up",
+      "kind": "exec",
+      "run": [
+        "wpctl",
+        "set-volume",
+        "-l",
+        "1.0",
+        "@DEFAULT_AUDIO_SINK@",
+        "{n_pct}%+"
+      ],
+      "sound": null,
+      "patterns": [
+        "(aumenta|aumentar|sobe|subir|levanta|levantar|mais) (o |um pouco o |um pouco de |um pouco )?(volume|som|audio)( (em |mais |uns )?(?P<n_pct>[a-z0-9 ]+?) ?(por cento|%|porcento))?",
+        "(volume|som) mais alto",
+        "(mais alto|alto)"
+      ],
+      "defaults": {
+        "n_pct": "5"
+      },
+      "inverse": "volume-down",
+      "direction": "more"
+    },
+    {
+      "name": "volume-down",
+      "kind": "exec",
+      "run": [
+        "wpctl",
+        "set-volume",
+        "@DEFAULT_AUDIO_SINK@",
+        "{n_pct}%-"
+      ],
+      "sound": null,
+      "patterns": [
+        "(abaixa|abaixar|baixa|baixar|diminui|diminuir|reduz|reduzir|desce|descer|menos) (o |um pouco o |um pouco de |um pouco )?(volume|som|audio)( (em |menos |uns )?(?P<n_pct>[a-z0-9 ]+?) ?(por cento|%|porcento))?",
+        "(volume|som) mais baixo",
+        "(mais baixo|baixo)"
+      ],
+      "defaults": {
+        "n_pct": "5"
+      },
+      "inverse": "volume-up",
+      "direction": "less"
+    },
+    {
+      "name": "volume-set",
+      "kind": "exec",
+      "run": [
+        "wpctl",
+        "set-volume",
+        "-l",
+        "1.0",
+        "@DEFAULT_AUDIO_SINK@",
+        "{n_pct}%"
+      ],
+      "sound": null,
+      "patterns": [
+        "(coloca|colocar|poe|por|bota|botar|ajusta|ajustar|deixa|deixar|muda|mudar) (o )?(volume|som) (em |para |pra |no |a )?(?P<n_pct>[a-z0-9 ]+?) ?(por cento|%|porcento)?",
+        "(volume|som) (em |para |pra |no |a )?(?P<n_pct>[a-z0-9 ]+?) ?(por cento|%|porcento)"
+      ],
+      "adjust": {
+        "group": "n_pct",
+        "by": 5
+      }
+    },
+    {
+      "name": "mute",
+      "kind": "exec",
+      "run": [
+        "wpctl",
+        "set-mute",
+        "@DEFAULT_AUDIO_SINK@",
+        "1"
+      ],
+      "sound": null,
+      "patterns": [
+        "(muta|mutar|mute|silencia|silenciar|desliga|desligar|tira|corta|cortar) (o )?(som|audio|volume|alto falante|caixa|caixas)( de som)?",
+        "(sem som|mudo|silencio total)"
+      ]
+    },
+    {
+      "name": "unmute",
+      "kind": "exec",
+      "run": [
+        "wpctl",
+        "set-mute",
+        "@DEFAULT_AUDIO_SINK@",
+        "0"
+      ],
+      "sound": null,
+      "patterns": [
+        "(desmuta|desmutar|unmute|volta|voltar|liga|ligar|devolve|ativa|ativar) (o |com )?(som|audio|volume)",
+        "(tira|tirar) (do )?mudo"
+      ]
+    },
+    {
+      "name": "mic-mute",
+      "kind": "exec",
+      "run": [
+        "wpctl",
+        "set-mute",
+        "@DEFAULT_AUDIO_SOURCE@",
+        "toggle"
+      ],
+      "sound": null,
+      "patterns": [
+        "(muta|mutar|desmuta|desmutar|silencia|liga|desliga|alterna) (o )?(microfone|mic|mike)"
+      ]
+    },
+    {
+      "name": "media-play",
+      "kind": "exec",
+      "run": [
+        "playerctl",
+        "play-pause"
+      ],
+      "sound": null,
+      "patterns": [
+        "(pausa|pausar|pause|para|parar|toca|tocar|play|continua|continuar|retoma|retomar|despausa)( (a |o )?(musica|som|video|midia|player|reproducao|spotify))?",
+        "(musica|play|pause|pausa)",
+        "(coloca|colocar|bota|botar|poe|por|toca|tocar) (uma |a |um )?(musica|som|musiquinha)( ai| para mim| pra mim)?"
+      ]
+    },
+    {
+      "name": "media-next",
+      "kind": "exec",
+      "run": [
+        "playerctl",
+        "next"
+      ],
+      "sound": null,
+      "patterns": [
+        "(proxima|proximo|pula|pular|avanca|avancar|passa|passar|troca) (a |o |de |essa |esta )?(musica|faixa|som|track)?",
+        "(proxima|next|skip)"
+      ],
+      "inverse": "media-prev",
+      "direction": "more"
+    },
+    {
+      "name": "media-prev",
+      "kind": "exec",
+      "run": [
+        "playerctl",
+        "previous"
+      ],
+      "sound": null,
+      "patterns": [
+        "(volta|voltar|anterior|retorna) (a |uma |para a |pra |o )?(musica|faixa|som|track)( anterior)?",
+        "(musica|faixa) anterior"
+      ],
+      "inverse": "media-next",
+      "direction": "less"
+    },
+    {
+      "name": "media-what",
+      "kind": "exec",
+      "run": [
+        "sh",
+        "-c",
+        "t=$(playerctl metadata --format '{{title}}, de {{artist}}' 2>/dev/null); [ -n \"$t\" ] && echo \"Está tocando $t.\" || echo 'Nada tocando agora.'"
+      ],
+      "say_output": true,
+      "patterns": [
+        "(que|qual) (musica|som|faixa) (e essa|esta tocando|ta tocando|e esta)",
+        "o que (esta|ta) tocando",
+        "(quem|que artista) (esta|ta) (cantando|tocando)",
+        "(qual|que) (e )?(a )?(musica|som|faixa)( (e essa|esta tocando|ta tocando|que (esta|ta) tocando))?"
+      ]
+    },
+    {
+      "name": "screenshot",
+      "kind": "exec",
+      "run": [
+        "sh",
+        "-c",
+        "mkdir -p ~/Pictures/Screenshots && f=~/Pictures/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png && sleep 0.4 && grim \"$f\" && wl-copy < \"$f\" && barch notify Screenshot 'Saved and copied to the clipboard'"
+      ],
+      "sound": null,
+      "patterns": [
+        "(tira|tirar|faz|fazer|captura|capturar|bate|bater|salva|salvar) (um |uma |a )?(print|screenshot|captura|captura de tela|foto da tela|print da tela|printscreen)"
+      ]
+    },
+    {
+      "name": "record",
+      "kind": "exec",
+      "run": [
+        "qs",
+        "ipc",
+        "call",
+        "replay",
+        "save"
+      ],
+      "sound": null,
+      "patterns": [
+        "(salva|salvar|guarda|guardar) (o |a |esse |essa )?(replay|clipe|clip|jogada|ultimos minutos|gravacao)"
+      ]
+    },
+    {
+      "name": "replay-toggle",
+      "kind": "exec",
+      "run": [
+        "qs",
+        "ipc",
+        "call",
+        "replay",
+        "toggle"
+      ],
+      "sound": null,
+      "patterns": [
+        "(liga|ligar|ativa|ativar|desliga|desligar|desativa|desativar|comeca|comecar|para|parar) (o |a )?(replay|gravacao continua|shadowplay|buffer de gravacao)"
+      ]
+    },
+    {
+      "name": "updates",
+      "kind": "exec",
+      "run": [
+        "sh",
+        "-c",
+        "n=$( (checkupdates 2>/dev/null; paru -Qua 2>/dev/null) | wc -l); if [ \"$n\" = 0 ]; then echo 'Tudo atualizado.'; else echo \"Tem $n pacotes para atualizar.\"; fi"
+      ],
+      "say_output": true,
+      "timeout": 60,
+      "patterns": [
+        "(tem|ha|existe|existem) (alguma |algumas )?(atualizacao|atualizacoes|update|updates)( pendentes?| disponiveis?)?",
+        "(quantas|quantos) (atualizacoes|pacotes|updates)( tem| pendentes| para atualizar)?",
+        "(o )?(sistema|pc) (esta|ta) atualizado"
+      ]
+    },
+    {
+      "name": "disk",
+      "kind": "exec",
+      "run": [
+        "sh",
+        "-c",
+        "df -h --output=pcent,avail / | tail -1 | awk '{gsub(\"%\",\"\",$1); print \"O disco está com \" $1 \" por cento usado, \" $2 \" livres.\"}'"
+      ],
+      "say_output": true,
+      "patterns": [
+        "(como (esta|ta) o disco|quanto (espaco|disco) (tem|sobra|resta|falta|livre)|espaco (em disco|livre|no disco)|disco (cheio|livre))"
+      ]
+    },
+    {
+      "name": "agenda",
+      "kind": "exec",
+      "run": [
+        "sh",
+        "-c",
+        "a=$(khal list today today --format '{start-time} {title}' --day-format '' 2>/dev/null | grep -v '^$' | head -5); [ -n \"$a\" ] && printf 'Hoje: %s' \"$(echo \"$a\" | paste -sd ';' | sed 's/;/; /g')\" || echo 'Nada na agenda de hoje.'"
+      ],
+      "say_output": true,
+      "timeout": 20,
+      "patterns": [
+        "(o que|que) (tem|eu tenho|temos) (hoje|na agenda|para hoje|pra hoje|marcado)",
+        "(minha |a )?agenda( de hoje| do dia)?",
+        "(quais|que) (compromissos|reunioes|eventos) (tem|tenho|temos)( hoje)?"
+      ]
+    },
+    {
+      "name": "weather",
+      "kind": "claude",
+      "patterns": [
+        "(como (esta|ta) o (tempo|clima)|vai chover|previsao do tempo|que tempo faz|temperatura (la fora|agora|de hoje))(?P<q>)"
+      ]
+    },
+    {
+      "name": "app",
+      "kind": "app",
+      "patterns": [
+        "(abre|abra|abrir|lanca|lance|lancar|inicia|inicie|iniciar|executa|execute|executar|roda|rode|rodar|starta|startar|chama|chamar|mostra|mostrar) (o |a |um |uma |os |as )?(aplicativo |app |programa )?(?P<app>.+?)( para mim| pra mim)?",
+        "(aplicativo|app|programa) (?P<app>.+)"
+      ]
+    },
+    {
+      "name": "ask",
+      "kind": "claude",
+      "patterns": [
+        "(pergunta|pergunte|perguntar|pesquisa|pesquise|pesquisar|busca|busque|procura|procure) (ao claude |para o claude |pro claude )?(?P<q>.+)",
+        "(claude|cloud|claud|clode)[ ,]+(?P<q>.+)"
+      ]
+    }
+  ]
+}

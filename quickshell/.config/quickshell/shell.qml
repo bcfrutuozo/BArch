@@ -48,6 +48,7 @@ import "vpn"
 import "anon"
 import "wallpaper"
 import "polkit"
+import "voice"
 
 ShellRoot {
   id: shell
@@ -595,6 +596,9 @@ ShellRoot {
 
         // VPN (PIA): só aparece com o túnel ligado
         VpnWidget {}
+
+        // Controle por voz (barch-voice): só aparece com o serviço ligado
+        VoiceWidget {}
 
         // Bluetooth
         BluetoothWidget {}

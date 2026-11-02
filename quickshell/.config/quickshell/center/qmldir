@@ -1,10 +1,13 @@
 singleton Ui Ui.qml
 singleton Store Store.qml
 AgentPage 1.0 AgentPage.qml
+AutomationPage 1.0 AutomationPage.qml
 Badge 1.0 Badge.qml
 Card 1.0 Card.qml
+Chart 1.0 Chart.qml
 ColorButton 1.0 ColorButton.qml
 FailuresPage 1.0 FailuresPage.qml
+HistoryPage 1.0 HistoryPage.qml
 JournalPage 1.0 JournalPage.qml
 LogPanel 1.0 LogPanel.qml
 OverviewPage 1.0 OverviewPage.qml

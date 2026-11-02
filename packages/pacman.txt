@@ -40,6 +40,7 @@ fwupd
 fzf
 gamemode
 gamescope
+ggml-cuda
 gimp
 git
 github-cli
@@ -159,6 +160,7 @@ vulkan-profiles
 vulkan-tools
 vulkan-utility-libraries
 vulkan-validation-layers
+whisper-cpp
 wireplumber
 wl-clip-persist
 wl-clipboard

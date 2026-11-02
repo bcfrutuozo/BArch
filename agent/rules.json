@@ -1,0 +1,180 @@
+{
+  "_doc": [
+    "Reactive rules of barch-events (agent/events.py): when an event happens or a metric crosses a line, do something.",
+    "Rule: id, description, when, do (shell commands, run in order; {field} placeholders are shell-quoted), notify (text of a",
+    "notification; title is the description), say (spoken through barch voice), ask (notify with a Run button instead of acting),",
+    "cooldown (30s 5m 2h 1d; default 60s), critical (notification urgency), enabled (default true).",
+    "when: {event: name, <field>: regex...} matches an event by name and regexes on its fields (search, case-insensitive);",
+    "      {metric: name, above|below: value, clear: value} fires once when the metric crosses the line and re-arms past clear.",
+    "Events: window.open/close/urgent (address, class, title, workspace), window.fullscreen (on), monitor.added/removed (name,",
+    "description), vpn.up/down (region, name, country), anon.on/off, net.up/down (dev), pods.connected/disconnected (name),",
+    "session.locked/unlocked, failure (unit, path), boot (seconds, text, kernel), claude.cost (source, usd, note), startup (boot_age_s).",
+    "Metrics: cpu.temp cpu.pct cpu.load1 temp.<hwmon> gpu.temp gpu.util gpu.power gpu.vram_pct ram.pct swap.pct disk.<root|home>.pct",
+    "disk.<..>.free_gb net.latency_ms vpn.latency_ms vpn.connected pods.<left|right|case>.pct health.issues health.failed_units boot.seconds.",
+    "`barch rules list|test|fire|enable|disable`, `barch events log`, `barch metrics list|series|summary`; the daemon reloads this file by itself."
+  ],
+  "interval_s": 30,
+  "health_every_s": 300,
+  "disks": [
+    "/",
+    "/home"
+  ],
+  "ping": "1.1.1.1",
+  "raw_days": 7,
+  "events_days": 180,
+  "rules": [
+    {
+      "id": "disk-full",
+      "description": "Root filesystem above 90%",
+      "when": {
+        "metric": "disk.root.pct",
+        "above": 90,
+        "clear": 85
+      },
+      "notify": "Disco em {value}%. Limpeza: barch health, Packages → orphans, snapper list.",
+      "critical": true,
+      "cooldown": "6h"
+    },
+    {
+      "id": "cpu-hot",
+      "description": "CPU above 90 °C",
+      "when": {
+        "metric": "cpu.temp",
+        "above": 90,
+        "clear": 80
+      },
+      "notify": "CPU a {value} °C.",
+      "critical": true,
+      "cooldown": "30m"
+    },
+    {
+      "id": "gpu-hot",
+      "description": "GPU above 85 °C",
+      "when": {
+        "metric": "gpu.temp",
+        "above": 85,
+        "clear": 75
+      },
+      "notify": "GPU a {value} °C.",
+      "critical": true,
+      "cooldown": "30m"
+    },
+    {
+      "id": "vpn-dropped",
+      "description": "VPN dropped",
+      "when": {
+        "event": "vpn.down"
+      },
+      "notify": "O túnel {name} caiu. Com o modo anônimo ligado o kill switch segura o tráfego.",
+      "say": "A VPN caiu.",
+      "critical": true,
+      "cooldown": "2m"
+    },
+    {
+      "id": "net-down",
+      "description": "No default route",
+      "when": {
+        "event": "net.down"
+      },
+      "notify": "Sem rota padrão: a rede caiu.",
+      "say": "A rede caiu.",
+      "cooldown": "5m"
+    },
+    {
+      "id": "net-back",
+      "description": "Network is back",
+      "when": {
+        "event": "net.up"
+      },
+      "notify": "Rede de volta por {dev}.",
+      "cooldown": "5m"
+    },
+    {
+      "id": "pods-low-left",
+      "description": "AirPods left below 20%",
+      "when": {
+        "metric": "pods.left.pct",
+        "below": 20,
+        "clear": 30
+      },
+      "notify": "AirPods esquerdo em {value}%.",
+      "cooldown": "1h"
+    },
+    {
+      "id": "pods-low-right",
+      "description": "AirPods right below 20%",
+      "when": {
+        "metric": "pods.right.pct",
+        "below": 20,
+        "clear": 30
+      },
+      "notify": "AirPods direito em {value}%.",
+      "cooldown": "1h"
+    },
+    {
+      "id": "game-opened",
+      "description": "A game window opened",
+      "when": {
+        "event": "window.open",
+        "class": "^(steam_app_\\d+|wow(classic)?\\.exe|battle\\.net\\.exe|gamescope)$"
+      },
+      "do": [
+        "barch caffeine on"
+      ],
+      "notify": "{class}: cafeína ligada enquanto o jogo roda.",
+      "cooldown": "2m",
+      "enabled": false
+    },
+    {
+      "id": "game-closed",
+      "description": "The game window closed",
+      "when": {
+        "event": "window.close",
+        "class": "^(steam_app_\\d+|wow(classic)?\\.exe|gamescope)$"
+      },
+      "do": [
+        "barch caffeine off"
+      ],
+      "cooldown": "2m",
+      "enabled": false
+    },
+    {
+      "id": "monitor-added",
+      "description": "A monitor was connected",
+      "when": {
+        "event": "monitor.added"
+      },
+      "notify": "{name} conectado: {description}",
+      "cooldown": "30s"
+    },
+    {
+      "id": "monitor-removed",
+      "description": "A monitor was disconnected",
+      "when": {
+        "event": "monitor.removed"
+      },
+      "notify": "{name} desconectado.",
+      "cooldown": "30s"
+    },
+    {
+      "id": "boot-slow",
+      "description": "Boot took more than 60 s",
+      "when": {
+        "metric": "boot.seconds",
+        "above": 60
+      },
+      "notify": "O boot levou {value} s. systemd-analyze blame mostra quem demorou.",
+      "cooldown": "1h"
+    },
+    {
+      "id": "claude-expensive",
+      "description": "One Claude call cost more than a dollar",
+      "when": {
+        "event": "claude.cost",
+        "usd": "^[1-9]\\d*(\\.\\d+)?$"
+      },
+      "notify": "{source}: US$ {usd} em uma chamada ({note}).",
+      "cooldown": "10m"
+    }
+  ]
+}

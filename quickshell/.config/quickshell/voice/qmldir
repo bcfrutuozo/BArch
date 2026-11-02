@@ -1,0 +1,2 @@
+singleton Voice Voice.qml
+VoiceWidget VoiceWidget.qml

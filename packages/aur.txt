@@ -17,6 +17,8 @@ papirus-folders
 parsec-bin
 paru
 paru-debug
+piper-tts
 rasdaemon
 ttf-mac-fonts
+whisper.cpp-model-large-v3-turbo-q5_0
 zoom

@@ -122,6 +122,11 @@ else
   fi
 fi
 
+step "Voice control (barch-voice)"
+# whisper.cpp + model, piper + the pt_BR voice (quickshell/voice/setup.sh); the daemon runs
+# without them and says so in the bar, so a missing piece is not fatal here
+if bash "$REPO/quickshell/.config/quickshell/voice/setup.sh" --install; then ok "whisper.cpp, model and piper voice"; else warn "voice control incomplete (barch voice setup)"; fi
+
 step "User services"
 systemctl --user daemon-reload || true
 # os listados em lib.sh + os que estavam ligados na máquina original (packages/user-services.txt)
