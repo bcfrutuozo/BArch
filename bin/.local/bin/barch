@@ -64,6 +64,10 @@ Desktop (through the bar):
                               10, true, "dwindle", {"colors":["rgba(ff0000ff)"],"angle":45})
   hypr reset <option>|all     forget it (the files' value is back after the reload this does)
   hypr list|status            what the app saved · version, option count, config errors
+  center [<page>]             BArch Center (quickshell/center): services and timers (user and
+                              system), the failures saved by `barch failure`, the agent tasks
+                              and reports, the safety snapshots, health, journal; page: overview|
+                              services|timers|failures|agent|snapshots|journal
   hdr on|off|status           HDR on the main monitor
   sdr <nits>|status           SDR brightness inside HDR
   monitor side on|off|status  side monitor (DPMS)
@@ -478,6 +482,17 @@ cmd_hypr() {
       show "$out" '"Hyprland \(.version): \(.options) options, \(.saved) saved by the app, \(.binds) binds added; \(.report)" + (if .configErrors != "" then "\nconfig errors:\n" + .configErrors else "" end)' ;;
     *) usage_error "hypr [edit] [<page>] | get <option> | set <option> <value> | reset <option>|all | list | status" ;;
   esac
+}
+
+# ---------------------------------------------------------------- center
+
+cmd_center() {
+  local cfg=$HOME/.config/quickshell/center
+  if qs -p "$cfg" ipc show >/dev/null 2>&1; then
+    qs -p "$cfg" ipc call app open "${1:-}" >/dev/null
+    return
+  fi
+  BARCH_CENTER_PAGE=${1:-} setsid -f qs -p "$cfg" >/dev/null 2>&1
 }
 
 # ---------------------------------------------------------------- snapshot
@@ -1164,6 +1179,7 @@ case $cmd in
   theme) cmd_theme "$@" ;;
   wallpaper) cmd_wallpaper "$@" ;;
   hypr) cmd_hypr "$@" ;;
+  center) cmd_center "$@" ;;
   hdr) cmd_hdr "$@" ;;
   sdr) cmd_sdr "$@" ;;
   monitor) cmd_monitor "$@" ;;

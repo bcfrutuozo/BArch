@@ -1,0 +1,1 @@
+../ui/UiSwitch.qml

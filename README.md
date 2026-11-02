@@ -27,7 +27,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | Folder | Goes to | What it is |
 |---|---|---|
 | `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, `scripts/lock.sh` (locks; starts and supervises the resident lock process); `settings.json` is what the Hyprland Settings app saved (below) |
-| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app |
+| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `ui/` the controls both apps share (linked into each) |
 | `foot/` | `~/.config/foot` | Terminal |
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
 | `mpv/` | `~/.config/mpv` | Video player (HDR, NVDEC) |
@@ -151,6 +151,19 @@ The main pieces:
   gestures reload Hyprland; environment waits for the next start. `barch hypr get|set|reset|list|status`
   does the same from a shell (`barch hypr set general:gaps_out 10`, `barch hypr reset all`), and
   the app follows the file while open.
+- **System Center** (`quickshell/center/`, own window: "System Center" in the launcher, `barch center [page]`):
+  the agent infrastructure and systemd in one place. **Overview** (the bar's health check with a
+  Check now, failed units, failures in the last day, the latest report of every agent task, the
+  next timers), **Services** (user and system units with state and enabled state, journal, start /
+  stop / restart / reset-failed / enable / disable; system units go through polkit, so the bar's
+  agent asks the password), **Timers** (both scopes, next and last run, run the service now),
+  **Failures** (the logs `barch failure` saved, grouped by unit: view, Investigate with Claude,
+  delete; the ignore list `agent/failure-ignore` editable), **Agent** (ask Claude, each task with
+  its timer, last result, Run now, the report in a side panel, Continue the session, history of
+  reports), **Snapshots** (the pre/post pairs of the Claude sessions: Status and Undo open a
+  terminal with the `sudo snapper` command, copy it, resume that session) and **Journal** (this
+  boot, by priority, unit and regex). Nothing is reimplemented: it runs `systemctl`, `journalctl`
+  and `barch --json …` and refreshes every 30 s.
 - **Polkit agent** (`Quickshell.Services.Polkit`, no hyprpolkitagent): the password dialog apps get
   when they ask for privileges (`pkexec`, GNOME Disks, …), in the bar's theme.
 - **Own notification server** with history, DND, sounds and app actions; privacy indicator
@@ -209,6 +222,7 @@ barch wallpaper list|status        barch wallpaper <scene> [--lock|--desktop]   
 barch wallpaper render [<palette>|all]   # the scenes in a palette's colors (automatic when pinned)
 barch hypr [edit] [<page>]         # Hyprland Settings (every option of the installed version, monitors, binds…)
 barch hypr get|set|reset|list|status [<option>] [<value>]   # the same file from a shell (see The bar)
+barch center [<page>]              # System Center: services, timers, failures, agent, snapshots, journal
 barch hdr on|off|status            barch sdr <nits>|status
 barch monitor side on|off|status   barch caffeine on|off|status
 barch nightlight on|off|status     barch dnd on|off|status
