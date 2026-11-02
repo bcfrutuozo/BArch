@@ -55,6 +55,15 @@ Desktop (through the bar):
   wallpaper render [<palette>|all]
                               draw the scenes in a palette's colors (the bar does it on its own the
                               first time a palette is pinned); default: the palette in use
+  hypr [edit] [<page>]        Hyprland Settings (quickshell/hypr): every option of the installed
+                              version, monitors, binds, animations, rules, devices, startup; page:
+                              a section (general, decoration, input…) or monitors|binds|animations|
+                              rules|devices|startup|files
+  hypr get <option>           an option: current value, default, what the app saved
+  hypr set <option> <value>   save it in hypr/settings.json and apply it live (value as JSON:
+                              10, true, "dwindle", {"colors":["rgba(ff0000ff)"],"angle":45})
+  hypr reset <option>|all     forget it (the files' value is back after the reload this does)
+  hypr list|status            what the app saved · version, option count, config errors
   hdr on|off|status           HDR on the main monitor
   sdr <nits>|status           SDR brightness inside HDR
   monitor side on|off|status  side monitor (DPMS)
@@ -413,6 +422,62 @@ cmd_health() {
         else (if .backup.ok then "ok" else "FAILED" end) + " (last \(.backup.at | strflocaltime("%Y-%m-%d %H:%M")))"
           + (if .backupLate then " · overdue" else "" end) end)
     end'
+}
+
+# ---------------------------------------------------------------- hypr
+
+# The settings app keeps its changes in ~/.config/hypr/settings.json (conf/settings.lua applies
+# them over the hand-written files); these commands edit that file the same way and apply through
+# `hyprctl eval`, so they work with or without the app open (it watches the file).
+HYPR_SETTINGS=$HOME/.config/hypr/settings.json
+hypr_settings() { [[ -s $HYPR_SETTINGS ]] && cat "$HYPR_SETTINGS" || echo '{}'; }
+hypr_write() { local tmp; tmp=$(mktemp "$HYPR_SETTINGS.XXXXXX") && jq . >"$tmp" && mv "$tmp" "$HYPR_SETTINGS"; }
+hypr_desc() { hyprctl -j descriptions 2>/dev/null | jq -e --arg n "$1" '.[] | select(.name == $n)' 2>/dev/null; }
+hypr_report() { hyprctl eval 'BArch.settings.report()' 2>&1 | sed 's/^error: //'; }
+
+hypr_edit() {
+  local cfg=$HOME/.config/quickshell/hypr
+  if qs -p "$cfg" ipc show >/dev/null 2>&1; then
+    qs -p "$cfg" ipc call app open "${1:-}" >/dev/null
+    return
+  fi
+  BARCH_HYPR_PAGE=${1:-} setsid -f qs -p "$cfg" >/dev/null 2>&1
+}
+
+cmd_hypr() {
+  command -v hyprctl >/dev/null || die 3 "hyprctl not found"
+  case "${1:-edit}" in
+    edit) hypr_edit "${2:-}" ;;
+    get)
+      [[ -n ${2:-} ]] || usage_error "hypr get <option>"
+      local d; d=$(hypr_desc "$2") || die 1 "unknown option: $2 (hyprctl descriptions)"
+      local out; out=$(jq -n --argjson d "$d" --argjson s "$(hypr_settings)" \
+        '{ok: true, name: $d.name, current: $d.current, default: $d.default, saved: ($s.options[$d.name] // null), description: $d.description}')
+      show "$out" '"\(.name) = \(.current | tojson)  (default \(.default | tojson)\(if .saved != null then ", saved by the app: " + (.saved | tojson) else "" end))\n  \(.description)"' ;;
+    set)
+      [[ -n ${2:-} && -n ${3:-} ]] || usage_error "hypr set <option> <value>"
+      hypr_desc "$2" >/dev/null || die 1 "unknown option: $2 (hyprctl descriptions)"
+      local v; v=$(jq -c . <<<"$3" 2>/dev/null) || v=$(jq -Rc . <<<"$3")    # not JSON: a string
+      hypr_settings | jq --arg n "$2" --argjson v "$v" '.options[$n] = $v' | hypr_write || die 1 "cannot write $HYPR_SETTINGS"
+      hyprctl eval "BArch.settings.apply(\"options\", \"$2\")" >/dev/null 2>&1
+      local rep; rep=$(hypr_report)
+      if [[ $rep == *" 0 error(s)"* ]]; then show "$(jq -n --arg n "$2" --argjson v "$v" '{ok: true, name: $n, value: $v}')" '"\(.name) = \(.value | tojson)"'
+      else die 1 "applied with errors: $rep"; fi ;;
+    reset)
+      [[ -n ${2:-} ]] || usage_error "hypr reset <option>|all"
+      if [[ $2 == all ]]; then hypr_settings | jq 'del(.options)' | hypr_write
+      else hypr_settings | jq --arg n "$2" 'del(.options[$n]) | if .options == {} then del(.options) else . end' | hypr_write; fi
+      hyprctl reload >/dev/null 2>&1
+      show "$(jq -n --arg n "$2" '{ok: true, reset: $n}')" '"\(.reset): back to the files (reloaded)"' ;;
+    list) show "$(hypr_settings)" '(.options // {}) | to_entries[] | "\(.key) = \(.value | tojson)"' ;;
+    status)
+      local n; n=$(hyprctl -j descriptions | jq 'length')
+      local out; out=$(jq -n --arg v "$(hyprctl -j version | jq -r '.tag // .version')" --argjson n "$n" --argjson s "$(hypr_settings)" \
+        --arg errors "$(hyprctl configerrors 2>/dev/null)" --arg report "$(hypr_report)" \
+        '{ok: true, version: $v, options: $n, saved: (($s.options // {}) | length), monitors: (($s.monitors // {}) | keys), binds: (($s.binds // []) | length), configErrors: $errors, report: $report}')
+      show "$out" '"Hyprland \(.version): \(.options) options, \(.saved) saved by the app, \(.binds) binds added; \(.report)" + (if .configErrors != "" then "\nconfig errors:\n" + .configErrors else "" end)' ;;
+    *) usage_error "hypr [edit] [<page>] | get <option> | set <option> <value> | reset <option>|all | list | status" ;;
+  esac
 }
 
 # ---------------------------------------------------------------- snapshot
@@ -1098,6 +1163,7 @@ case $cmd in
   notify) cmd_notify "$@" ;;
   theme) cmd_theme "$@" ;;
   wallpaper) cmd_wallpaper "$@" ;;
+  hypr) cmd_hypr "$@" ;;
   hdr) cmd_hdr "$@" ;;
   sdr) cmd_sdr "$@" ;;
   monitor) cmd_monitor "$@" ;;

@@ -1,0 +1,20 @@
+{
+  "options": {
+    "decoration:wobble:enabled": false,
+    "decoration:wobble:damping": 12,
+    "general:border_size": 2,
+    "general:gaps_in": 4,
+    "general:gaps_out": 12,
+    "general:layout": "dwindle",
+    "general:allow_tearing": false,
+    "render:xp_mode": false,
+    "render:cm_auto_hdr": 0
+  },
+  "animations": {
+    "borderangle": {
+      "enabled": false,
+      "speed": 1,
+      "bezier": "default"
+    }
+  }
+}

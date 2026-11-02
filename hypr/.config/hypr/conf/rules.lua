@@ -83,6 +83,15 @@ hl.window_rule({
     size   = "1120 720",
 })
 
+-- Hyprland Settings (quickshell/hypr, `barch hypr`): flutuando e centralizado.
+hl.window_rule({
+    name  = "hyprland-settings",
+    match = { title = "^BArch Hyprland$" },
+    float  = true,
+    center = true,
+    size   = "1280 820",
+})
+
 -- Diálogos de arquivo: flutuando e centralizados, num tamanho fixo.
 hl.window_rule({
     name  = "file-dialogs",
