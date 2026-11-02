@@ -15,7 +15,6 @@
 644 /etc/locale.gen
 644 /etc/makepkg.conf
 644 /etc/mkinitcpio.conf
-644 /etc/mkinitcpio.d/linux.preset
 644 /etc/modprobe.d/kvm.conf
 644 /etc/modprobe.d/nvidia.conf
 644 /etc/modules-load.d/ntsync.conf

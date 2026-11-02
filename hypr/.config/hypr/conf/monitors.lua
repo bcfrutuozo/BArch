@@ -52,6 +52,8 @@ function BArch.apply_monitor(name)
     local t = {}
     for k, v in pairs(BArch.monitors[name] or {}) do t[k] = v end
     t.disabled = false   -- re-enables an output turned off by hl.monitor({ disabled = true }); an override wins
+    -- what the settings app saved for this output (settings.json), then the bar's live changes
+    for k, v in pairs((BArch.settings and BArch.settings.monitor(name)) or {}) do t[k] = v end
     for k, v in pairs(BArch.monitor_overrides[name] or {}) do t[k] = v end
     hl.monitor(t)
 end

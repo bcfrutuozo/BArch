@@ -26,8 +26,8 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 
 | Folder | Goes to | What it is |
 |---|---|---|
-| `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, `scripts/lock.sh` (locks; starts and supervises the resident lock process) |
-| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor |
+| `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, `scripts/lock.sh` (locks; starts and supervises the resident lock process); `settings.json` is what the Hyprland Settings app saved (below) |
+| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app |
 | `foot/` | `~/.config/foot` | Terminal |
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
 | `mpv/` | `~/.config/mpv` | Video player (HDR, NVDEC) |
@@ -125,6 +125,32 @@ The main pieces:
   so the two can differ. `make_wallpapers.py ~/Pictures/Wallpapers [-p palette]... [scene...]`
   regenerates them (a new scene is a function in `SCENES`; a new palette in `palettes.json` is
   enough, and a palette saved in the editor renders its set by itself).
+- **Hyprland Settings** (`quickshell/hypr/`, its own Quickshell window: "Hyprland Settings" in the
+  launcher, `barch hypr [page]`): every config option of the Hyprland version installed, read from
+  `hyprctl descriptions` (name, description, default, current value, range, enum) and typed with
+  the Lua stubs Hyprland ships (`/usr/share/hypr/stubs/hl.meta.lua`), so nothing is hardcoded
+  and a new release shows its new options by itself. Sections in a sidebar, search across all of
+  them, and each option gets the control its type asks for: switch, slider + field, enum,
+  color (hex + hue/saturation/lightness/alpha popup), gradient (stops + angle), gaps (one or four
+  values), vec2, text with the choices the description lists. Every row says where the value
+  comes from (`conf/look.lua:9`), what Hyprland's default is, whether the bar's theme owns it
+  (border colors, rounding, background: change those in the palette editor) and has a reset.
+  More pages: **Monitors** (every field of `hl.monitor` per output, with the modes the output
+  reports), **Key binds** (everything `hyprctl binds` knows; add binds that run a command or a
+  Lua dispatcher, with flags and the `Group|Name` description of the shortcut sheet; turn a
+  bind of the files off with `hl.unbind`), **Animations** (the tree with enabled/speed/curve/style,
+  the bezier curves drawn, new beziers and springs), **Rules** (window, layer and workspace: the
+  files' ones read-only with their line, the app's ones editable as match + properties),
+  **Devices** (`hl.device` per input device), **Startup** (commands at session start, environment,
+  gestures) and **Files** (the Lua files, config errors, the app's own file).
+  The hand-written Lua is never edited: what you change goes to `hypr/.config/hypr/settings.json`
+  (saved with the repo) and `conf/settings.lua`, required by `hyprland.lua`, applies it on top of
+  the files, so a reload or a fresh install keeps it; a reset removes the entry and the files'
+  value is back. Options, monitors, animations and devices apply live (`hyprctl eval` into
+  `BArch.settings.apply`, since the Lua config has no `hyprctl keyword`); binds, rules and
+  gestures reload Hyprland; environment waits for the next start. `barch hypr get|set|reset|list|status`
+  does the same from a shell (`barch hypr set general:gaps_out 10`, `barch hypr reset all`), and
+  the app follows the file while open.
 - **Polkit agent** (`Quickshell.Services.Polkit`, no hyprpolkitagent): the password dialog apps get
   when they ask for privileges (`pkexec`, GNOME Disks, …), in the bar's theme.
 - **Own notification server** with history, DND, sounds and app actions; privacy indicator
@@ -181,6 +207,8 @@ barch theme from-image <image> [--id ID] [--label NAME] [--dark|--light]   # a p
 barch theme delete|export <palette>
 barch wallpaper list|status        barch wallpaper <scene> [--lock|--desktop]   # both by default
 barch wallpaper render [<palette>|all]   # the scenes in a palette's colors (automatic when pinned)
+barch hypr [edit] [<page>]         # Hyprland Settings (every option of the installed version, monitors, binds…)
+barch hypr get|set|reset|list|status [<option>] [<value>]   # the same file from a shell (see The bar)
 barch hdr on|off|status            barch sdr <nits>|status
 barch monitor side on|off|status   barch caffeine on|off|status
 barch nightlight on|off|status     barch dnd on|off|status
