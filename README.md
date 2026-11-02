@@ -604,6 +604,10 @@ True for this machine only; review before using the repo elsewhere.
   or the output does not come back; one resume gets one kick (hypridle calls it twice, the second is dropped).
   Waking from DPMS the HDMI 2.1 link training (FRL) often fails (`HDMI FRL link training failed` in the
   kernel log) and the driver falls back to 60 Hz: then it goes straight to the reconnect.
+  Restoring that link after a suspend fails too, and left the AW black even after a reconnect, so
+  hypridle turns the AW off before the machine sleeps (`hdr-kick.sh sleep`) and on again only once
+  the GPU and the side monitor are back (`hdr-kick.sh resume`): a fresh connect, as if plugged in later.
+  It stays on HDMI 2.1: over DisplayPort, DSC froze the machine on resume.
 - **Games:** Battle.net in its own prefix at `~/Games/battle.net` (games on drive `G:`).
   WoW has no native HDR; gamescope's inverse tone mapping didn't work nested in Hyprland
   (gamescope 3.17, Hyprland 0.56) — use the SDR brightness slider instead.
