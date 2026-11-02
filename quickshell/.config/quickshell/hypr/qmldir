@@ -19,3 +19,5 @@ UiField 1.0 UiField.qml
 UiNumber 1.0 UiNumber.qml
 UiSlider 1.0 UiSlider.qml
 UiSwitch 1.0 UiSwitch.qml
+IdlePage 1.0 IdlePage.qml
+SunsetPage 1.0 SunsetPage.qml

@@ -334,6 +334,51 @@ Singleton {
         reload()
     }
 
+    // ---------- hypridle.conf and hyprsunset.conf (hyprlang; edited in place, blocks and comments kept) ----------
+    readonly property string idlePath: hyprDir + "/hypridle.conf"
+    readonly property string sunsetPath: hyprDir + "/hyprsunset.conf"
+    property var idleItems: []
+    property var sunsetItems: []
+    property string idleWritten: ""
+    property string sunsetWritten: ""
+    FileView {
+        id: idleFile
+        path: store.idlePath
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: { const t = text(); if (t !== store.idleWritten) store.idleItems = H.parseHyprlang(t) }
+    }
+    FileView {
+        id: sunsetFile
+        path: store.sunsetPath
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: { const t = text(); if (t !== store.sunsetWritten) store.sunsetItems = H.parseHyprlang(t) }
+    }
+    function saveIdle(items) {
+        idleItems = items
+        idleWritten = H.writeHyprlang(items) + "\n"
+        idleFile.setText(idleWritten)
+        restartIdle()
+    }
+    function saveSunset(items) {
+        sunsetItems = items
+        sunsetWritten = H.writeHyprlang(items) + "\n"
+        sunsetFile.setText(sunsetWritten)
+        restartSunset()
+    }
+    // hypridle is started by conf/autostart.lua (not a unit) and does not re-read its file
+    function restartIdle() {
+        Quickshell.execDetached(["sh", "-c", "pkill -x hypridle; sleep 0.3; exec uwsm app -- hypridle"])
+        say("hypridle.conf saved; hypridle restarted")
+    }
+    function restartSunset() {
+        Quickshell.execDetached(["systemctl", "--user", "restart", "hyprsunset.service"])
+        say("hyprsunset.conf saved; hyprsunset restarted")
+    }
+
     // ---------- files ----------
     function openFile(path) {
         Quickshell.execDetached(["sh", "-c", 'exec uwsm app -- foot -e "${EDITOR:-nvim}" "$1"', "sh", path])

@@ -99,6 +99,14 @@ hl.window_rule({
     center = true,
     size   = "1320 840",
 })
+-- os outros apps do BArch (backup, pacotes, mixer): mesmo tratamento
+hl.window_rule({
+    name  = "barch-apps",
+    match = { title = "^BArch (Backup|Packages|Mixer)$" },
+    float  = true,
+    center = true,
+    size   = "1240 800",
+})
 
 -- Diálogos de arquivo: flutuando e centralizados, num tamanho fixo.
 hl.window_rule({

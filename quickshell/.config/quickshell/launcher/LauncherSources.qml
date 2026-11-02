@@ -259,6 +259,9 @@ Scope {
         { title: "Palette Editor", alias: "palette", sub: "New palettes, from an image, live preview", glyph: 0xF03D8, keywords: "theme colors palette editor create", cmd: ["barch", "theme", "edit"] },
         { title: "Hyprland Settings", alias: "hypr", sub: "Every option, monitors, binds, rules, animations", glyph: 0xF1B9A, keywords: "hyprland settings config options monitors binds rules animations", cmd: ["barch", "hypr"] },
         { title: "System Center", alias: "center", sub: "Services, timers, failures, agent reports, snapshots, journal", glyph: 0xF0493, keywords: "system center services systemd timers failures agent reports snapshots journal health", cmd: ["barch", "center"] },
+        { title: "Backup Browser", alias: "backup", sub: "Snapshots on the NAS, browse and restore files", glyph: 0xF0A17, keywords: "backup restic restore snapshots nas files", cmd: ["barch", "backup", "browse"] },
+        { title: "Packages", alias: "pkg", sub: "Installed, orphans, updates, pacnew, history", glyph: 0xF03D7, keywords: "packages pacman aur paru installed orphans updates pacnew history", cmd: ["barch", "packages"] },
+        { title: "Audio Mixer", alias: "mixer", sub: "Per-app volume and routing, devices, sample rate", glyph: 0xF057E, keywords: "audio mixer volume pipewire routing bluetooth codec sample rate", cmd: ["barch", "mixer"] },
         // ferramentas de tela (launcher/tools.sh): digite o atalho (ocr, pick, qr)
         { title: "Copy Text from Screen", alias: "ocr",  sub: "Select an area · OCR",          glyph: 0xF113A, keywords: "ocr text extract recognize read", cmd: ["bash", Quickshell.shellDir + "/launcher/tools.sh", "ocr"] },
         { title: "Pick Color",            alias: "pick", sub: "Click any pixel · copies hex",  glyph: 0xF020A, keywords: "color picker eyedropper hex colour", cmd: ["bash", Quickshell.shellDir + "/launcher/tools.sh", "pick"] },

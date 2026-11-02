@@ -43,6 +43,7 @@ ComboBox {
         background: null
         onTextEdited: combo.editText = text
         onAccepted: combo.accepted()
+        onTextChanged: if (!combo.editable) cursorPosition = 0      // show the start of a long label, not its end
     }
     indicator: Text {
         x: combo.width - width - 10

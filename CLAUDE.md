@@ -66,10 +66,14 @@ reusing the widget's own functions.
   `hypr/.config/hypr/settings.json`, applied by `conf/settings.lua` on top of the files
   (`BArch.settings.apply`). To change an option for Bruno, prefer `barch hypr set <opt> <value>`
   over editing the Lua by hand when it is a one-off; hand-written files stay the base.
-- **Apps with their own window** (`quickshell/hypr`, `quickshell/center`, `quickshell/palette`) run as
-  `qs -p <dir>` and cannot import outside their folder: the shared controls live in `quickshell/ui/`
-  and are symlinked into each app (`ln -s ../ui/X.qml`), and every component must be listed in the
-  app's `qmldir`. Closing the window quits the process; `barch hypr` / `barch center` start a new one.
+- **Apps with their own window** (`quickshell/hypr`, `center`, `backup`, `packages`, `mixer`,
+  `palette`) run as `qs -p <dir>` and cannot import outside their folder: the shared controls live
+  in `quickshell/ui/` and are symlinked into each app (`ln -s ../ui/X.qml`), and every component
+  must be listed in the app's `qmldir`. Closing the window quits the process; `barch hypr|center|
+  packages|mixer`, `barch backup browse` start a new one. In their shell commands resolve the repo
+  with `readlink -f` (`Quickshell.shellDir/../../../..` only works physically, the shell dir is a
+  symlink). `hypridle.conf` and `hyprsunset.conf` are edited by the Hyprland app's Idle and Night
+  light pages (hyprlang parser in `hypr/hypr.js`, comments kept).
 - **Theme:** `quickshell/.config/quickshell/theme/palettes.json` holds the palettes (ten tones
   each) and `theme/Theme.qml` derives everything else from them. Change colors there (or with
   `barch theme edit`), never in the generated files (they are git-ignored and get overwritten).

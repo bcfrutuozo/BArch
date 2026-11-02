@@ -412,3 +412,72 @@ function fmt(n, step) {
     if (step && step < 1) { var d = Math.max(0, Math.ceil(-Math.log10(step))); return Number(n).toFixed(d).replace(/\.?0+$/, "") }
     return String(n)
 }
+
+// ---------- hyprlang files (hypridle.conf, hyprsunset.conf): read, edit, write back ----------
+// items: { kind: "comment"|"blank", text } | { kind: "kv", key, value } | { kind: "block", name, items }
+function parseHyprlang(text) {
+    var root = [], stack = [root]
+    var lines = String(text).split("\n")
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i], t = line.trim(), cur = stack[stack.length - 1]
+        if (t === "") { cur.push({ kind: "blank" }); continue }
+        if (t[0] === "#") { cur.push({ kind: "comment", text: t }); continue }
+        var mb = /^([A-Za-z0-9_:\-]+)\s*\{$/.exec(t)
+        if (mb) { var b = { kind: "block", name: mb[1], items: [] }; cur.push(b); stack.push(b.items); continue }
+        if (t === "}") { if (stack.length > 1) stack.pop(); continue }
+        var eq = t.indexOf("=")
+        if (eq > 0) { cur.push({ kind: "kv", key: t.slice(0, eq).trim(), value: t.slice(eq + 1).trim() }); continue }
+        cur.push({ kind: "comment", text: "# " + t })      // something we do not understand: kept, disabled
+    }
+    // drop trailing blanks
+    while (root.length && root[root.length - 1].kind === "blank") root.pop()
+    return root
+}
+function writeHyprlang(items, indent) {
+    indent = indent || ""
+    var out = []
+    for (var i = 0; i < items.length; i++) {
+        var it = items[i]
+        if (it.kind === "blank") out.push("")
+        else if (it.kind === "comment") out.push(indent + it.text)
+        else if (it.kind === "kv") out.push(indent + it.key + " = " + it.value)
+        else if (it.kind === "block") { out.push(indent + it.name + " {"); out.push(writeHyprlang(it.items, indent + "    ")); out.push(indent + "}") }
+    }
+    return out.join("\n")
+}
+function blockGet(block, key) { for (var i = 0; i < block.items.length; i++) if (block.items[i].kind === "kv" && block.items[i].key === key) return block.items[i].value; return undefined }
+function blockSet(block, key, value) {
+    for (var i = 0; i < block.items.length; i++) if (block.items[i].kind === "kv" && block.items[i].key === key) {
+        if (value === undefined || value === "") block.items.splice(i, 1); else block.items[i].value = value
+        return
+    }
+    if (value !== undefined && value !== "") block.items.push({ kind: "kv", key: key, value: value })
+}
+function blocksOf(items, name) { return items.filter(function (x) { return x.kind === "block" && x.name === name }) }
+function humanSeconds(s) {
+    s = Number(s) || 0
+    if (s % 3600 === 0 && s > 0) return (s / 3600) + " h"
+    if (s % 60 === 0 && s > 0) return (s / 60) + " min"
+    if (s > 60) return Math.floor(s / 60) + " min " + (s % 60) + " s"
+    return s + " s"
+}
+
+// hypridle general keys (hypridle 0.1.x)
+var IDLE_GENERAL = [
+    { key: "lock_cmd", hint: "command that locks the screen (loginctl lock-session runs it)" },
+    { key: "unlock_cmd", hint: "command that unlocks (loginctl unlock-session)" },
+    { key: "before_sleep_cmd", hint: "run before the machine suspends" },
+    { key: "after_sleep_cmd", hint: "run after resume" },
+    { key: "on_lock_cmd", hint: "run when the session locks" },
+    { key: "on_unlock_cmd", hint: "run when the session unlocks" },
+    { key: "ignore_dbus_inhibit", hint: "true: idle even when an app asks not to (D-Bus)", bool: true },
+    { key: "ignore_systemd_inhibit", hint: "true: ignore systemd idle inhibitors", bool: true },
+    { key: "ignore_wayland_inhibit", hint: "true: ignore Wayland idle inhibitors", bool: true },
+    { key: "inhibit_sleep", hint: "0 none · 1 always · 2 while locked, 3 until locked (lock_cmd)" }
+]
+var IDLE_PRESETS = [
+    { label: "Lock the session", timeout: 300, on: "loginctl lock-session", resume: "" },
+    { label: "Screen off", timeout: 330, on: "hyprctl dispatch 'hl.dsp.dpms({action = \"off\"})'", resume: "hyprctl dispatch 'hl.dsp.dpms({action = \"on\"})'" },
+    { label: "Suspend", timeout: 1800, on: "systemctl suspend", resume: "" },
+    { label: "Dim the keyboard light", timeout: 150, on: "brightnessctl -sd rgb:kbd_backlight set 0", resume: "brightnessctl -rd rgb:kbd_backlight" }
+]

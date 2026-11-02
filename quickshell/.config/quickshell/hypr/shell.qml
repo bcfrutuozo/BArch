@@ -30,6 +30,8 @@ ShellRoot {
         { id: "rules",      label: "Rules",      icon: "󰓆" },
         { id: "devices",    label: "Devices",    icon: "󰍽" },
         { id: "startup",    label: "Startup",    icon: "󰐊" },
+        { id: "idle",       label: "Idle & lock", icon: "󰒲" },
+        { id: "nightlight", label: "Night light", icon: "󰖔" },
         { id: "files",      label: "Files",      icon: "󰈙" }
     ]
     readonly property bool onSection: !pages.some(p => p.id === page)
@@ -153,6 +155,8 @@ ShellRoot {
                                          : modelData.id === "rules" ? (Store.settings.window_rules || []).length + (Store.settings.layer_rules || []).length + (Store.settings.workspace_rules || []).length
                                          : modelData.id === "devices" ? Object.keys(Store.settings.devices || {}).length
                                          : modelData.id === "startup" ? (Store.settings.exec || []).length + Object.keys(Store.settings.env || {}).length + (Store.settings.gestures || []).length
+                                         : modelData.id === "idle" ? H.blocksOf(Store.idleItems, "listener").length
+                                         : modelData.id === "nightlight" ? H.blocksOf(Store.sunsetItems, "profile").length
                                          : 0
                                 }
                             }
@@ -209,6 +213,8 @@ ShellRoot {
                         case "rules": return rulesC
                         case "devices": return devicesC
                         case "startup": return startupC
+                        case "idle": return idleC
+                        case "nightlight": return sunsetC
                         case "files": return filesC
                         default: return optionsC
                         }
@@ -221,6 +227,8 @@ ShellRoot {
                 Component { id: rulesC; RulesPage {} }
                 Component { id: devicesC; DevicesPage {} }
                 Component { id: startupC; StartupPage {} }
+                Component { id: idleC; IdlePage {} }
+                Component { id: sunsetC; SunsetPage {} }
                 Component { id: filesC; FilesPage {} }
 
                 // status bar

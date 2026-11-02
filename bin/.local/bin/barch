@@ -64,6 +64,12 @@ Desktop (through the bar):
                               10, true, "dwindle", {"colors":["rgba(ff0000ff)"],"angle":45})
   hypr reset <option>|all     forget it (the files' value is back after the reload this does)
   hypr list|status            what the app saved · version, option count, config errors
+  backup browse [<page>]      BArch Backup (quickshell/backup): status, snapshots, browse a snapshot
+                              and restore into ~/Restore; page: status|snapshots|browse
+  packages [<page>]           BArch Packages (quickshell/packages): installed (explicit, AUR, orphans),
+                              updates, .pacnew, the repo lists, pacman history; page: installed|updates|history
+  mixer [<page>]              BArch Mixer (quickshell/mixer): PipeWire devices, per-app volume and
+                              routing, sample rate, Bluetooth codec; page: devices|apps|settings
   center [<page>]             BArch Center (quickshell/center): services and timers (user and
                               system), the failures saved by `barch failure`, the agent tasks
                               and reports, the safety snapshots, health, journal; page: overview|
@@ -484,16 +490,21 @@ cmd_hypr() {
   esac
 }
 
-# ---------------------------------------------------------------- center
+# ---------------------------------------------------------------- apps with their own window
 
-cmd_center() {
-  local cfg=$HOME/.config/quickshell/center
+# app_open <quickshell dir> <ENV var for the page> [page]: one instance; a running one gets the
+# request over its IPC, otherwise a new Quickshell starts on that page
+app_open() {
+  local cfg=$HOME/.config/quickshell/$1 var=$2 page=${3:-}
   if qs -p "$cfg" ipc show >/dev/null 2>&1; then
-    qs -p "$cfg" ipc call app open "${1:-}" >/dev/null
+    qs -p "$cfg" ipc call app open "$page" >/dev/null
     return
   fi
-  BARCH_CENTER_PAGE=${1:-} setsid -f qs -p "$cfg" >/dev/null 2>&1
+  env "$var=$page" setsid -f qs -p "$cfg" >/dev/null 2>&1
 }
+cmd_center() { app_open center BARCH_CENTER_PAGE "${1:-}"; }
+cmd_packages() { app_open packages BARCH_PACKAGES_PAGE "${1:-}"; }
+cmd_mixer() { app_open mixer BARCH_MIXER_PAGE "${1:-}"; }
 
 # ---------------------------------------------------------------- snapshot
 
@@ -1149,7 +1160,8 @@ cmd_backup() {
       for a in "${paths[@]}"; do [[ $a == /* ]] || a="$HOME/$a"; inc+=(--include "$a"); done
       restic restore "$snap" --target "$target" "${inc[@]}" && echo "restored into $target (paths keep their full names below it)"
       ;;
-    *) usage_error "backup init|run [--prune]|status|list|restore [SNAPSHOT] <path>... [--target DIR]" ;;
+    browse) app_open backup BARCH_BACKUP_PAGE "${1:-}" ;;
+    *) usage_error "backup init|run [--prune]|status|list|restore [SNAPSHOT] <path>... [--target DIR]|browse [<page>]" ;;
   esac
 }
 
@@ -1180,6 +1192,8 @@ case $cmd in
   wallpaper) cmd_wallpaper "$@" ;;
   hypr) cmd_hypr "$@" ;;
   center) cmd_center "$@" ;;
+  packages) cmd_packages "$@" ;;
+  mixer) cmd_mixer "$@" ;;
   hdr) cmd_hdr "$@" ;;
   sdr) cmd_sdr "$@" ;;
   monitor) cmd_monitor "$@" ;;
