@@ -164,8 +164,8 @@ ShellRoot {
       implicitHeight: Theme.islandHeight + Theme.gap
       color: "transparent"
 
-      // Libera o teclado só enquanto há senha de Wi-Fi, busca no clipboard ou filtro de região da VPN para digitar
-      WlrLayershell.keyboardFocus: (wifi.wantsKeyboard || clip.wantsKeyboard || control.wantsKeyboard) ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+      // Libera o teclado só enquanto há senha de Wi-Fi, busca no clipboard, filtro de região da VPN ou de idioma da voz para digitar
+      WlrLayershell.keyboardFocus: (wifi.wantsKeyboard || clip.wantsKeyboard || control.wantsKeyboard || voice.wantsKeyboard) ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
       // ================= ESQUERDA: workspaces + janela ativa =================
       Row {
@@ -598,7 +598,7 @@ ShellRoot {
         VpnWidget {}
 
         // Controle por voz (barch-voice): só aparece com o serviço ligado
-        VoiceWidget {}
+        VoiceWidget { id: voice }
 
         // Bluetooth
         BluetoothWidget {}

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""barch-voice: always-on voice control of the desktop, in Brazilian Portuguese.
+"""barch-voice: always-on voice control of the desktop, in Brazilian Portuguese (or any language
+whisper knows: `voice.py language <code>`, the bar's microphone panel).
 
 Like a car: the microphone is always open, nothing happens until a sentence starts with the
 wake word ("barch"). Everything runs on this machine: PipeWire capture (pw-record), an energy
@@ -12,11 +13,17 @@ does not know, and Piper for the spoken answers.
     voice.py run "texto"     handle a sentence as if it had been heard (no wake word needed)
     voice.py say "texto"     speak
     voice.py pause|resume|toggle|reload|stop
+    voice.py language [code]  the language it listens and answers in (pt, en, auto…); languages lists them
     voice.py match "texto"   which intent a sentence hits and what it would run (offline, runs nothing)
 
 State for the bar: ~/.local/state/barch/voice/state.json (the bar watches it); control socket:
 $XDG_RUNTIME_DIR/barch-voice.sock (newline-delimited JSON). Settings: config.json next to this
-file; intents: commands.json; the prompt of the Claude fallback: fallback.md.
+file; intents: commands.json; the prompt of the Claude fallback: fallback.md; the languages and
+their Piper voices: languages.json (the choice is kept in ~/.local/state/barch/voice/language).
+
+Only Portuguese has the command table: in any other language the sentence goes, as whisper wrote
+it, to Claude, who answers in that language with that language's Piper voice (downloaded the
+first time the language is picked; a language without one answers in a notification).
 """
 from __future__ import annotations
 
@@ -52,6 +59,54 @@ RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
 SOCKET = RUNTIME / "barch-voice.sock"
 STATE_FILE = STATE_DIR / "state.json"
 UNMATCHED = STATE_DIR / "unmatched.log"
+LANG_FILE = STATE_DIR / "language"
+
+
+def load_languages() -> dict:
+    """languages.json → {code: entry}, in its order (auto first)."""
+    try:
+        doc = json.loads((HERE / "languages.json").read_text())
+        return {e["code"]: e for e in doc.get("languages", [])}
+    except (OSError, json.JSONDecodeError, KeyError):
+        return {"pt": {"code": "pt", "name": "Portuguese", "native": "Português", "voice": "pt_BR-faber-medium", "latin": True}}
+
+
+LANGUAGES = load_languages()
+LANG_BY_NAME = {e["name"].lower(): c for c, e in LANGUAGES.items()}   # whisper's detected_language → code
+
+# what the daemon itself says when something fails: Portuguese, and English for every other language
+MESSAGES = {
+    "pt": {"slow": "O Claude demorou demais.", "noanswer": "O Claude não respondeu.", "login": "A sessão do Claude expirou. Faça login de novo.",
+           "failed": "O Claude não conseguiu.", "unknown": "Não entendi.", "cancel": "Cancelado.", "confirm": "Confirma?"},
+    "en": {"slow": "Claude took too long.", "noanswer": "Claude did not answer.", "login": "Claude's session expired. Log in again.",
+           "failed": "Claude could not do it.", "unknown": "I did not understand.", "cancel": "Cancelled.", "confirm": "Confirm?"},
+}
+
+
+def msg(lang: str, key: str) -> str:
+    return MESSAGES.get(lang, MESSAGES["en"])[key]
+
+
+# a yes or a no to "Confirm?" in any language: normalized (Latin letters) or as written
+YES = re.compile(r"(sim|confirma|confirmo|pode|isso|vai|bora|yes|yeah|yep|sure|ok|okay|claro|do it|go ahead|si|oui|ja|jawohl|"
+                 r"tak|da|ano|igen|evet|ndio|kylla|jah)( .*)?")
+NO = re.compile(r"(nao|cancela|cancelar|deixa|esquece|para|no|nope|cancel|stop|non|nein|nie|ne ?ne|hayir|nej|ei|nu)( .*)?")
+YES_RAW = ("да", "так", "是", "好", "对", "はい", "うん", "네", "예", "응", "نعم", "بله", "हाँ", "हां", "כן", "ναι", "ใช่", "có", "evet")
+NO_RAW = ("нет", "ні", "不", "不是", "いいえ", "아니", "아니요", "لا", "نه", "नहीं", "לא", "όχι", "ไม่", "không")
+
+
+def yes_no(text: str) -> bool | None:
+    raw = text.strip().lower().strip(" ,.!?。、！？")
+    if any(raw.startswith(w) for w in YES_RAW):
+        return True
+    if any(raw.startswith(w) for w in NO_RAW):
+        return False
+    t = normalize(text)
+    if NO.fullmatch(t) and not YES.fullmatch(t):
+        return False
+    if YES.fullmatch(t):
+        return True
+    return None
 HISTORY = STATE_DIR / "history.log"
 BARCH = HOME / ".local/bin/barch"
 RATE = 16000
@@ -140,6 +195,7 @@ def log(*a):
 HALLUCINATIONS = {
     "obrigado", "obrigada", "tchau", "e ai", "legendas pela comunidade amara org", "amara org",
     "legendas", "inscreva-se", "inscreva se no canal", "ate a proxima", "ate mais",
+    "thank you", "thanks", "thanks for watching", "thank you for watching", "bye", "you",
 }
 
 # Words whisper spells its own way → what commands.json and the aliases use.
@@ -257,6 +313,7 @@ def wav_bytes(pcm: bytes) -> bytes:
 
 class Whisper:
     """whisper.cpp: whisper-server kept warm when it exists, whisper-cli per sentence otherwise."""
+    detected = "pt"                  # the language of the last transcription (whisper's detection)
 
     def __init__(self, cfg):
         self.cfg = cfg
@@ -310,22 +367,25 @@ class Whisper:
             except subprocess.TimeoutExpired:
                 self.server.kill()
 
-    def transcribe(self, pcm: bytes) -> str:
+    def transcribe(self, pcm: bytes, lang: str = "pt") -> str:
+        """The words in `lang` (a whisper code, or "auto"); the language whisper heard goes to
+        self.detected (a code; only the server reports it, the CLI leaves the asked one)."""
         if not self.available:
             return ""
+        self.detected = lang
         with self.lock:
             try:
                 if self.server and self.server.poll() is None:
-                    return self._server(pcm)
-                return self._cli(pcm)
+                    return self._server(pcm, lang)
+                return self._cli(pcm, lang)
             except Exception as e:  # noqa: BLE001
                 log("whisper failed:", e)
                 return ""
 
-    def _server(self, pcm: bytes) -> str:
+    def _server(self, pcm: bytes, lang: str) -> str:
         import urllib.request
         boundary = "----barchvoice"
-        fields = {"temperature": "0.0", "response_format": "json", "language": "pt",
+        fields = {"temperature": "0.0", "response_format": "verbose_json", "language": lang,
                   "prompt": self.cfg["whisper_prompt"]}
         body = b""
         for k, v in fields.items():
@@ -336,12 +396,14 @@ class Whisper:
                                      headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
         with urllib.request.urlopen(req, timeout=60) as r:
             data = json.loads(r.read().decode())
+        name = str(data.get("detected_language") or "").lower()
+        self.detected = LANG_BY_NAME.get(name, lang)
         return (data.get("text") or "").strip()
 
-    def _cli(self, pcm: bytes) -> str:
+    def _cli(self, pcm: bytes, lang: str) -> str:
         path = RUNTIME / "barch-voice-in.wav"
         path.write_bytes(wav_bytes(pcm))
-        r = run([self.cli, "-m", self.model, "-l", "pt", "-t", str(self.cfg["whisper_threads"]), "-nt", "-np",
+        r = run([self.cli, "-m", self.model, "-l", lang, "-t", str(self.cfg["whisper_threads"]), "-nt", "-np",
                  "--prompt", self.cfg["whisper_prompt"], "-f", str(path)], timeout=120)
         return " ".join(line.strip() for line in r.stdout.splitlines() if line.strip())
 
@@ -365,9 +427,33 @@ class Speaker:
     def available(self) -> bool:
         return bool(self.piper and self.player and self.voice_model())
 
-    def voice_model(self) -> str:
-        """The .onnx of tts_voice under tts_dir (also one level down, how older piper laid them out)."""
-        v = self.cfg["tts_voice"]
+    def voice_for(self, lang: str) -> str:
+        """The Piper voice of a language: tts_voice for Portuguese, tts_voices[lang] or languages.json."""
+        if lang == "pt":
+            return self.cfg["tts_voice"]
+        return (self.cfg.get("tts_voices") or {}).get(lang) or (LANGUAGES.get(lang) or {}).get("voice") or ""
+
+    def has(self, lang: str) -> bool:
+        return bool(self.piper and self.player and self.voice_model(self.voice_for(lang)))
+
+    def download(self, voice: str) -> bool:
+        """piper 1.x: `python -m piper.download_voices` (the AUR piper-tts ships the module)."""
+        self.dir.mkdir(parents=True, exist_ok=True)
+        try:
+            r = subprocess.run([sys.executable, "-m", "piper.download_voices", "--download-dir", str(self.dir), voice],
+                               capture_output=True, text=True, timeout=600)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            log("voice download failed:", voice, e)
+            return False
+        ok = bool(self.voice_model(voice))
+        log(f"voice {voice}:", "downloaded" if ok else "download failed " + (r.stderr or "").strip()[-200:])
+        return ok
+
+    def voice_model(self, v: str = "") -> str:
+        """The .onnx of a voice (tts_voice by default) under tts_dir (also one level down, how older piper laid them out)."""
+        v = v or self.cfg["tts_voice"]
+        if not v:
+            return ""
         for pat in (f"{v}.onnx", f"*/{v}.onnx"):
             hits = sorted(self.dir.glob(pat))
             if hits:
@@ -420,9 +506,13 @@ class Speaker:
                 time.sleep(0.25)        # the room's echo of our own voice
                 self.on_busy(False)
 
-    def say(self, text: str) -> bool:
+    def say(self, text: str, lang: str = "pt") -> bool:
         text = (text or "").strip()
         if not text:
+            return False
+        model = self.voice_model(self.voice_for(lang))
+        if lang != "pt" and not model:
+            log(f"say (no voice for {lang}):", text)
             return False
         if not self.available:
             log("say (no piper):", text)
@@ -433,7 +523,7 @@ class Speaker:
             return False
         out = RUNTIME / "barch-voice-say.wav"
         try:
-            r = subprocess.run([self.piper, "-m", self.voice_model(), "--length-scale", str(1 / float(self.cfg["tts_speed"])),
+            r = subprocess.run([self.piper, "-m", model or self.voice_model(), "--length-scale", str(1 / float(self.cfg["tts_speed"])),
                                 "-f", str(out)], input=text, capture_output=True, text=True, timeout=60)
             if r.returncode != 0:
                 log("piper failed:", r.stderr.strip()[-300:])
@@ -762,9 +852,26 @@ class Intents:
                     return c
         return None
 
-    def confirm(self, what: str, fn) -> dict:
+    def confirm(self, what: str, fn, lang: str = "pt") -> dict:
         self.pending = (time.time() + 15, fn, what)
-        return {"matched": True, "say": what + " Confirma?", "intent": "confirm", "sound": None}
+        # outside Portuguese Claude writes the whole question in the language (fallback.md)
+        say = what + " " + msg("pt", "confirm") if lang == "pt" else what.rstrip(".") + ("" if what.rstrip(".").endswith("?") else "?")
+        return {"matched": True, "say": say, "intent": "confirm", "sound": None}
+
+    def answer_pending(self, text: str, lang: str) -> dict | None:
+        """Outside Portuguese only the yes/no to a pending confirmation is handled here."""
+        if not self.pending:
+            return None
+        expires, fn, _ = self.pending
+        self.pending = None
+        if time.time() >= expires:
+            return None
+        answer = yes_no(re.sub(r"^\W*(?:barch|bart|bartch|bartsch)\b[ ,]*", "", text, flags=re.I))
+        if answer is True:
+            return fn()
+        if answer is False:
+            return {"matched": True, "say": msg(lang, "cancel"), "intent": "cancel"}
+        return None
 
     def execute(self, rule: dict, g: dict, text: str) -> dict | None:
         kind = rule.get("kind", "exec")
@@ -1036,6 +1143,9 @@ class Voice:
         STATE_DIR.mkdir(parents=True, exist_ok=True)
         self.state = {"state": "starting", "heard": "", "said": "", "time": time.time(), "paused": False,
                       "whisper": False, "tts": False, "model": ""}
+        self.language = self._load_language()   # what whisper listens in: a code of languages.json, or "auto"
+        self.downloading = ""                    # the Piper voice being downloaded for it
+        self.statelock = threading.Lock()
         self.paused = False
         self.playing_until = 0.0
         self.awaiting_until = 0.0        # after "barch" alone, or during the follow-up window after an answer
@@ -1050,8 +1160,56 @@ class Voice:
         self.worklock = threading.Lock()
         self.write_state("starting")
 
+    # -- language
+    def _load_language(self) -> str:
+        try:
+            code = LANG_FILE.read_text().strip()
+        except OSError:
+            code = str(self.cfg.get("language") or "pt")
+        return code if code in LANGUAGES else "pt"
+
+    def set_language(self, code: str) -> dict:
+        code = (code or "").strip().lower()
+        if code not in LANGUAGES:
+            return {"ok": False, "error": f"unknown language {code!r} (voice.py languages lists them)"}
+        self.language = code
+        atomic_write(LANG_FILE, code + "\n")
+        log("language:", code)
+        self.ensure_voice(code)
+        self.write_state()
+        return {"ok": True, **self.language_info()}
+
+    def ensure_voice(self, code: str):
+        """Download the Piper voice of a language in the background the first time it is picked."""
+        # auto: the two he speaks; any other detected language speaks if its voice is there
+        for c in (["pt", "en"] if code == "auto" else [code]):
+            v = self.speaker.voice_for(c)
+            if v and self.speaker.piper and not self.speaker.voice_model(v) and not self.downloading:
+                def work(v=v):
+                    self.downloading = v
+                    self.write_state()
+                    try:
+                        self.speaker.download(v)
+                    finally:
+                        self.downloading = ""
+                        self.write_state()
+                threading.Thread(target=work, daemon=True).start()
+                return
+
+    def language_info(self) -> dict:
+        e = LANGUAGES.get(self.language, {})
+        voice = self.speaker.voice_for(self.language) if self.language != "auto" else ""
+        return {"language": self.language, "language_name": e.get("name", self.language),
+                "language_native": e.get("native", ""), "voice": voice,
+                "voice_ready": self.speaker.has(self.language) if self.language != "auto" else self.speaker.available,
+                "downloading": self.downloading}
+
     # -- state for the bar
     def write_state(self, state=None, **kw):
+        with self.statelock:           # the voice download thread writes it too (same .tmp file)
+            self._write_state(state, **kw)
+
+    def _write_state(self, state=None, **kw):
         if state:
             self.state["state"] = state
         self.state.update(kw)
@@ -1060,6 +1218,7 @@ class Voice:
         self.state["whisper"] = self.whisper.available
         self.state["tts"] = self.speaker.available
         self.state["model"] = Path(self.whisper.model).name if self.whisper.model else ""
+        self.state.update(self.language_info())
         try:
             atomic_write(STATE_FILE, json.dumps(self.state))
         except OSError as e:
@@ -1207,35 +1366,58 @@ class Voice:
         awaiting = now < self.awaiting_until
         head_bytes = int(float(self.cfg["head_s"]) * RATE) * 2
         followup = awaiting and self.followup
+        chosen = self.language
+        # the wake word is looked for in Latin letters: in the chosen language when whisper writes it
+        # that way, else in English ("барч" would never match); auto: Portuguese, and the language
+        # whisper detects there is the one the whole sentence is transcribed in
+        head_lang = "pt" if chosen == "auto" else chosen if (LANGUAGES.get(chosen) or {}).get("latin") else "en"
+        lang = chosen
+        raw = ""
+        alone = False
         if awaiting:
-            text = self.whisper.transcribe(pcm)
+            text = self.whisper.transcribe(pcm, "auto" if chosen == "auto" else chosen)
+            lang = self.whisper.detected if chosen == "auto" else chosen
             if self.hallucinated(text):
                 log("dropped (whisper hallucination):", text.strip())
                 return
             yes, rest = self.wake_in(text)
             command = rest if yes else normalize(text)
+            raw = text
             if yes:
                 followup = False             # he said "barch": a normal command, whatever came before
             self.write_state("processing")
         else:
             t0 = time.time()
-            head = self.whisper.transcribe(pcm[:head_bytes])
+            head = self.whisper.transcribe(pcm[:head_bytes], head_lang)
+            if chosen == "auto":
+                lang = self.whisper.detected
             yes, rest = self.wake_in(head)
             if self.cfg["debug"]:
-                log(f"heard ({time.time() - t0:.2f}s): {head!r} wake={yes}")
+                log(f"heard ({time.time() - t0:.2f}s, {head_lang}→{lang}): {head!r} wake={yes}")
             if not yes or self.hallucinated(head):
                 return
+            alone = len(pcm) <= head_bytes and not rest.strip(" ,.!?")   # "barch" and nothing else
             self.write_state("processing", heard="…")
-            if len(pcm) > head_bytes:
-                full = self.whisper.transcribe(pcm)
+            if len(pcm) > head_bytes or lang != head_lang:
+                full = self.whisper.transcribe(pcm, lang)
                 if self.hallucinated(full):
                     log("dropped (whisper hallucination):", full.strip())
                     self.write_state("listening")
                     return
                 yes2, rest2 = self.wake_in(full)
                 command = rest2 if yes2 else normalize(full)
+                raw = full
             else:
                 command = rest
+                raw = head
+        if lang not in LANGUAGES or lang == "auto":
+            lang = "pt"
+        if lang != "pt":
+            # no command table outside Portuguese: Claude gets the sentence as whisper wrote it
+            # (normalize() keeps only a-z), wake word included; empty only when nothing follows it
+            latin = (LANGUAGES.get(lang) or {}).get("latin")
+            if raw.strip() and (command.strip(" ,.!?") or (not latin and not (not awaiting and alone))):
+                command = raw.strip()
         self.awaiting_until = 0
         self.followup = False
         command = strip_fillers(command.strip(" ,.!?"))
@@ -1249,9 +1431,9 @@ class Voice:
             self.speaker.chime("wake")
             threading.Timer(float(self.cfg["wake_window_s"]) + 0.5, self._wake_timeout).start()
             return
-        log("command:" if not followup else "follow-up:", command)
+        log(("command" if not followup else "follow-up") + (f" [{lang}]:" if lang != "pt" else ":"), command)
         self.write_state("processing", heard=command)
-        self.run_text(command, followup=followup)
+        self.run_text(command, followup=followup, lang=lang)
 
     def _wake_timeout(self):
         if self.state["state"] in ("wake", "followup") and time.time() >= self.awaiting_until:
@@ -1268,23 +1450,26 @@ class Voice:
         self.write_state("followup")
         threading.Timer(secs + 0.5, self._wake_timeout).start()
 
-    def run_text(self, command: str, followup: bool = False) -> dict:
+    def run_text(self, command: str, followup: bool = False, lang: str = "pt") -> dict:
         if self.desktop.locked():
             log("ignored (session locked):", command)
             self.write_state("listening", heard="")
             return {"matched": False, "say": "", "locked": True}
-        res = self.intents.handle(command)
+        if lang == "pt":
+            res = self.intents.handle(command)
+        else:
+            res = self.intents.answer_pending(command, lang) or {"matched": False}
         if not res.get("matched"):
-            talking_to_claude = time.time() - self.last_claude < 60 and len(command.split()) >= 2
+            talking_to_claude = time.time() - self.last_claude < 60 and (len(command.split()) >= 2 or lang != "pt")
             if followup and not talking_to_claude:
                 # a follow-up window catches whatever is said in the room: without a command in it, drop it
                 log("follow-up ignored (no command):", command)
                 self.write_state("listening", heard="")
                 return {"matched": False, "say": "", "ignored": True}
             if self.cfg["claude"] and shutil.which("claude"):
-                res = self.ask_claude(command)
+                res = self.ask_claude(command, lang=lang)
             else:
-                res = {"matched": False, "say": "Não entendi."}
+                res = {"matched": False, "say": msg(lang, "unknown")}
             with UNMATCHED.open("a") as f:
                 f.write(f"{datetime.now():%Y-%m-%d %H:%M} | {command} | {res.get('say', '')[:120]}\n")
         with HISTORY.open("a") as f:
@@ -1297,7 +1482,10 @@ class Voice:
             self.set_paused(True)
         if say:
             self.write_state("speaking", heard=command, said=say)
-            self.speaker.say(say)
+            if not self.speaker.say(say, lang) and lang != "pt":
+                # no voice for this language (yet): the answer as a notification
+                subprocess.Popen([str(BARCH), "notify", "Voice", say, "--app", "barch-voice"],
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         elif res.get("sound", "default") is not None and self.cfg["confirm_sound"]:
             self.speaker.chime("ok" if res.get("ok", True) else "fail")
         self.write_state("listening", heard=command, said=say)
@@ -1308,7 +1496,7 @@ class Voice:
         return res
 
     # -- Claude fallback
-    def ask_claude(self, question: str, confirmed: bool = False) -> dict:
+    def ask_claude(self, question: str, confirmed: bool = False, lang: str = "pt") -> dict:
         self.write_state("thinking", heard=question)
         prompt_file = HERE / "fallback.md"
         try:
@@ -1317,8 +1505,10 @@ class Voice:
             prompt = "You control Bruno's Hyprland desktop through the `barch` CLI. Answer in one short Portuguese sentence in `say`."
         win = self.desktop.active_window()
         last = next((c for c in self.desktop.clients() if c.get("address") == self.intents.window), None)
+        e = LANGUAGES.get(lang) or {}
         ctx = {
             "heard": question,
+            "language": "Brazilian Portuguese" if lang == "pt" else f"{e.get('name', lang)} ({lang})",
             "confirmed": confirmed,
             "time": datetime.now().strftime("%A %Y-%m-%d %H:%M"),
             "active_window": {"class": win.get("class"), "title": win.get("title"),
@@ -1342,17 +1532,17 @@ class Voice:
                                timeout=float(self.cfg["claude_timeout_s"]), env=env)
             data = json.loads(r.stdout) if r.stdout.strip() else {}
         except subprocess.TimeoutExpired:
-            return {"matched": False, "say": "O Claude demorou demais.", "intent": "claude"}
-        except (json.JSONDecodeError, OSError) as e:
-            log("claude:", e)
-            return {"matched": False, "say": "O Claude não respondeu.", "intent": "claude"}
+            return {"matched": False, "say": msg(lang, "slow"), "intent": "claude"}
+        except (json.JSONDecodeError, OSError) as err:
+            log("claude:", err)
+            return {"matched": False, "say": msg(lang, "noanswer"), "intent": "claude"}
         out = data.get("structured_output") or {}
         if data.get("is_error") or not out:
             msg = str(data.get("result") or r.stderr or "")[:200]
             log("claude error:", msg)
             if "authenticate" in msg.lower() or "login" in msg.lower():
-                return {"matched": False, "say": "A sessão do Claude expirou. Faça login de novo.", "intent": "claude"}
-            return {"matched": False, "say": "O Claude não conseguiu.", "intent": "claude"}
+                return {"matched": False, "say": msg(lang, "login"), "intent": "claude"}
+            return {"matched": False, "say": msg(lang, "failed"), "intent": "claude"}
         log(f"claude: {out.get('say')!r} confirm={out.get('confirm')!r} cost={data.get('total_cost_usd')}")
         if data.get("total_cost_usd") is not None:
             try:  # one line per call, what `barch metrics summary` adds up
@@ -1363,7 +1553,7 @@ class Voice:
         if out.get("confirm") and not confirmed:
             # something risky: say what it would do and wait for the "sim" (then ask again, confirmed)
             what = out["confirm"].strip().rstrip(".") + "."
-            res = self.intents.confirm(what, lambda: self.ask_claude(question, confirmed=True))
+            res = self.intents.confirm(what, lambda: self.ask_claude(question, confirmed=True, lang=lang), lang)
             res["intent"] = "confirm"
             res["cost"] = data.get("total_cost_usd")
             return res
@@ -1431,8 +1621,10 @@ class Voice:
             self.write_state("paused" if self.paused else "listening")
             return {"ok": ok, "said": text, "error": "" if ok else "piper failed (see barch voice log)"}
         if c == "run":
+            lang = self.language if self.language != "auto" else "pt"
+            text = req.get("text", "")
             with self.worklock:
-                res = self.run_text(strip_fillers(normalize(req.get("text", ""))))
+                res = self.run_text(strip_fillers(normalize(text)) if lang == "pt" else text.strip(), lang=lang)
             return {"ok": res.get("ok", res.get("matched", False)), **res}
         if c == "pause":
             self.set_paused(True)
@@ -1443,6 +1635,10 @@ class Voice:
         if c == "toggle":
             self.set_paused(not self.paused)
             return {"ok": True, "paused": self.paused}
+        if c == "language":
+            if req.get("code"):
+                return self.set_language(req["code"])
+            return {"ok": True, **self.language_info()}
         if c == "reload":
             self.intents.load()
             self.desktop.refresh(force=True)
@@ -1477,6 +1673,7 @@ class Voice:
         if not self.whisper.available:
             self.write_state("error", error="whisper.cpp or its model is missing (see README: Voice)")
         self.whisper.start()
+        self.ensure_voice(self.language)
         threading.Thread(target=self.serve, daemon=True).start()
         self.desktop.refresh(force=True)
         try:
@@ -1509,9 +1706,29 @@ def match(argv: list[str]) -> int:
     return 0 if res.get("matched") else 1
 
 
+def languages() -> int:
+    """voice.py languages: every language with its voice and whether that voice is downloaded."""
+    cfg = dict(DEFAULTS)
+    try:
+        cfg.update(json.loads((HERE / "config.json").read_text()))
+    except (OSError, json.JSONDecodeError):
+        pass
+    sp = Speaker.__new__(Speaker)
+    sp.cfg, sp.dir = cfg, Path(cfg["tts_dir"]).expanduser()
+    out = []
+    for code, e in LANGUAGES.items():
+        v = sp.voice_for(code) if code != "auto" else ""
+        out.append({"code": code, "name": e.get("name"), "native": e.get("native"), "voice": v or None,
+                    "downloaded": bool(v and sp.voice_model(v)), "commands": code == "pt"})
+    print(json.dumps({"ok": True, "languages": out}, ensure_ascii=False))
+    return 0
+
+
 def client(argv: list[str]) -> int:
     cmd = argv[0]
     req = {"cmd": cmd}
+    if cmd == "language" and len(argv) > 1:
+        req["code"] = argv[1]
     if cmd in ("say", "run"):
         if len(argv) < 2:
             print(f"usage: voice.py {cmd} <text>", file=sys.stderr)
@@ -1534,8 +1751,10 @@ def client(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] in ("status", "say", "run", "pause", "resume", "toggle", "reload", "stop"):
+    if len(sys.argv) > 1 and sys.argv[1] in ("status", "say", "run", "pause", "resume", "toggle", "reload", "stop", "language"):
         sys.exit(client(sys.argv[1:]))
+    if len(sys.argv) > 1 and sys.argv[1] == "languages":
+        sys.exit(languages())
     if len(sys.argv) > 1 and sys.argv[1] == "match":
         sys.exit(match(sys.argv[2:]))
     if len(sys.argv) > 1 and sys.argv[1] not in ("daemon",):

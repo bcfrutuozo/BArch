@@ -201,7 +201,8 @@ The main pieces:
   only listens, pulsing in the accent color after "barch" alone (it chimes and waits for the
   sentence), steady while it understands or asks Claude, green while it speaks, red when
   whisper.cpp or the microphone is missing; what it understood shows next to it for a few
-  seconds. Click pauses and resumes the listening, right-click shows the last sentence and answer.
+  seconds. Click pauses and resumes the listening, right-click shows the last sentence and answer
+  and the **language** it listens in (a list with a filter: every language whisper knows, see Voice).
 - **Polkit agent** (`Quickshell.Services.Polkit`, no hyprpolkitagent): the password dialog apps get
   when they ask for privileges (`pkexec`, GNOME Disks, …), in the bar's theme.
 - **Own notification server** with history, DND, sounds and app actions; privacy indicator
@@ -275,6 +276,7 @@ barch health [--refresh]           # .pacnew, failed services, TPM, backup, clea
 barch voice on|off|toggle|status   # always-on voice control (see Voice); pause|resume keep the service
 barch voice match "abre o terminal"  # which command a sentence hits, running nothing · test "..." runs it
 barch voice say "texto"            # speak · reload (commands.json) · log · setup [--install]
+barch voice lang [<code>|list]     # the language it listens and answers in (pt, en, es, auto…)
 barch backup init|run|status|list|restore [SNAPSHOT] <path>...   # restic to the NAS (see Backup)
 barch rules list|test <event> [k=v..]|fire <id>|enable|disable <id>   # agent/rules.json (see Automation)
 barch events status|log [n] [--filter x] [--since 7d]   # the daemon and what happened (windows, VPN, boots, costs…)
@@ -479,7 +481,23 @@ Anonymous Mode, change Hyprland options, delete files) Claude does not act: it a
 request back, confirmed. Answers are spoken with [Piper](https://github.com/OHF-Voice/piper1-gpl) (`pt_BR-faber-medium`,
 downloaded once into `~/.local/share/piper`); commands that need no answer only get a short chime
 (`confirm_sound` in `config.json`), the ones that do (anonymous mode, VPN, the time, errors) a
-sentence. While the session is locked every sentence is ignored. Nothing is done while the daemon
+sentence. While the session is locked every sentence is ignored.
+
+**Other languages.** The microphone's panel in the bar (right-click) has a **Language** list with
+a filter, the same as `barch voice lang <code>`: Portuguese, Automatic, and every other language
+whisper knows (`voice/languages.json`: whisper's hundred, each with the Piper voice that speaks
+it, null for the ones Piper has no voice for). The choice is kept in
+`~/.local/state/barch/voice/language` and goes to whisper with every sentence. Only Portuguese
+has the command table: in any other language the sentence goes, as whisper wrote it, to Claude,
+who acts and answers in that language (`language` in the context of `fallback.md`, the
+"Confirm?" question written by him too), read by that language's voice, downloaded with
+`piper.download_voices` the first time the language is picked (a few seconds; a language
+without a voice answers in a notification). The wake word stays "barch": in a language whisper
+does not write in Latin letters the start of the sentence is transcribed in English to find it.
+**Automatic** transcribes the start in Portuguese, takes the language whisper detects there and
+transcribes the whole sentence in it: Portuguese uses the table, anything else goes to Claude
+(a short command can be detected as the wrong language, which is why it is not the default).
+`tts_voices` in `config.json` (`{"en": "en_US-lessac-high"}`) picks another voice for a language. Nothing is done while the daemon
 itself speaks, so it does not hear itself.
 
 ```bash
