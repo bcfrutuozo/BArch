@@ -354,7 +354,7 @@ without any AI:
   and the boot time of every boot (`systemd-analyze`, once per boot).
 - **Events**, stored and matched as they happen: Hyprland's socket2 (`window.open`,
   `window.close` with class and title, `window.fullscreen`, `window.urgent`, `monitor.added`,
-  `monitor.removed`), `vpn.up`/`vpn.down`, `anon.on`/`anon.off`, `net.up`/`net.down` (default
+  `monitor.removed`), `vpn.up`, `vpn.down` (the tunnel dropped) and `vpn.off` (turned off: Disconnect, Anonymous Mode off, a voice command; `pia.sh disconnect` leaves the time in `stopped`), both with the tunnel that went away and whether the kill switch is holding the traffic, `anon.on`/`anon.off`, `net.up`/`net.down` (default
   route), `pods.connected`/`pods.disconnected`, `session.locked`/`unlocked`, `failure` (a new
   log from `barch failure`), `boot`, `claude.cost` (every agent task run and voice fallback writes
   a line to `~/.local/state/barch/claude-cost.log`), `startup`.

@@ -21,6 +21,7 @@ Singleton {
     property string country: ""
     property string ip: ""
     property real since: 0                  // epoch, s
+    property real stopped: 0                // epoch, s: the last disconnect asked for (not a drop)
     property bool auto: false               // a região atual veio do "auto"
     property bool busy: false               // connect/disconnect rodando
     property var regions: []                // [{id, name, country, geo, pf, auto, latency}]
@@ -86,6 +87,7 @@ Singleton {
                 root.ip = s.ip || ""
                 root.since = s.since || 0
                 root.auto = s.auto === true
+                root.stopped = s.stopped || 0
                 if (s.error && !root.busy) root.error = s.error
                 if (root.connected) root.error = ""
             }
@@ -110,7 +112,7 @@ Singleton {
     // ---- IPC (barch vpn ...) ----
     function status() {
         return { ok: true, state: state, connected: connected, preferred: preferred, region: region, name: regionName,
-                 country: country, ip: ip, since: since, auto: auto, error: error }
+                 country: country, ip: ip, since: since, auto: auto, error: error, stopped: stopped }
     }
     IpcHandler {
         target: "vpn"

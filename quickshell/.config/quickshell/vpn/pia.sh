@@ -5,7 +5,9 @@
 #                                  (default: the saved region, see `region`; auto = lowest latency)
 #   pia.sh disconnect              tunnel down
 #   pia.sh status                  JSON: state (unconfigured|disconnected|connecting|connected),
-#                                  region, name, country, ip, since, preferred, error
+#                                  region, name, country, ip, since, preferred, error, stopped
+#                                  (when `disconnect` last ran: a tunnel that goes away after it
+#                                  was turned off, not one that dropped; barch-events tells them apart)
 #   pia.sh regions                 JSON list of regions (id, name, country, geo, pf, latency)
 #   pia.sh region [ID|auto]        show or save the preferred region
 #   pia.sh latency                 measure the latency to every region (what "auto" uses, cached 1 h)
@@ -134,6 +136,17 @@ connect() {
   local want=${1:-} id rj name country cn ip tok priv pub resp server_key server_ip server_port peer_ip dns auto=false
   [[ -r $creds ]] || fail "no credentials: put the PIA username and password, one per line, in $creds (chmod 600)"
   [[ -n $want ]] || want=$(preferred)
+  # already up in that region (Anonymous Mode turned on over a running VPN, `barch vpn on` twice):
+  # keep the tunnel. Registering a new key means calling the server's own API (port 1337) from
+  # inside its tunnel, which never answers, and the fresh token asked for after that failed too
+  # (2026-11-02 15:06: Anonymous Mode off again, "PIA did not give a token")
+  if nm_active && [[ -s $state/current.json ]] \
+    && jq -e --arg w "$want" '(.region == $w) or ($w == "auto" and .auto == true)' "$state/current.json" >/dev/null 2>&1; then
+    rm -f "$state/error"
+    log "already connected to $(jq -r .name "$state/current.json"); keeping the tunnel"
+    echo "connected: $(jq -r .name "$state/current.json")"
+    return 0
+  fi
   echo connecting > "$state/state"; rm -f "$state/error"; echo $$ > "$state/pid"
   if [[ $want == auto ]]; then auto=true; id=$(best_region); else id=$want; fi
   rj=$(region_json "$id") || fail "unknown region: $id (see: pia.sh regions)"
@@ -187,6 +200,7 @@ connect() {
 disconnect() {
   nm_exists && nmcli connection down "$con" >/dev/null 2>&1 || true
   echo disconnected > "$state/state"; rm -f "$state/current.json" "$state/pid"
+  date +%s > "$state/stopped"
   log "disconnected"
   echo disconnected
 }
@@ -201,7 +215,8 @@ status() {
   [[ -r $creds ]] || st=unconfigured
   err=$(cat "$state/error" 2>/dev/null || true)
   jq -n --arg state "$st" --arg error "$err" --arg preferred "$(preferred)" --argjson current "$cur" \
-    '{state: $state, error: $error, preferred: $preferred} + $current'
+    --argjson stopped "$(cat "$state/stopped" 2>/dev/null || echo 0)" \
+    '{state: $state, error: $error, preferred: $preferred, stopped: $stopped} + $current'
 }
 
 regions() {   # for the menu: fastest first, unmeasured at the end
