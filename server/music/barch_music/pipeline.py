@@ -93,7 +93,7 @@ def find_existing(music: Path, folder: str) -> Path:
     adir = music / artist
     if not adir.is_dir():
         adir = next((d for d in music.iterdir() if d.is_dir() and style.norm(d.name) == style.norm(artist)), adir) if music.is_dir() else adir
-    if adir.is_dir():
+    if adir.is_dir() and style.norm(album):
         hit = next((d for d in adir.iterdir() if d.is_dir() and style.norm(d.name) == style.norm(album)), None)
         if hit:
             return hit
@@ -199,6 +199,11 @@ class Pipeline:
         self.store.save(job)
         src = Path(job["source"])
         if not src.exists():
+            if (job.get("result") or {}).get("files") or (job.get("result") or {}).get("merged"):
+                # delivered before and its download already cleaned up: run twice, nothing to redo
+                job["state"], job["problems"] = "done", []
+                self.log(job, "already delivered; the download is gone, nothing to do again")
+                return self.store.save(job)
             raise FileNotFoundError(f"the download is gone: {src}")
         work = self.store.path(job["id"]) / "work"
         shutil.rmtree(work, ignore_errors=True)
@@ -316,6 +321,9 @@ class Pipeline:
         (tmp / "cover.jpg").write_bytes(cov.data)
         if job.get("replace") and target.exists():
             backup = self.store.path(job["id"]) / "replaced"
+            if backup.exists():
+                # never over the first backup: that is Bruno's original album (undo brings it back)
+                raise RuntimeError(f"{backup} already holds the album this job replaced; undo first")
             shutil.move(str(target), str(backup))
             self.log(job, f"the previous {alb.folder} moved to {backup}")
         target.mkdir(parents=True, exist_ok=True)

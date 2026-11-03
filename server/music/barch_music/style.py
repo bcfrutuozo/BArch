@@ -215,6 +215,8 @@ def make_album(mb_title: str) -> str:
 
 
 def norm(s: str) -> str:
-    """For comparisons: no accents, lower case, only letters and digits."""
-    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
-    return re.sub(r"[^a-z0-9]+", " ", s).strip()
+    """For comparisons: no accents, no case, no punctuation; letters of every script kept
+    ("Motörhead" = "motorhead", but "夏の惑星" stays itself: dropping non-Latin letters made
+    every Japanese title equal to every other one)."""
+    s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c)).casefold()
+    return re.sub(r"[\W_]+", " ", s).strip()
