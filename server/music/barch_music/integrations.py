@@ -14,10 +14,14 @@ class Http:
         self.timeout = timeout
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
 
-    def call(self, method: str, path: str, params: dict | None = None, body=None, form: dict | None = None):
+    def call(self, method: str, path: str, params: dict | None = None, body=None, form: dict | None = None,
+             raw: bytes | None = None, ctype: str = ""):
         url = self.base + path + ("?" + urllib.parse.urlencode(params) if params else "")
         data, headers = None, dict(self.headers)
-        if form is not None:
+        if raw is not None:
+            data = raw
+            headers["Content-Type"] = ctype or "application/octet-stream"
+        elif form is not None:
             data = urllib.parse.urlencode(form).encode()
             headers["Content-Type"] = "application/x-www-form-urlencoded"
         elif body is not None:
@@ -148,6 +152,38 @@ class Plex:
                     break
         self.h.call("GET", f"/library/sections/{sec}/refresh", params={"path": f"{self.path_prefix}/{folder}"})
         return f"Plex: scanning {folder}"
+
+    def _section(self) -> str:
+        if self.section:
+            return self.section
+        for d in (self.h.call("GET", "/library/sections") or {}).get("MediaContainer", {}).get("Directory", []):
+            if d.get("type") == "artist":
+                return d["key"]
+        return ""
+
+    def album_key(self, folder: str) -> str:
+        """The ratingKey of the album whose tracks live in /music/<folder>."""
+        sec = self._section()
+        album = folder.split("/", 1)[-1]
+        want = f"{self.path_prefix}/{folder}/"
+        r = self.h.call("GET", f"/library/sections/{sec}/all", params={"type": 9, "title": album}) or {}
+        for a in (r.get("MediaContainer") or {}).get("Metadata", []):
+            t = self.h.call("GET", f"/library/metadata/{a['ratingKey']}/children") or {}
+            for tr in (t.get("MediaContainer") or {}).get("Metadata", [])[:1]:
+                for m in tr.get("Media", []):
+                    if any((pt.get("file") or "").startswith(want) for pt in m.get("Part", [])):
+                        return str(a["ratingKey"])
+        return ""
+
+    def set_poster(self, folder: str, jpeg: bytes) -> str:
+        """Upload the cover as the album's poster (a scan alone keeps Plex's cached one)."""
+        if not self.enabled:
+            return "Plex: no token configured"
+        key = self.album_key(folder)
+        if not key:
+            return f"Plex: {folder} not found (scanning it)" if self.scan(folder) else ""
+        self.h.call("POST", f"/library/metadata/{key}/posters", raw=jpeg, ctype="image/jpeg")
+        return f"Plex: poster of {folder} replaced"
 
 
 class Telegram:

@@ -102,7 +102,7 @@ Desktop (through the bar):
   voice setup [--install]     what is missing (whisper.cpp, model, piper, voice); --install asks paru
   music status|list [state]   the music pipeline on the NAS (server/music): downloads -> /music
   music browse [<page>]       BArch Music (quickshell/music): the review queue with the resolve inputs
-                              as a form, every album handled (undo), Lidarr [review|albums|lidarr]
+                              as a form, every album handled (undo), Lidarr [review|albums|covers|lidarr]
   music show <id>             one album: problems, MusicBrainz candidates, the proposed tags
   music resolve <id> [--release MBID|URL] [--cover URL] [--date YYYY-MM-DD] [--genre G]
         [--album A] [--artist A] [--title D.TT=Title]... [--replace-tracks 1.15,2.03] [--replace]
@@ -113,6 +113,14 @@ Desktop (through the bar):
                               those tracks, --replace the whole album)
   music retry|reject|undo <id>   run again / give up / put back what it changed in /music
   music scan                  look for finished torrents and inbox folders now
+  music covers [list]         the library's covers that were checked: a scan with a frame, a cleaner one
+  music covers check [<artist>]   look for scans with a frame (and the clean artwork) in /music
+  music covers apply|undo|keep <Artist/Album>   replace cover.jpg + embedded art + Plex poster / undo / keep it
+  music covers pick <Artist/Album> <n>         candidate n (as listed in the app) becomes the proposal
+  music covers propose <Artist/Album> <file|URL> [label]   a new image as the proposal (still needs apply)
+  music covers ask <Artist/Album> "what is wrong"   Claude looks at the candidates, adapts one or finds
+                              another and proposes it (Bruno still decides with apply)
+  music restart               restart the pipeline in the container (new code after install)
   music lidarr-flac-only      every Lidarr quality profile: FLAC and FLAC 24bit only
   music lidarr-monitor <ids> on|off   monitor or not these Lidarr album ids
   music lidarr-search <ids>   monitor these Lidarr albums and search the indexers now
@@ -416,6 +424,74 @@ music_api() {   # music_api GET|POST <path> [json body]
   [[ $(jq -r '.ok' <<<"$OUT") == true ]] || { [[ $JSON == 1 ]] && jq . <<<"$OUT"; die 1 "$(jq -r '.error // "failed"' <<<"$OUT")"; }
 }
 
+# music_upload <Artist/Album> <image file> <label>: POST the image itself as a new cover proposal
+music_upload() {
+  local conf="$HOME/.config/barch/music.json" url token qs
+  url=$(jq -r .url "$conf"); token=$(jq -r .token "$conf")
+  qs=$(jq -rn --arg f "$1" --arg l "$3" '"folder=\($f | @uri)&label=\($l | @uri)"')
+  OUT=$(curl -sS --max-time 120 -X POST -H "X-Barch-Token: $token" -H "Content-Type: image/jpeg" \
+    --data-binary "@$2" "$url/api/covers/propose?$qs" 2>&1) || die 3 "music pipeline not reachable ($OUT)"
+  jq -e . >/dev/null 2>&1 <<<"$OUT" || die 3 "music pipeline answered: ${OUT:0:200}"
+  [[ $(jq -r .ok <<<"$OUT") == true ]] || die 1 "$(jq -r '.error // "refused"' <<<"$OUT")"
+}
+
+# music_covers_ask <Artist/Album> "what is wrong": a Claude run in a folder with the album's
+# candidate images, the pipeline's notes and Bruno's complaint; it may adapt one (magick) or
+# search the web, and proposes the result with `barch music covers propose` (never applies it)
+music_covers_ask() {
+  local folder=${1:-} complaint=${2:-}
+  [[ -n $folder && -n $complaint ]] || usage_error "music covers ask <Artist/Album> \"what is wrong with the candidates\""
+  need claude
+  music_api GET /api/covers
+  local entry
+  entry=$(jq -c --arg f "$folder" '.entries[] | select(.folder == $f)' <<<"$OUT")
+  [[ -n $entry ]] || die 1 "$folder was not checked yet: barch music covers check \"${folder%%/*}\""
+  local conf="$HOME/.config/barch/music.json" url token run i n
+  url=$(jq -r .url "$conf"); token=$(jq -r .token "$conf")
+  run=$STATE/music-covers/$(date +%Y%m%d-%H%M%S)
+  mkdir -p "$run"
+  fetch() { curl -sSf --max-time 60 -G -H "X-Barch-Token: $token" --data-urlencode "folder=$folder" -d "which=$1" -o "$run/$2" "$url/api/covers/image" 2>/dev/null; }
+  fetch current current.jpg || true
+  n=$(jq '.alts // [] | length' <<<"$entry")
+  for ((i = 0; i < n; i++)); do fetch "alt:$i" "alt$i.jpg" || true; done
+  {
+    echo "# Context"
+    echo
+    echo "- Album folder: \`$folder\` (use exactly this with barch music covers propose)"
+    echo "- Artist: $(jq -r '.artist // ""' <<<"$entry") · album tag: $(jq -r '.album // ""' <<<"$entry")"
+    jq -r 'if .mbid and .mbid != "" then "- MusicBrainz release: https://musicbrainz.org/release/\(.mbid)" else "- No MusicBrainz release id in the tags" end' <<<"$entry"
+    echo "- Run folder (write here only): $run"
+    echo
+    echo "## Bruno's complaint"
+    echo
+    echo "$complaint"
+    echo
+    echo "## Images"
+    echo
+    echo "| file | what | size | notes |"
+    echo "|---|---|---|---|"
+    jq -r '"| current.jpg | the library'"'"'s cover.jpg now | \(.current.w // "?")x\(.current.h // "?") | \(if .current.framed then "scan frame detected" else "" end) |"' <<<"$entry"
+    jq -r '.alts // [] | to_entries[] | "| alt\(.key).jpg | \(.value.source) | \(.value.orig) (as converted: \(.value.w)x\(.value.h)) | \([(if .value.framed then "scan frame (trimmed in this file)" else empty end), (if .value.same != null then "similarity to the scans \(.value.same * 100 | floor / 100)" else empty end), (if .value.trusted | not then "rejected: other artwork" else empty end), (if .value.best then "the pipeline'"'"'s pick" else empty end)] | join("; ")) |"' <<<"$entry"
+    echo
+    echo "## What the pipeline tried"
+    echo
+    jq -r '.tried // [] | map("- " + .) | join("\n")' <<<"$entry"
+  } >"$run/context.md"
+  { cat "$REPO/quickshell/.config/quickshell/music/cover-ask.md"; echo; cat "$run/context.md"; } >"$run/prompt.md"
+  local schema='{"type":"object","properties":{"summary":{"type":"string"},"proposed":{"type":"boolean"}},"required":["summary","proposed"]}'
+  local rc=0
+  (cd "$run" && timeout 20m claude -p --output-format json --permission-mode dontAsk --strict-mcp-config \
+    --add-dir "$run" --json-schema "$schema" --disallowedTools Edit Write NotebookEdit \
+    --allowedTools Read Glob WebSearch WebFetch "Bash(curl *)" "Bash(magick *)" "Bash(ffprobe *)" "Bash(barch music covers propose *)" \
+    <"$run/prompt.md" >"$run/result.json" 2>"$run/claude.log") || rc=$?
+  cost_log music-cover "$(jq -r '.total_cost_usd // empty' "$run/result.json" 2>/dev/null)" "$folder"
+  jq -e '.structured_output | type == "object"' "$run/result.json" >/dev/null 2>&1 ||
+    die 1 "Claude did not finish (exit $rc): see $run/claude.log"
+  OUT=$(jq -c --arg f "$folder" --arg run "$run" '{ok: true, folder: $f, run: $run, summary: .structured_output.summary,
+    proposed: .structured_output.proposed, session: .session_id, cost: .total_cost_usd}' "$run/result.json")
+  show "$OUT" '.summary + (if .proposed then "\n(new proposal in Covers: barch music covers apply \"" + .folder + "\" to use it)" else "" end)'
+}
+
 cmd_music() {
   local sub=${1:-status}
   (($#)) && shift
@@ -464,6 +540,35 @@ cmd_music() {
       done
       music_api POST "/api/jobs/$id" "$body"
       show "$OUT" '"\(.job.id): \(.job.state) (queued again)"' ;;
+    covers)
+      local act=${1:-list}
+      (($#)) && shift
+      case $act in
+        list)
+          music_api GET /api/covers
+          show "$OUT" '(if .running != "" then "checking \(.running) (\(.queued) more)\n" else "" end) + (.entries | map("\(.verdict)\t\(.folder)" + (if .proposal then "  ←  \(.proposal.source) \(.proposal.w)x\(.proposal.h)" else "" end) + (if .applied then "  (applied)" else "" end) + (if .error then "  " + .error else "" end)) | join("\n"))' ;;
+        check)
+          music_api POST /api/covers/check "$(jq -cn --arg a "${1:-}" '{artist: $a}')"
+          show "$OUT" '.result' ;;
+        pick)
+          [[ -n ${1:-} && ${2:-} =~ ^[0-9]+$ ]] || usage_error "music covers pick <Artist/Album> <n>"
+          music_api POST /api/covers/pick "$(jq -cn --arg f "$1" --argjson n "$2" '{folder: $f, alt: $n}')"
+          show "$OUT" '.result' ;;
+        propose)
+          [[ -n ${1:-} && -n ${2:-} ]] || usage_error "music covers propose <Artist/Album> <file|URL> [label]"
+          if [[ -f $2 ]]; then music_upload "$1" "$2" "${3:-$(basename "$2")}"
+          else music_api POST /api/covers/propose "$(jq -cn --arg f "$1" --arg u "$2" --arg l "${3:-}" '{folder: $f, url: $u, label: $l}')"; fi
+          show "$OUT" '.result' ;;
+        ask) music_covers_ask "$@" ;;
+        apply | undo | keep)
+          [[ -n ${1:-} ]] || usage_error "music covers $act <Artist/Album>"
+          music_api POST "/api/covers/$act" "$(jq -cn --arg f "$1" '{folder: $f}')"
+          show "$OUT" '.result' ;;
+        *) usage_error "music covers list|check [artist]|apply|undo|keep|pick|propose|ask <Artist/Album> ..." ;;
+      esac ;;
+    restart)
+      music_api POST /api/restart '{}'
+      show "$OUT" '"music pipeline: restarting"' ;;
     scan)
       music_api POST /api/scan '{}'
       show "$OUT" '"music pipeline: \(.new) new album(s) queued"' ;;
@@ -482,7 +587,7 @@ cmd_music() {
       fi
       show "$OUT" '.result' ;;
     install) exec "$REPO/server/music/install.sh" ;;
-    *) usage_error "music status|browse [page]|list [state]|show <id>|resolve <id> ...|retry|reject|undo <id>|scan|lidarr-flac-only|install" ;;
+    *) usage_error "music status|browse [page]|covers ...|restart|list [state]|show <id>|resolve <id> ...|retry|reject|undo <id>|scan|lidarr-flac-only|install" ;;
   esac
 }
 

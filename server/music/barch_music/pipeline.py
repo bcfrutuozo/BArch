@@ -19,6 +19,7 @@ from pathlib import Path
 
 from . import album as albummod
 from . import audio, cover, matcher, merge, style, tagger
+from .libcovers import LibraryCovers
 from .integrations import Lidarr, Plex, QBit, Telegram
 
 STATES = ("queued", "working", "review", "done", "failed", "rejected")
@@ -112,6 +113,7 @@ class Pipeline:
         self.tg = Telegram(cfg.get("telegram", {}))
         self.wake = threading.Event()
         self.current = ""
+        self.covers = LibraryCovers(self.music, self.store.root / "covers", self.plex)
 
     # ------------------------------------------------------------ intake
     def log(self, job: dict, msg: str) -> None:
@@ -234,9 +236,8 @@ class Pipeline:
         existing = target.is_dir() and any(target.glob("*.flac")) and not job.get("replace")
         local = audio.find_images(src, work)
         lib_cover = target / "cover.jpg"
-        if existing and lib_cover.exists():
-            local = [lib_cover] + local                 # the album's own cover first
-        cov, tried = cover.find(alb.mbid, alb.group_mbid, alb.artist_folder, alb.album, local, job.get("cover", ""))
+        cov, tried = cover.find(alb.mbid, alb.group_mbid, alb.artist_folder, alb.album, local, job.get("cover", ""),
+                                library=lib_cover if existing else None)
         job["cover_tried"] = tried
         problems = list(alb.problems)
         if existing:
@@ -245,6 +246,9 @@ class Pipeline:
         if cov:
             (work / "cover.jpg").write_bytes(cov.data)
             job["notes"].append(f"cover {cov.width}x{cov.height} from {cov.source}")
+            if cov.better:
+                job["notes"].append(f"the library's cover.jpg looks like a scan with a frame; a clean one exists: {cov.better} "
+                                    "(Covers in the Music app)")
         else:
             problems.append("no cover of at least 500x500 (tried: " + "; ".join(tried) + ")")
         job["proposal"] = {"folder": alb.folder, "album": alb.album, "artist_folder": alb.artist_folder,

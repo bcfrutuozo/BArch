@@ -107,14 +107,17 @@ def caa_images(kind: str, mbid: str) -> list[dict]:
     return out
 
 
-def itunes_covers(artist: str, album: str) -> list[str]:
-    d = get("https://itunes.apple.com/search", {"term": f"{artist} {album}", "entity": "album", "limit": 5}) or {}
-    return [r["artworkUrl100"].replace("100x100bb", "1400x1400bb") for r in d.get("results", []) if r.get("artworkUrl100")]
+def itunes_albums(artist: str, album: str) -> list[dict]:
+    """[{url (1400 px), artist, album}] as the store names them, best match first."""
+    d = get("https://itunes.apple.com/search", {"term": f"{artist} {album}", "entity": "album", "limit": 10}) or {}
+    return [{"url": r["artworkUrl100"].replace("100x100bb", "1400x1400bb"), "artist": r.get("artistName", ""),
+             "album": r.get("collectionName", "")} for r in d.get("results", []) if r.get("artworkUrl100")]
 
 
-def deezer_covers(artist: str, album: str) -> list[str]:
-    d = get("https://api.deezer.com/search/album", {"q": f'artist:"{artist}" album:"{album}"', "limit": 5}) or {}
-    return [r["cover_xl"] for r in d.get("data", []) if r.get("cover_xl")]
+def deezer_albums(artist: str, album: str) -> list[dict]:
+    d = get("https://api.deezer.com/search/album", {"q": f'artist:"{artist}" album:"{album}"', "limit": 10}) or {}
+    return [{"url": r["cover_xl"], "artist": (r.get("artist") or {}).get("name", ""), "album": r.get("title", "")}
+            for r in d.get("data", []) if r.get("cover_xl")]
 
 
 def download(url: str, timeout: int = 60) -> bytes | None:

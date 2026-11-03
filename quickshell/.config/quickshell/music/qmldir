@@ -2,6 +2,7 @@ singleton Ui Ui.qml
 singleton Store Store.qml
 Badge 1.0 Badge.qml
 Card 1.0 Card.qml
+CoversPage 1.0 CoversPage.qml
 JobDetail 1.0 JobDetail.qml
 JobsPage 1.0 JobsPage.qml
 LidarrPage 1.0 LidarrPage.qml
