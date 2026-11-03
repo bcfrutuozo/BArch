@@ -51,6 +51,7 @@ class Titles(unittest.TestCase):
             "TV Crimes": "TV Crimes",
             "JIRENMA (Movie Size)": "JIRENMA (Movie Size)",
             "Wake up the Mountain": "Wake Up the Mountain",
+            "More Moonglow – The Rock Hard EP": "More Moonglow – The Rock Hard EP",   # a part starts after an en dash too
         }
         for a, b in cases.items():
             self.assertEqual(style.title_case(a), b, a)

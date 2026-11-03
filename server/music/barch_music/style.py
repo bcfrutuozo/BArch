@@ -62,8 +62,8 @@ _COMPILED = [(_rule_rx(a), b) for a, b in _RULES]
 
 # where a part of a title starts and ends: the first and the last word of each part keep their
 # capital ("'Freedom' / The Execution", "[Bonus - The Mamas...]", "Dream On [Live]")
-_PART_START = r"(?:^|(?<=: )|(?<= / )|(?<= - )|(?<=\()|(?<=\[)|(?<=; )|(?<=\d\. )|(?<=\b[IVX]\. )|(?<=\b[IVX]{2}\. )|(?<=\b[IVX]{3}\. ))"
-_PART_END = r"(?=$|\s*\(|\s*\[|\s*\)|\s*\]| / |: | - |; )"
+_PART_START = r"(?:^|(?<=: )|(?<= / )|(?<= - )|(?<= – )|(?<= — )|(?<=\()|(?<=\[)|(?<=; )|(?<=\d\. )|(?<=\b[IVX]\. )|(?<=\b[IVX]{2}\. )|(?<=\b[IVX]{3}\. ))"
+_PART_END = r"(?=$|\s*\(|\s*\[|\s*\)|\s*\]| / |: | - | – | — |; )"
 
 
 def _part_edges(t: str) -> str:

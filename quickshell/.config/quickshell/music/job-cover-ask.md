@@ -35,6 +35,9 @@ How to work:
    deliver again.
 5. If nothing usable exists anywhere, deliver nothing and say so plainly, with what you tried; the
    album stays in the review queue for Bruno.
+6. Only the commands named run, each on its own: a line that pipes or chains into anything else
+   (`curl … | head`, `cmd1; cmd2`) is refused as a whole, so write `curl -o file` and then `head
+   file`; a refusal is a reason to redo the step with the allowed commands, not to stop.
 
 Your final answer (the structured output) goes to Bruno as a notification, in Brazilian
 Portuguese, two or three sentences: what you delivered (source, size) or why nothing.

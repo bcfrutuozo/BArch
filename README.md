@@ -326,6 +326,7 @@ barch music cover <id> <file|URL> [label]   # the cover you found for an album w
 barch music cover-ask <id> ["hint"]   # Claude searches the web for it and runs the album (the music-cover rule does this alone)
 barch music fix <id> ["hint"]         # Fix with Agent: Claude takes the album over (release, date, cover, merge) until it is in
 barch music rescan <id>               # the download taken in again from scratch (a torrent split wrong by an older version)
+barch music retitle "<Artist/Album>" "<title>"   # the ALBUM tag (as given) and the folder of an album in /music; Plex and Lidarr told
 barch music lidarr-artists|lidarr-albums <artist>|lidarr-search <ids>|lidarr-profile <name> ...|lidarr-list <Type> <name> field=value..
                                    # what Lidarr tracks, search albums, metadata profiles (studio albums only), import lists
 barch music lidarr-queue|lidarr-queue-remove <ids>|all|lidarr-commands|lidarr-cancel <id>   # what Lidarr is downloading and running
