@@ -206,7 +206,8 @@ The main pieces:
   `resolve` and `cover` commands, waits for the run and goes on with the next problem until the album
   is in, never rejecting and never replacing your audio on its own; the answer says what it found and,
   if something is left, the one decision that is yours. **Albums**: every job by state,
-  Undo for a delivered one. **Covers**: the covers already in the library, per artist or all of it:
+  Undo for a delivered one. **Covers**: the covers already in the library, one artist at a time
+  (picked from the list of `/music`, filtered as you type, then Check; nothing is shown before that):
   the ones that are a scan of the sleeve with a frame next to the clean artwork of the same album,
   Replace (cover.jpg, the picture embedded in every track and Plex's poster), Keep mine, Undo; every
   candidate found is shown too (a click makes it the proposal), and when none is right, a sentence

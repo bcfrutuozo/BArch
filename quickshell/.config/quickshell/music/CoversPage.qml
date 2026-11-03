@@ -8,7 +8,21 @@ import QtQuick.Layouts
 Item {
     id: page
     property bool all: false
-    readonly property var list: Store.covers.entries.filter(e => all || e.verdict === "better" || e.verdict === "framed" || e.applied || e.queued || e.verdict === "queued")
+    // one artist at a time: picked from the library's list (filtered as you type), nothing shown before that
+    readonly property string artist: Store.coversArtist
+    property string filterText: ""
+    readonly property var filtered: {
+        const q = page.norm(page.filterText)
+        return Store.artists.filter(a => !q || page.norm(a.name).indexOf(q) !== -1)
+    }
+    function norm(s) { return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() }
+    onFilteredChanged: {
+        // the typed filter narrows the combo; the first match becomes the choice when the current one left
+        if (filtered.length && !filtered.some(a => a.name === page.artist)) Store.coversArtist = filtered[0].name
+    }
+    readonly property var list: !artist ? [] : Store.covers.entries.filter(e => e.folder.indexOf(artist + "/") === 0
+        && (all || e.verdict === "better" || e.verdict === "framed" || e.applied || e.queued || e.verdict === "queued"))
+    Component.onCompleted: if (!Store.artists.length) Store.loadArtists()
 
     function verdictText(e) {
         return e.verdict === "better" ? "a cleaner cover exists" : e.verdict === "framed" ? "a scan, nothing cleaner found"
@@ -58,9 +72,24 @@ Item {
             Layout.fillWidth: true
             Layout.margins: 12; Layout.bottomMargin: 0
             spacing: 8
-            UiField { id: artist; Layout.preferredWidth: 280; placeholderText: "artist folder (e.g. Dokken)"; onAccepted: if (text.trim()) Store.checkCovers(text.trim()) }
-            UiButton { label: "Check artist"; icon: "󰍉"; primary: true; enabledBtn: artist.text.trim() !== ""; onClicked: Store.checkCovers(artist.text.trim()) }
-            UiButton { label: "Whole library"; small: true; tooltip: "every album in /music (takes a while: a few seconds per album)"; onClicked: Store.checkCovers("") }
+            UiField {
+                id: filter; Layout.preferredWidth: 200
+                placeholderText: "filter artists…"
+                onTextChanged: page.filterText = text
+                onAccepted: if (page.artist) Store.checkCovers(page.artist)
+            }
+            UiCombo {
+                id: artistCombo; Layout.preferredWidth: 300
+                entries: page.filtered.map(a => ({ label: a.name + "  (" + a.albums + ")", value: a.name }))
+                value: page.artist
+                onPicked: v => Store.coversArtist = String(v)
+            }
+            UiButton {
+                label: "Check"; icon: "󰍉"; primary: true; enabledBtn: page.artist !== "" && !Store.covers.entries.some(e => e.folder.indexOf(page.artist + "/") === 0 && e.queued)
+                tooltip: "look at every album of this artist: a scan with a frame, and the clean artwork of the same album in the stores and the archive (a few seconds per album)"
+                onClicked: Store.checkCovers(page.artist)
+            }
+            UiButton { icon: "󰑐"; small: true; tooltip: "reload the list of artists"; onClicked: Store.loadArtists() }
             Item { Layout.fillWidth: true }
             Text {
                 visible: Store.covers.running !== ""
@@ -78,7 +107,10 @@ Item {
         Text {
             Layout.leftMargin: 14
             visible: page.list.length === 0
-            text: Store.covers.entries.length ? "Nothing to look at: every checked cover is fine (show all to see them)." : "Nothing checked yet: type an artist and Check."
+            text: !page.artist ? "Pick an artist (type to filter the list) and press Check."
+                : Store.covers.entries.some(e => e.folder.indexOf(page.artist + "/") === 0)
+                    ? "Every checked cover of " + page.artist + " is fine (show all to see them)."
+                    : page.artist + " was not checked yet: press Check."
             color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize
         }
         ListView {

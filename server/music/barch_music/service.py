@@ -32,6 +32,7 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
                                          "BArch" metadata profile, new albums monitored, albums without a file monitored once
     GET  /api/lidarr/queue               what Lidarr grabbed and still waits for; POST /api/lidarr/queue-remove {"ids", "blocklist", "from_client"}
     POST /api/lidarr/artists             {"ids": "all" | [artist ids], "monitored": bool, "monitor_new_items": "all|none|new"}
+    GET  /api/library/artists            the artist folders of /music with their album count (the Covers page's list)
     GET  /api/covers                     the library's covers that were checked, with their verdict
     GET  /api/covers/image?folder=A/B&which=current|proposal|previous   one of them (JPEG)
     POST /api/covers/check               {"artist": "Dokken"} ("" = the whole library): check in the background
@@ -159,6 +160,8 @@ def make_handler(p: Pipeline, token: str):
                 return self._send(200, {"ok": True, "job": j}) if j else self._send(404, {"ok": False, "error": "no such job"})
             if parts == ["api", "covers"]:
                 return self._send(200, {"ok": True, **p.covers.summary()})
+            if parts == ["api", "library", "artists"]:
+                return self._send(200, {"ok": True, "artists": p.library_artists()})
             if parts[:2] == ["api", "lidarr"] and len(parts) == 3 and parts[2] in ("artists", "albums", "metadata-profiles", "import-lists", "queue", "commands"):
                 try:
                     if parts[2] == "artists":
