@@ -515,14 +515,15 @@ music_covers_ask() {
 
 # music_claude_run <run dir> <cost note> <barch command>...: Claude on $run/prompt.md (dontAsk, read-only
 # but for the barch commands listed, e.g. "barch music cover"), the answer in $run/result.json;
-# MUSIC_CLAUDE_TIMEOUT (20m) bounds it
+# MUSIC_CLAUDE_TIMEOUT (20m) bounds it. Always Sonnet (MUSIC_CLAUDE_MODEL): a fix that chained three
+# rounds cost US$ 1.48 on the default model (2026-11-03); these are lookups, not reasoning
 music_claude_run() {
   local run=$1 note=$2 rc=0 c
   shift 2
   local allowed=(Read Glob WebSearch WebFetch "Bash(curl *)" "Bash(magick *)" "Bash(ffprobe *)" "Bash(sleep *)")
   for c in "$@"; do allowed+=("Bash($c *)"); done
   local schema='{"type":"object","properties":{"summary":{"type":"string"},"proposed":{"type":"boolean"}},"required":["summary","proposed"]}'
-  (cd "$run" && timeout "${MUSIC_CLAUDE_TIMEOUT:-20m}" claude -p --output-format json --permission-mode dontAsk --strict-mcp-config \
+  (cd "$run" && timeout "${MUSIC_CLAUDE_TIMEOUT:-20m}" claude -p --model "${MUSIC_CLAUDE_MODEL:-sonnet}" --output-format json --permission-mode dontAsk --strict-mcp-config \
     --add-dir "$run" --json-schema "$schema" --disallowedTools Edit Write NotebookEdit \
     --allowedTools "${allowed[@]}" \
     <"$run/prompt.md" >"$run/result.json" 2>"$run/claude.log") || rc=$?

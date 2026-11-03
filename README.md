@@ -205,7 +205,8 @@ The main pieces:
   (release, date, genre, cover, the merge, a folder of its own for a same-title album) with the same
   `resolve` and `cover` commands, waits for the run and goes on with the next problem until the album
   is in, never rejecting and never replacing your audio on its own; the answer says what it found and,
-  if something is left, the one decision that is yours. **Albums**: every job by state,
+  if something is left, the one decision that is yours. These runs (fix, cover-ask, covers ask)
+  always use Sonnet (`MUSIC_CLAUDE_MODEL` in the environment overrides it). **Albums**: every job by state,
   Undo for a delivered one. **Covers**: the covers already in the library, one artist at a time
   (picked from the list of `/music`, filtered as you type): every album of the artist with its cover
   as it is and what its last check found, the ones never checked marked as such; Load reads the
