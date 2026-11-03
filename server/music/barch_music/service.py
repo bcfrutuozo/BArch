@@ -12,6 +12,8 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done):
                                           "cover": URL, "overrides": {...}, "replace": bool}
     POST /api/scan                       look for new torrents and inbox folders now
     POST /api/lidarr/flac-only           set every Lidarr quality profile to FLAC / FLAC 24bit
+    POST /api/lidarr/monitor             {"ids": [album ids], "monitored": bool}
+    POST /api/lidarr/search              {"ids": [album ids]}: monitor them and search the indexers now
     GET  /done?hash=<hash>               qBittorrent's "run on torrent finished" (just a scan)
 """
 from __future__ import annotations
@@ -131,6 +133,12 @@ def make_handler(p: Pipeline, token: str):
                     return self._send(200, {"ok": True, "new": p.scan()})
                 if parts == ["api", "lidarr", "flac-only"]:
                     return self._send(200, {"ok": True, "result": p.lidarr.flac_only_profile()})
+                if parts == ["api", "lidarr", "monitor"]:
+                    ids = [int(i) for i in body.get("ids", [])]
+                    return self._send(200, {"ok": True, "result": p.lidarr.monitor(ids, bool(body.get("monitored", True)))})
+                if parts == ["api", "lidarr", "search"]:
+                    ids = [int(i) for i in body.get("ids", [])]
+                    return self._send(200, {"ok": True, "result": p.lidarr.search(ids)})
                 if len(parts) == 3 and parts[:2] == ["api", "jobs"]:
                     action = body.pop("action", "retry")
                     return self._send(200, {"ok": True, "job": summary(p.resolve(parts[2], action, **body))})
