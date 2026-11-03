@@ -124,6 +124,16 @@ Desktop (through the bar):
   music lidarr-flac-only      every Lidarr quality profile: FLAC and FLAC 24bit only
   music lidarr-monitor <ids> on|off   monitor or not these Lidarr album ids
   music lidarr-search <ids>   monitor these Lidarr albums and search the indexers now
+  music lidarr-artists [q]    the artists Lidarr tracks · lidarr-albums <artist|id>: their albums with type and id
+  music lidarr-artist-set all|<ids> [--monitored on|off] [--new-albums all|none|new]
+                              artist settings: whether an album that shows up later gets monitored (and downloaded)
+  music lidarr-enforce        every artist on the BArch profile, every album without a file monitored (the pipeline does it hourly)
+  music lidarr-commands       Lidarr's running and recent commands · lidarr-cancel <id> stops one (a RefreshArtist in flight undoes monitor changes)
+  music lidarr-queue          what Lidarr grabbed and is downloading · lidarr-queue-remove <ids>|all [--keep]: drop them (blocklisted)
+  music lidarr-profiles       the metadata profiles · lidarr-profile <name> --primary Album,EP --secondary Live
+                              --statuses Official [--apply all|<artist ids>]: create/update one (and assign it)
+  music lidarr-lists          the import lists · lidarr-list <Type> <name> field=value.. [--monitor none|specificAlbum|entireArtist]
+                              e.g. lidarr-list LastFmUser "Last.fm" userId=bruno count=50
   music install               copy server/music to the NAS (server/music/install.sh)
 
 Automation (agent/rules.json + agent/events.py, barch-events.service):
@@ -586,8 +596,95 @@ cmd_music() {
         music_api POST /api/lidarr/search "{\"ids\": $ids}"
       fi
       show "$OUT" '.result' ;;
+    lidarr-artists)
+      music_api GET "/api/lidarr/artists?q=$(jq -rn --arg v "${1:-}" '$v | @uri')"
+      show "$OUT" '.artists[] | "\(.id)\t\(.name)  \(.albums) albums, \(.files)/\(.tracks) tracks\(if .monitored then "" else "  (unmonitored)" end)"' ;;
+    lidarr-artist-set)
+      [[ -n ${1:-} ]] || usage_error "music lidarr-artist-set all|<artist ids> [--monitored on|off] [--new-albums all|none|new]"
+      local body ids
+      if [[ $1 == all ]]; then ids='"all"'; else ids=$(jq -cn --arg v "$1" '$v | split(",") | map(tonumber)'); fi
+      shift
+      body=$(jq -cn --argjson ids "$ids" '{ids: $ids}')
+      while [[ $# -gt 0 ]]; do
+        case $1 in
+          --monitored) body=$(jq -c --arg m "${2:-on}" '.monitored = ($m == "on")' <<<"$body"); shift 2 ;;
+          --new-albums) body=$(jq -c --arg m "${2:-}" '.monitor_new_items = $m' <<<"$body"); shift 2 ;;
+          *) usage_error "music lidarr-artist-set: unknown option $1" ;;
+        esac
+      done
+      music_api POST /api/lidarr/artists "$body"
+      show "$OUT" '.result' ;;
+    lidarr-commands)
+      music_api GET /api/lidarr/commands
+      show "$OUT" '.commands[] | "\(.id)\t\(.name) \(.status)  \(.started[0:19])  artist \(.artist_id // "-")  albums \(.albums)  (\(.trigger))"' ;;
+    lidarr-enforce)
+      music_api POST /api/lidarr/enforce '{}'
+      show "$OUT" '.result' ;;
+    lidarr-cancel)
+      [[ -n ${1:-} ]] || usage_error "music lidarr-cancel <command id>"
+      music_api POST /api/lidarr/command-cancel "{\"id\": $1}"
+      show "$OUT" '.result' ;;
+    lidarr-queue)
+      music_api GET /api/lidarr/queue
+      show "$OUT" '.queue[] | "\(.id)\t\(.artist) - \(.album)  \(.status)/\(.state)  \(.left_gb)/\(.size_gb) GB  \(.title)"' ;;
+    lidarr-queue-remove)
+      [[ -n ${1:-} ]] || usage_error "music lidarr-queue-remove <queue ids, comma separated>|all [--keep]   (--keep leaves the download in the client)"
+      local ids body keep=false
+      [[ ${2:-} == --keep ]] && keep=true
+      if [[ $1 == all ]]; then
+        music_api GET /api/lidarr/queue
+        ids=$(jq -c '[.queue[].id]' <<<"$OUT")
+      else
+        ids=$(jq -cn --arg v "$1" '$v | split(",") | map(tonumber)')
+      fi
+      body=$(jq -cn --argjson ids "$ids" --argjson k "$keep" '{ids: $ids, blocklist: true, from_client: ($k | not)}')
+      music_api POST /api/lidarr/queue-remove "$body"
+      show "$OUT" '.result' ;;
+    lidarr-albums)
+      [[ -n ${1:-} ]] || usage_error "music lidarr-albums <artist name or id>"
+      music_api GET "/api/lidarr/albums?artist=$(jq -rn --arg v "$1" '$v | @uri')"
+      show "$OUT" '.albums[] | "\(.id)\t\(.date)  \(.title)  [\(.type)\(if (.secondary|length) > 0 then ", " + (.secondary|join(", ")) else "" end)]  \(.files)/\(.tracks)\(if .monitored then "  monitored" else "" end)"' ;;
+    lidarr-profiles)
+      music_api GET /api/lidarr/metadata-profiles
+      show "$OUT" '.profiles[] | "\(.id)\t\(.name): \(.primary|join(", ")) | \(.secondary|join(", ")) | \(.statuses|join(", "))"' ;;
+    lidarr-profile)
+      [[ -n ${1:-} ]] || usage_error "music lidarr-profile <name> [--primary A,B] [--secondary A,B] [--statuses A,B] [--apply all|ids]"
+      local body
+      body=$(jq -cn --arg n "$1" '{name: $n, primary: [], secondary: [], statuses: ["Official"]}')
+      shift
+      while (($#)); do
+        case $1 in
+          --primary|--secondary|--statuses) body=$(jq -c --arg k "${1#--}" --arg v "$2" '.[$k] = ($v | split(","))' <<<"$body"); shift ;;
+          --apply) if [[ $2 == all ]]; then body=$(jq -c '.apply_to = "all"' <<<"$body")
+                   else body=$(jq -c --arg v "$2" '.apply_to = ($v | split(",") | map(tonumber))' <<<"$body"); fi; shift ;;
+          *) usage_error "music lidarr-profile: unknown option $1" ;;
+        esac
+        shift
+      done
+      music_api POST /api/lidarr/metadata-profile "$body"
+      show "$OUT" '.result' ;;
+    lidarr-lists)
+      music_api GET /api/lidarr/import-lists
+      show "$OUT" '.lists[] | "\(.id)\t\(.name) (\(.type))\(if .enabled then "" else "  disabled" end)  monitor: \(.monitor)  \(.fields | to_entries | map("\(.key)=\(.value)") | join(" "))"' ;;
+    lidarr-list)
+      [[ -n ${2:-} ]] || usage_error "music lidarr-list <Type> <name> [field=value ...] [--monitor none|specificAlbum|entireArtist] [--search]"
+      local body
+      body=$(jq -cn --arg t "$1" --arg n "$2" '{type: $t, name: $n, fields: {}, monitor: "specificAlbum"}')
+      shift 2
+      while (($#)); do
+        case $1 in
+          --monitor) body=$(jq -c --arg v "$2" '.monitor = $v' <<<"$body"); shift ;;
+          --search) body=$(jq -c '.search = true' <<<"$body") ;;
+          --metadata-profile|--quality-profile) body=$(jq -c --arg k "$(tr - _ <<<"${1#--}")" --arg v "$2" '.[$k] = $v' <<<"$body"); shift ;;
+          *=*) body=$(jq -c --arg k "${1%%=*}" --arg v "${1#*=}" '.fields[$k] = (if ($v | test("^[0-9]+$")) then ($v | tonumber) else $v end)' <<<"$body") ;;
+          *) usage_error "music lidarr-list: unknown option $1" ;;
+        esac
+        shift
+      done
+      music_api POST /api/lidarr/import-list "$body"
+      show "$OUT" '.result' ;;
     install) exec "$REPO/server/music/install.sh" ;;
-    *) usage_error "music status|browse [page]|covers ...|restart|list [state]|show <id>|resolve <id> ...|retry|reject|undo <id>|scan|lidarr-flac-only|install" ;;
+    *) usage_error "music status|browse [page]|covers ...|restart|list [state]|show <id>|resolve <id> ...|retry|reject|undo <id>|scan|lidarr-...|install" ;;
   esac
 }
 

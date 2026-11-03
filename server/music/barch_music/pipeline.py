@@ -17,8 +17,10 @@ import traceback
 import uuid
 from pathlib import Path
 
+from mutagen.flac import FLAC
+
 from . import album as albummod
-from . import audio, cover, matcher, merge, style, tagger
+from . import audio, cover, matcher, mb, merge, style, tagger
 from .libcovers import LibraryCovers
 from .integrations import Lidarr, Plex, QBit, Telegram
 
@@ -84,6 +86,25 @@ def album_roots(source: Path) -> list[Path]:
     return sorted(roots) or [source]
 
 
+def other_album_in(target: Path, group_mbid: str) -> str:
+    """The MusicBrainz release group of the album already in `target`, when it is not `group_mbid`:
+    a library with "Greatest Hits" (1998) must not receive the tracks of the other seven albums
+    MusicBrainz calls Greatest Hits. Empty when it is the same album (any edition) or unknown."""
+    if not group_mbid:
+        return ""
+    for f in sorted(target.glob("*.flac")):
+        try:
+            lib_id = (FLAC(f).get("MUSICBRAINZ_ALBUMID") or [""])[0].strip()
+        except Exception:  # noqa: BLE001
+            return ""
+        if not lib_id:
+            return ""
+        rel = mb.release(lib_id) or {}
+        lib_group = (rel.get("release-group") or {}).get("id", "")
+        return lib_group if lib_group and lib_group != group_mbid else ""
+    return ""
+
+
 def find_existing(music: Path, folder: str) -> Path:
     """The album folder as the library already names it: "Pandora’s Box" finds "Pandora's Box",
     "Motorhead" finds "Motörhead" (compared without accents, punctuation and case)."""
@@ -113,6 +134,7 @@ class Pipeline:
         self.tg = Telegram(cfg.get("telegram", {}))
         self.wake = threading.Event()
         self.current = ""
+        self.last_enforce = 0.0
         self.covers = LibraryCovers(self.music, self.store.root / "covers", self.plex)
 
     # ------------------------------------------------------------ intake
@@ -173,6 +195,7 @@ class Pipeline:
         while True:
             job = self.next_job()
             if not job:
+                self.enforce_lidarr()
                 self.wake.wait(timeout=60)
                 self.wake.clear()
                 continue
@@ -188,6 +211,21 @@ class Pipeline:
                 self.tg.send(f"❌ Música: {job['name']}\n{e}")
             finally:
                 self.current = ""
+
+    def enforce_lidarr(self, force: bool = False) -> str:
+        """Every hour (or now): every artist Lidarr has on the library's metadata profile, every album
+        without a file monitored, new ones too (`lidarr.profile` in config.json, "BArch"; "" turns it off)."""
+        profile = self.cfg.get("lidarr", {}).get("profile", "BArch")
+        if not profile or (not force and time.time() - self.last_enforce < 3600):
+            return ""
+        self.last_enforce = time.time()
+        try:
+            r = self.lidarr.enforce(profile, self.store.root / "lidarr-seen.json")
+        except Exception as e:  # noqa: BLE001
+            r = f"Lidarr: profile check failed: {e}"
+        if not r.endswith("nothing to change") and not r.endswith("nothing changed"):
+            print(f"[pipeline] {r}", flush=True)
+        return r
 
     def process(self, job: dict) -> None:
         from .service import missing_tools
@@ -234,6 +272,11 @@ class Pipeline:
             job["notes"].append(f"the library has this album as {target.relative_to(self.music)}: that folder is used")
             alb.folder = str(target.relative_to(self.music))
         existing = target.is_dir() and any(target.glob("*.flac")) and not job.get("replace")
+        other = other_album_in(target, alb.group_mbid) if existing else ""
+        if other:
+            return self.to_review(job, [f"{alb.folder} is in the library but it is another album with the same name "
+                                        f"(MusicBrainz release group {other}, this download is {alb.group_mbid}): give this one "
+                                        f"its own folder with --album \"{alb.album} ({alb.date[:4] or 'year'})\", or reject it"])
         local = audio.find_images(src, work)
         lib_cover = target / "cover.jpg"
         cov, tried = cover.find(alb.mbid, alb.group_mbid, alb.artist_folder, alb.album, local, job.get("cover", ""),
@@ -382,6 +425,10 @@ class Pipeline:
         if action == "reject":
             job["state"] = "rejected"
             self.log(job, "rejected in the review")
+            rel = mb.release((job.get("match") or {}).get("mbid", "")) if job.get("match") else None
+            note = self.lidarr.unmonitor_group(((rel or {}).get("release-group") or {}).get("id", ""), "rejected")
+            if note:
+                job.setdefault("notes", []).append(note)
         elif action == "undo":
             u = self.store.path(jid) / "undo.json"
             if u.exists():
