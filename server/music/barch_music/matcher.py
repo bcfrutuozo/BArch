@@ -64,23 +64,39 @@ def hints_from(folder_name: str, tracks: list[Track]) -> dict:
         if t.hints.get("date") and not h["year"]:
             m = re.search(r"\b(19|20)\d\d\b", t.hints["date"])
             h["year"] = m.group(0) if m else ""
-    name = re.sub(r"[\[{(](?:flac|web|cd|lossless|24bit|24-bit|16bit|hi-?res|\d+ ?khz|[^\]})]*(?:us|eu|jp|uk)[^\]})]*|\d{2,3})[\]})]", " ", folder_name, flags=re.I)
-    name = re.sub(r"\b(FLAC|WEB|CD|LOSSLESS|24bit|16bit)\b", " ", name, flags=re.I)
-    name = re.sub(r"\s+", " ", name).strip(" -_.")
-    y = re.search(r"\b(19[5-9]\d|20[0-4]\d)\b", name)
+    name = clean_folder_name(folder_name)
+    y = re.search(r"\b(19[5-9]\d|20[0-4]\d)\b", folder_name)
     if y and not h["year"]:
         h["year"] = y.group(0)
-    parts = [p.strip() for p in re.split(r"\s+-\s+|(?<=\w)-(?=[A-Z])", name) if p.strip()]
+    parts = [p.strip() for p in re.split(r"\s+[-–—]\s+|(?<=\w)[–—](?=\w)|(?<=\w)-(?=[A-Z])", name) if p.strip()]
     parts = [p for p in parts if not re.fullmatch(r"\(?(19|20)\d\d\)?", p)]
     if len(parts) >= 2:
         h["artist"] = h["artist"] or parts[0]
-        h["album_folder"] = re.sub(r"\s*\((19|20)\d\d[^)]*\)\s*$", "", parts[-1]).strip()
+        h["album_folder"] = re.sub(r"\s*\((19|20)\d\d[^)]*\)\s*$", "", " ".join(parts[1:])).strip()
     elif parts:
         h["album_folder"] = re.sub(r"^(19|20)\d\d\s+", "", re.sub(r"\s*\((19|20)\d\d[^)]*\)", "", parts[0])).strip()
     h["album_folder"] = re.sub(r"\s*\((?:19|20)\d\d[^)]*\)|\s+\d{1,3}$", "", h["album_folder"]).strip()   # "(1979,2000)", a stray "88"
     h["album_folder"] = _DISC_SUFFIX.sub("", h["album_folder"]).strip()
     h["album"] = h["album"] or h["album_folder"]
     return h
+
+
+_TAG_WORDS = r"flac|web|cd|cds|lossless|\d{2} ?-?bit|hi-?res|\d+(?:\.\d+)? ?khz|\d{2}-\d{2,3}|eac|rip|log|cue|remaster(?:ed)?|\d{4}"
+
+
+def clean_folder_name(name: str) -> str:
+    """"Deep Purple - The Best Of - [EAC]-[FLAC]" -> "Deep Purple - The Best Of": the release tags in
+    brackets ((2003), [FLAC], (3 CD), [24Bit-48kHz], {US, CMC Int., 06076 86285-2}), the uploader
+    tags ([rjk], [PMEDIA]), the bare words (FLAC, WEB, 24bit) and stray symbols go; what is in
+    parentheses and is not a tag ("(20th Anniversary Remix)") stays, it may be part of the title."""
+    n = re.sub(r"\{[^}]*\}", " ", name)                                  # {US, CMC Int., 06076 86285-2}
+    n = re.sub(r"[\[(][^\])]*\b(?:" + _TAG_WORDS + r")\b[^\])]*[\])]", " ", n, flags=re.I)
+    n = re.sub(r"[\[(][^\])\s]{1,14}[\])]", " ", n)                        # [EAC] [rjk] [TFM] [PMEDIA] (1)
+    n = re.sub(r"\b(?:FLAC|WEB|CD|LOSSLESS|\d{2}-?bit|EAC|Hi-?Res)\b", " ", n, flags=re.I)
+    n = re.sub(r"[^\w\s'’&,.!?:/()\[\]+–—-]", " ", n)                      # ⭐️ and the like
+    n = re.sub(r"\s+(?=\S*\d)(?=\S*[a-z])\S+$", "", n)                      # a trailing uploader tag: vtwin88cube
+    n = re.sub(r"\s+", " ", n).strip(" -–—_.")
+    return n
 
 
 # ---------------------------------------------------------------- scoring
@@ -220,14 +236,27 @@ def find(tracks: list[Track], hints: dict, force: str = "", acoustid_key: str = 
         if acoustid_key and fingerprints and len(ids) < 3:
             ids += [i for i in _acoustid_releases(acoustid_key, fingerprints) if i not in seen]
     cands = []
-    for mbid in ids[:10]:
+
+    def add(mbid: str, why: str = "") -> None:
         rel = mb.release(mbid)
         if not rel:
-            continue
+            return
         c = _candidate(rel)
         score(c, tracks, hints if not force else {**hints, "album": "", "artist": ""})
+        if why:
+            c.why.insert(0, why)
         cands.append(c)
+
+    for mbid in ids[:10]:
+        add(mbid)
     cands.sort(key=lambda c: -c.score)
+    if not force and not keep_order and not (cands and cands[0].ok):
+        # the folder lies about the album ("The Best Of" holding Stormbringer whole): the songs do not.
+        # Releases of the groups that hold these titles, with this many tracks, scored like the rest
+        seen = {c.mbid for c in cands}
+        for mbid in _by_titles(hints.get("artist", ""), tracks, seen):
+            add(mbid, f"found by the track titles, not by the name the download gives the album ({hints.get('album') or '?'})")
+        cands.sort(key=lambda c: -c.score)
     if not cands:
         return None, [], "MusicBrainz has no release for " + (f"{hints.get('artist')} - {hints.get('album')}" if hints.get("album") else "this download")
     best = cands[0]
@@ -254,6 +283,51 @@ def find(tracks: list[Track], hints: dict, force: str = "", acoustid_key: str = 
             return None, cands, f"{len(rivals) + 1} releases fit equally well with different track titles"
         best.why.append(f"{len(rivals)} other editions with the same tracks also fit")
     return best, cands, ""
+
+
+def _by_titles(artist: str, tracks: list[Track], seen: set[str]) -> list[str]:
+    """Release ids to try when the album's name finds nothing that fits: four titles spread over the
+    download (old tags or CUE) searched as recordings, the release groups they share, and the
+    releases of those groups with the download's track count. A famous song is on fifty
+    compilations; four songs together are on the album (and the big box sets, which the track
+    count drops)."""
+    titles = [t.hints.get("title", "").strip() for t in sorted(tracks, key=lambda x: (x.disc, x.index))]
+    titles = [x for x in titles if x]
+    if len(titles) < 3:
+        return []
+    picks = [titles[0], titles[len(titles) // 3], titles[2 * len(titles) // 3], titles[-1]]
+    picks = list(dict.fromkeys(picks))
+    votes: dict[str, int] = {}
+    plain: dict[str, bool] = {}          # a studio album, not a compilation / box / live: tried first
+    try:
+        for title in picks:
+            groups = set()
+            for rec in mb.search_recordings(artist, title):
+                if (rec.get("score") or 0) < 70:
+                    continue
+                for rel in rec.get("releases", []):
+                    g = rel.get("release-group") or {}
+                    if g.get("id"):
+                        groups.add(g["id"])
+                        plain[g["id"]] = g.get("primary-type") == "Album" and not g.get("secondary-types")
+            for g in groups:
+                votes[g] = votes.get(g, 0) + 1
+        # four songs together: the album, the box sets and the big compilations tie; the album goes first
+        top = [g for g, n in sorted(votes.items(), key=lambda kv: (-kv[1], 0 if plain.get(kv[0]) else 1))
+               if n >= max(2, len(picks) - 1)][:12]
+        out: list[str] = []
+        total = len(tracks)
+        for g in top:
+            for rel in mb.releases_of_group(g):
+                if rel["id"] in seen or sum(m.get("track-count", 0) for m in rel.get("media", [])) != total:
+                    continue
+                out.append(rel["id"])
+                seen.add(rel["id"])
+                if len(out) >= 6:
+                    return out
+    except mb.NetError:
+        pass
+    return out
 
 
 def _same_tracklist(a: Candidate, b: Candidate) -> bool:

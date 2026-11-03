@@ -199,7 +199,13 @@ The main pieces:
   the `music-cover` rule already does by itself for every album that waits only for a cover),
   a title per track, keep the download's order, replace the album, the tracks to swap
   for the download's (the merge's suggestions are switches); the equivalent command is shown under
-  it, Resolve queues the album again, Retry and Reject next to it. **Albums**: every job by state,
+  it, Resolve queues the album again, Retry and Reject next to it. **Fix with Agent** (`barch music
+  fix <id> ["hint"]`, prompt `quickshell/music/job-fix.md`) hands the album to Claude: it gets the
+  whole job, researches MusicBrainz, Wikipedia, Discogs and the web, decides what you would
+  (release, date, genre, cover, the merge, a folder of its own for a same-title album) with the same
+  `resolve` and `cover` commands, waits for the run and goes on with the next problem until the album
+  is in, never rejecting and never replacing your audio on its own; the answer says what it found and,
+  if something is left, the one decision that is yours. **Albums**: every job by state,
   Undo for a delivered one. **Covers**: the covers already in the library, per artist or all of it:
   the ones that are a scan of the sleeve with a frame next to the clean artwork of the same album,
   Replace (cover.jpg, the picture embedded in every track and Plex's poster), Keep mine, Undo; every
@@ -313,6 +319,7 @@ barch music covers check [artist]|list|apply|undo|keep|pick|propose <Artist/Albu
 barch music covers ask <Artist/Album> "keep the red frame"   # Claude adapts one or finds another, as a proposal
 barch music cover <id> <file|URL> [label]   # the cover you found for an album waiting on it: checked, then the album runs
 barch music cover-ask <id> ["hint"]   # Claude searches the web for it and runs the album (the music-cover rule does this alone)
+barch music fix <id> ["hint"]         # Fix with Agent: Claude takes the album over (release, date, cover, merge) until it is in
 barch music lidarr-artists|lidarr-albums <artist>|lidarr-search <ids>|lidarr-profile <name> ...|lidarr-list <Type> <name> field=value..
                                    # what Lidarr tracks, search albums, metadata profiles (studio albums only), import lists
 barch music lidarr-queue|lidarr-queue-remove <ids>|all|lidarr-commands|lidarr-cancel <id>   # what Lidarr is downloading and running

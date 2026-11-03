@@ -116,6 +116,8 @@ Desktop (through the bar):
                               with the job and the album runs again with it (= --cover + resolve)
   music cover-ask <id> ["hint"]   Claude searches the web for the album's front cover and runs the
                               album with it (what the music-cover rule does by itself)
+  music fix <id> ["hint"]     Fix with Agent: Claude takes the album over (release, date, genre, cover,
+                              the merge), resolves it, waits for the run and goes on until it is in
   music scan                  look for finished torrents and inbox folders now
   music covers [list]         the library's covers that were checked: a scan with a frame, a cleaner one
   music covers check [<artist>]   look for scans with a frame (and the clean artwork) in /music
@@ -502,24 +504,68 @@ music_covers_ask() {
     jq -r '.tried // [] | map("- " + .) | join("\n")' <<<"$entry"
   } >"$run/context.md"
   { cat "$REPO/quickshell/.config/quickshell/music/cover-ask.md"; echo; cat "$run/context.md"; } >"$run/prompt.md"
-  music_claude_cover "$run" "barch music covers propose" "$folder"
+  music_claude_run "$run" "cover $folder" "barch music covers propose"
   OUT=$(jq -c --arg f "$folder" --arg run "$run" '{ok: true, folder: $f, run: $run, summary: .structured_output.summary,
     proposed: .structured_output.proposed, session: .session_id, cost: .total_cost_usd}' "$run/result.json")
   show "$OUT" '.summary + (if .proposed then "\n(new proposal in Covers: barch music covers apply \"" + .folder + "\" to use it)" else "" end)'
 }
 
-# music_claude_cover <run dir> <deliver command> <cost note>: Claude on $run/prompt.md (dontAsk, read-only
-# but for the one barch command that delivers the image), the answer in $run/result.json
-music_claude_cover() {
-  local run=$1 deliver=$2 note=$3 rc=0
+# music_claude_run <run dir> <cost note> <barch command>...: Claude on $run/prompt.md (dontAsk, read-only
+# but for the barch commands listed, e.g. "barch music cover"), the answer in $run/result.json;
+# MUSIC_CLAUDE_TIMEOUT (20m) bounds it
+music_claude_run() {
+  local run=$1 note=$2 rc=0 c
+  shift 2
+  local allowed=(Read Glob WebSearch WebFetch "Bash(curl *)" "Bash(magick *)" "Bash(ffprobe *)" "Bash(sleep *)")
+  for c in "$@"; do allowed+=("Bash($c *)"); done
   local schema='{"type":"object","properties":{"summary":{"type":"string"},"proposed":{"type":"boolean"}},"required":["summary","proposed"]}'
-  (cd "$run" && timeout 20m claude -p --output-format json --permission-mode dontAsk --strict-mcp-config \
+  (cd "$run" && timeout "${MUSIC_CLAUDE_TIMEOUT:-20m}" claude -p --output-format json --permission-mode dontAsk --strict-mcp-config \
     --add-dir "$run" --json-schema "$schema" --disallowedTools Edit Write NotebookEdit \
-    --allowedTools Read Glob WebSearch WebFetch "Bash(curl *)" "Bash(magick *)" "Bash(ffprobe *)" "Bash($deliver *)" \
+    --allowedTools "${allowed[@]}" \
     <"$run/prompt.md" >"$run/result.json" 2>"$run/claude.log") || rc=$?
-  cost_log music-cover "$(jq -r '.total_cost_usd // empty' "$run/result.json" 2>/dev/null)" "$note"
+  cost_log music-agent "$(jq -r '.total_cost_usd // empty' "$run/result.json" 2>/dev/null)" "$note"
   jq -e '.structured_output | type == "object"' "$run/result.json" >/dev/null 2>&1 ||
     die 1 "Claude did not finish (exit $rc): see $run/claude.log"
+}
+
+# music fix <id> ["hint"]: the Fix with Agent button. Claude gets the whole job (problems, candidates,
+# proposal, merge plan, what was tried), researches, decides with `barch music resolve` / `barch music
+# cover`, waits for the run and goes on with the next problem until the album is in (job-fix.md).
+music_fix_job() {
+  local id=${1:-} hint=${2:-}
+  [[ -n $id ]] || usage_error "music fix <id> [\"hint\"]"
+  need claude
+  music_api GET "/api/jobs/$id"
+  local job run
+  job=$(jq -c .job <<<"$OUT")
+  run=$STATE/music-agent/job-$id-$(date +%Y%m%d-%H%M%S)
+  mkdir -p "$run"
+  {
+    echo "# Context"
+    echo
+    echo "- Job id: \`$id\` (use exactly this with barch music resolve / cover / show)"
+    jq -r '"- Download: \(.name)\n- State: \(.state)\n- Source: \(.source)\n- Audio: \(.audio.tracks // "?") tracks on \(.audio.discs // "?") disc(s), \((.audio.format // []) | join(", "))"' <<<"$job"
+    echo "- Run folder (write here only): $run"
+    if [[ -n $hint ]]; then echo; echo "## Bruno's hint"; echo; echo "$hint"; fi
+    echo
+    echo "## The job, as barch music show prints it"
+    echo
+    echo '```'
+    "$0" music show "$id" 2>/dev/null || jq . <<<"$job"
+    echo '```'
+    echo
+    echo "## The job as JSON (hints, track lengths, overrides, merge plan, cover sources tried)"
+    echo
+    echo '```json'
+    jq '{id, state, kind, hints, audio, problems, notes, chosen, cover, cover_label, overrides, keep_order, replace, replace_tracks,
+         match, candidates, proposal, merge, cover_tried, result, after, log: (.log | .[-40:])}' <<<"$job"
+    echo '```'
+  } >"$run/context.md"
+  { cat "$REPO/quickshell/.config/quickshell/music/job-fix.md"; echo; cat "$run/context.md"; } >"$run/prompt.md"
+  MUSIC_CLAUDE_TIMEOUT=40m music_claude_run "$run" "fix $id" "barch music show" "barch music resolve" "barch music cover"
+  OUT=$(jq -c --arg id "$id" --arg run "$run" '{ok: true, id: $id, run: $run, summary: .structured_output.summary,
+    fixed: .structured_output.proposed, session: .session_id, cost: .total_cost_usd}' "$run/result.json")
+  show "$OUT" '.summary'
 }
 
 # music cover-ask <id> ["hint"]: an album stopped for its cover (or about to get a bad one): Claude
@@ -553,7 +599,7 @@ music_cover_ask_job() {
     jq -r '.cover_tried // [] | map("- " + .) | join("\n")' <<<"$job"
   } >"$run/context.md"
   { cat "$REPO/quickshell/.config/quickshell/music/job-cover-ask.md"; echo; cat "$run/context.md"; } >"$run/prompt.md"
-  music_claude_cover "$run" "barch music cover" "job $id"
+  music_claude_run "$run" "cover job $id" "barch music cover"
   OUT=$(jq -c --arg id "$id" --arg run "$run" '{ok: true, id: $id, run: $run, summary: .structured_output.summary,
     proposed: .structured_output.proposed, session: .session_id, cost: .total_cost_usd}' "$run/result.json")
   show "$OUT" '.summary'
@@ -593,6 +639,7 @@ cmd_music() {
       music_api POST "/api/jobs/$1" '{"action": "resolve"}'
       show "$OUT" '"\(.job.id): \(.job.state) (queued again)"' ;;
     cover-ask) music_cover_ask_job "$@" ;;
+    fix) music_fix_job "$@" ;;
     resolve)
       [[ -n ${1:-} ]] || usage_error "music resolve <id> [--release ..] [--cover URL|file] [--date ..] [--genre ..] [--album ..] [--artist ..] [--title D.TT=..] [--replace]"
       local id=$1 body='{"action": "resolve"}'
