@@ -100,6 +100,19 @@ Desktop (through the bar):
   voice reload                reload commands.json and the app/project lists
   voice log                   the daemon's journal
   voice setup [--install]     what is missing (whisper.cpp, model, piper, voice); --install asks paru
+  music status|list [state]   the music pipeline on the NAS (server/music): downloads -> /music
+  music show <id>             one album: problems, MusicBrainz candidates, the proposed tags
+  music resolve <id> [--release MBID|URL] [--cover URL] [--date YYYY-MM-DD] [--genre G]
+        [--album A] [--artist A] [--title D.TT=Title]... [--replace-tracks 1.15,2.03] [--replace]
+        [--date-year-only]    (only when no source on earth has the day: the date becomes YYYY-01-01)
+        [--keep-order]        (an edition MusicBrainz lacks, e.g. an LP: same songs, the download's order)
+                              decide and run it again (an album already in /music is completed
+                              and fixed by the library's rules; --replace-tracks swaps the audio of
+                              those tracks, --replace the whole album)
+  music retry|reject|undo <id>   run again / give up / put back what it changed in /music
+  music scan                  look for finished torrents and inbox folders now
+  music lidarr-flac-only      every Lidarr quality profile: FLAC and FLAC 24bit only
+  music install               copy server/music to the NAS (server/music/install.sh)
 
 Automation (agent/rules.json + agent/events.py, barch-events.service):
   rules list                  the rules, enabled or not, when each fired last
@@ -386,6 +399,76 @@ cmd_nightlight() {
 }
 
 cmd_dnd() { toggle notifs dndSet "${1:-}" '"do not disturb: \(.dnd | '"$onoff_text"')"'; }
+
+# music: the pipeline runs in the beets container on the NAS (server/music); this only talks
+# to its API with the URL and token install.sh left in ~/.config/barch/music.json
+music_api() {   # music_api GET|POST <path> [json body]
+  local conf="$HOME/.config/barch/music.json" url token
+  [[ -r $conf ]] || die 3 "no $conf: run barch music install first"
+  url=$(jq -r .url "$conf"); token=$(jq -r .token "$conf")
+  OUT=$(curl -sS --max-time 60 -X "$1" -H "X-Barch-Token: $token" -H "Content-Type: application/json" \
+    ${3:+--data "$3"} "$url$2" 2>&1) || die 3 "music pipeline not reachable at $url ($OUT)"
+  jq -e . >/dev/null 2>&1 <<<"$OUT" || die 3 "music pipeline answered: ${OUT:0:200}"
+  [[ $(jq -r '.ok' <<<"$OUT") == true ]] || { [[ $JSON == 1 ]] && jq . <<<"$OUT"; die 1 "$(jq -r '.error // "failed"' <<<"$OUT")"; }
+}
+
+cmd_music() {
+  local sub=${1:-status}
+  (($#)) && shift
+  need curl; need jq
+  case $sub in
+    status)
+      music_api GET /api/status
+      show "$OUT" '"music pipeline: " + ((.counts | to_entries | map(select(.value > 0) | "\(.value) \(.key)") | join(", ")) | if . == "" then "idle, nothing queued" else . end) + (if .running != "" then " · working on \(.running)" else "" end) + (if ((.missing // []) | length) > 0 then "\nMISSING in the container: " + (.missing | join(", ")) + " (custom-cont-init.d not run?)" else "" end)' ;;
+    list)
+      music_api GET "/api/jobs?state=${1:-review}"
+      show "$OUT" '.jobs[] | "\(.id)  \(.state)\t\(.name)\(if .folder then "  →  " + .folder else "" end)\(if (.problems|length) > 0 then "\n      " + (.problems | join("\n      ")) else "" end)"' ;;
+    show)
+      [[ -n ${1:-} ]] || usage_error "music show <id>"
+      music_api GET "/api/jobs/$1"
+      show "$OUT" '.job | "\(.id)  \(.state)  \(.name)\nsource: \(.source)"
+        + (if (.problems|length) > 0 then "\nproblems:\n  " + (.problems | join("\n  ")) else "" end)
+        + (if (.notes|length) > 0 then "\nnotes:\n  " + (.notes | join("\n  ")) else "" end)
+        + (if (.candidates|length) > 0 then "\ncandidates:\n" + (.candidates | map("  \(if .ok then "✓" else " " end) \(.score)  \(.artist) - \(.title)  \(.date) \(.country)  \(.tracks) tracks  \(.url)\n      \(.why | join("; "))") | join("\n")) else "" end)
+        + (if .merge then "\nmerge into the library:\n" + ((.merge.add | map("  + " + .)) + (.merge.fix | map("  ~ " + .file + (if .rename != "" then " → " + .rename else "" end) + (if (.set|length) > 0 then "  " + (.set | to_entries | map("\(.key)=\(.value)") | join(", ")) else "" end) + (if (.drop|length) > 0 then "  −" + (.drop | join(" −")) else "" end) + (if .cover then "  +cover" else "" end))) + (.merge.review | map("  ! " + .)) | join("\n")) else "" end)
+        + (if .result.merged then "\nmerged:\n  " + (.result.merged | join("\n  ")) else "" end)
+        + (if .proposal then "\nproposal: \(.proposal.folder)  (\(.proposal.date), \(.proposal.genre))\n" + (.proposal.tracks | map("  " + .file) | join("\n")) else "" end)' ;;
+    retry | reject | undo)
+      [[ -n ${1:-} ]] || usage_error "music $sub <id>"
+      music_api POST "/api/jobs/$1" "{\"action\": \"$sub\"}"
+      show "$OUT" '"\(.job.id): \(.job.state)"' ;;
+    resolve)
+      [[ -n ${1:-} ]] || usage_error "music resolve <id> [--release ..] [--cover ..] [--date ..] [--genre ..] [--album ..] [--artist ..] [--title D.TT=..] [--replace]"
+      local id=$1 body='{"action": "resolve"}'
+      shift
+      while (($#)); do
+        case $1 in
+          --release) body=$(jq --arg v "$2" '.release = $v' <<<"$body"); shift ;;
+          --cover) body=$(jq --arg v "$2" '.cover = $v' <<<"$body"); shift ;;
+          --date|--genre|--album) body=$(jq --arg k "${1#--}" --arg v "$2" '.overrides[$k] = $v' <<<"$body"); shift ;;
+          --artist) body=$(jq --arg v "$2" '.overrides.artist_folder = $v' <<<"$body"); shift ;;
+          --title) [[ $2 == *=* ]] || usage_error "--title D.TT=Title (e.g. 1.03=Song)"
+            body=$(jq --arg k "${2%%=*}" --arg v "${2#*=}" '.overrides.tracks[$k].TITLE = $v' <<<"$body"); shift ;;
+          --replace) body=$(jq '.replace = true' <<<"$body") ;;
+          --date-year-only) body=$(jq '.overrides.date_year_only = true' <<<"$body") ;;
+          --keep-order) body=$(jq '.keep_order = true' <<<"$body") ;;
+          --replace-tracks) body=$(jq --arg v "$2" '.replace_tracks = ($v | split(","))' <<<"$body"); shift ;;
+          *) usage_error "music resolve: unknown option $1" ;;
+        esac
+        shift
+      done
+      music_api POST "/api/jobs/$id" "$body"
+      show "$OUT" '"\(.job.id): \(.job.state) (queued again)"' ;;
+    scan)
+      music_api POST /api/scan '{}'
+      show "$OUT" '"music pipeline: \(.new) new album(s) queued"' ;;
+    lidarr-flac-only)
+      music_api POST /api/lidarr/flac-only '{}'
+      show "$OUT" '.result' ;;
+    install) exec "$REPO/server/music/install.sh" ;;
+    *) usage_error "music status|list [state]|show <id>|resolve <id> ...|retry|reject|undo <id>|scan|lidarr-flac-only|install" ;;
+  esac
+}
 
 cmd_vpn() {
   local text='"vpn: \(.state)" + (if .name != "" then " (\(.name)\(if .ip != "" then ", " + .ip else "" end))" else "" end)
@@ -1378,6 +1461,7 @@ case $cmd in
   dnd) cmd_dnd "$@" ;;
   anon) cmd_anon "$@" ;;
   vpn) cmd_vpn "$@" ;;
+  music) cmd_music "$@" ;;
   health) cmd_health "$@" ;;
   rules) cmd_rules "$@" ;;
   events) cmd_events "$@" ;;
