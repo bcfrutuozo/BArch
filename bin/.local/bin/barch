@@ -120,6 +120,7 @@ Desktop (through the bar):
   music fix <id> ["hint"]     Fix with Agent: Claude takes the album over (release, date, genre, cover,
                               the merge), resolves it, waits for the run and goes on until it is in
   music scan                  look for finished torrents and inbox folders now
+  music retitle <Artist/Album> <title>   fix the ALBUM tag (as given) and the folder of an album in /music
   music rescan <id>           take that job's download in again from scratch, as the albums are found
                               now (a torrent split per disc folder by an older version); old jobs superseded
   music covers [list]         the library's covers that were checked: a scan with a frame, a cleaner one
@@ -520,7 +521,10 @@ music_covers_ask() {
 music_claude_run() {
   local run=$1 note=$2 rc=0 c
   shift 2
-  local allowed=(Read Glob WebSearch WebFetch "Bash(curl *)" "Bash(magick *)" "Bash(ffprobe *)" "Bash(sleep *)")
+  # read-only helpers too: a command chained with an unlisted tool (curl … | head) is refused whole
+  local allowed=(Read Glob WebSearch WebFetch "Bash(curl *)" "Bash(magick *)" "Bash(identify *)" "Bash(ffprobe *)" "Bash(sleep *)"
+                 "Bash(head *)" "Bash(tail *)" "Bash(ls *)" "Bash(cat *)" "Bash(wc *)" "Bash(grep *)" "Bash(jq *)" "Bash(file *)"
+                 "Bash(sort *)" "Bash(cut *)" "Bash(tr *)" "Bash(echo *)" "Bash(mkdir *)")
   for c in "$@"; do allowed+=("Bash($c *)"); done
   local schema='{"type":"object","properties":{"summary":{"type":"string"},"proposed":{"type":"boolean"}},"required":["summary","proposed"]}'
   (cd "$run" && timeout "${MUSIC_CLAUDE_TIMEOUT:-20m}" claude -p --model "${MUSIC_CLAUDE_MODEL:-sonnet}" --output-format json --permission-mode dontAsk --strict-mcp-config \
@@ -548,7 +552,8 @@ music_fix_job() {
     echo "# Context"
     echo
     echo "- Job id: \`$id\` (use exactly this with barch music resolve / cover / show)"
-    jq -r '"- Download: \(.name)\n- State: \(.state)\n- Source: \(.source)\n- Audio: \(.audio.tracks // "?") tracks on \(.audio.discs // "?") disc(s), \((.audio.format // []) | join(", "))"' <<<"$job"
+    jq -r '"- Download: \(.name)\n- State: \(.state)\n- Source on the NAS: \(.source)\n- Audio: \(.audio.tracks // "?") tracks on \(.audio.discs // "?") disc(s), \((.audio.format // []) | join(", "))"' <<<"$job"
+    jq -r '.source | if startswith("/data/") then "- The same folder on this machine (read only; its images can be looked at with Read): /mnt/nasfrutuozo/downloads/torrents/" + .[6:] else empty end' <<<"$job"
     echo "- Run folder (write here only): $run"
     if [[ -n $hint ]]; then echo; echo "## Bruno's hint"; echo; echo "$hint"; fi
     echo
@@ -645,6 +650,10 @@ cmd_music() {
       music_api POST "/api/jobs/$1" '{"action": "resolve"}'
       show "$OUT" '"\(.job.id): \(.job.state) (queued again)"' ;;
     cover-ask) music_cover_ask_job "$@" ;;
+    retitle)                                         # the ALBUM tag and the folder of an album already in /music
+      [[ -n ${1:-} && -n ${2:-} ]] || usage_error "music retitle <Artist/Album> <new title>"
+      music_api POST /api/library/retitle "$(jq -cn --arg f "$1" --arg a "$2" '{folder: $f, album: $a}')"
+      show "$OUT" '.result' ;;
     rescan)                                          # the download taken in again from scratch (its old jobs superseded)
       [[ -n ${1:-} ]] || usage_error "music rescan <id>"
       music_api POST "/api/jobs/$1/rescan" '{}'

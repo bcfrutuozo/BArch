@@ -35,6 +35,7 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
     POST /api/lidarr/artists             {"ids": "all" | [artist ids], "monitored": bool, "monitor_new_items": "all|none|new"}
     GET  /api/library/artists            the artist folders of /music with their album count (the Covers page's list)
     GET  /api/library/albums?artist=X    the album folders of one artist, and whether each has a cover.jpg
+    POST /api/library/retitle            {"folder": "Artist/Album", "album": "New Title"}: ALBUM on every track and the folder renamed
     GET  /api/covers                     the library's covers that were checked, with their verdict
     GET  /api/covers/image?folder=A/B&which=current|proposal|previous   one of them (JPEG)
     POST /api/covers/check               {"artist": "Dokken"} ("" = the whole library): check in the background
@@ -249,6 +250,12 @@ def make_handler(p: Pipeline, token: str):
                 if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "rescan":
                     new = p.rescan(parts[2])
                     return self._send(200, {"ok": True, "jobs": [summary(j) for j in new], "result": f"{len(new)} new job(s) from the download"})
+                if parts == ["api", "library", "retitle"]:
+                    try:
+                        r = p.retitle_album(str(body.get("folder", "")), str(body.get("album", "")))
+                    except ValueError as e:
+                        return self._send(400, {"ok": False, "error": str(e)})
+                    return self._send(200, {"ok": True, "result": "; ".join(r["done"]), **r})
                 if parts == ["api", "scan"]:
                     return self._send(200, {"ok": True, "new": p.scan()})
                 if parts == ["api", "lidarr", "flac-only"]:

@@ -65,6 +65,16 @@ going until it is in the library or until the only decision left is truly his.
   so the album needs fewer rounds. Stop after four rounds, or as soon as the remaining problem
   is one of Bruno's decisions.
 
+## How the tools are allowed
+
+Only the commands named above run, each on its own: a line that pipes or chains into anything
+else (`curl … | head`, `cmd1; cmd2`) is refused as a whole, so write `curl -o file` and then
+`head file`. A refusal is not a reason to stop: redo the step with the allowed commands. The
+download's files live on the NAS; here they are under `/mnt/nasfrutuozo/downloads/torrents/`
+(the context gives the exact folder), read only. A front image that is not square (a digipak
+scan, 3250x2920) is cropped to the artwork with `magick in.jpg -gravity center -crop WxH+X+Y
++repage out.jpg` after looking at it, never stretched.
+
 ## Your final answer
 
 The structured output goes to Bruno as a notification, in Brazilian Portuguese, two to four

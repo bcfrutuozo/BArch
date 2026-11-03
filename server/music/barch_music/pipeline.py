@@ -462,6 +462,42 @@ class Pipeline:
                     out.append({"name": d.name, "albums": n})
         return out
 
+    def retitle_album(self, folder: str, album: str) -> dict:
+        """ALBUM on every track of /music/<folder> set to `album` (as given, no restyling) and the folder
+        renamed to the library's name for it; Plex rescans the artist, Lidarr the album's artist."""
+        src = self.music / folder
+        if "/" not in folder or not src.is_dir():
+            raise KeyError("no such album in the library")
+        album = album.strip()
+        if not album:
+            raise ValueError("an empty title")
+        dst = src.parent / style.folder_name(album)
+        if dst != src and dst.exists():
+            raise ValueError(f"{dst.relative_to(self.music)} exists already")
+        files = sorted(src.glob("*.flac"))
+        for f in files:
+            x = FLAC(f)
+            x["ALBUM"] = album
+            x.save()
+        if dst != src:
+            os.rename(src, dst)
+        new = str(dst.relative_to(self.music))
+        done = [f"ALBUM={album} on {len(files)} track(s)"] + ([f"folder renamed to {new}"] if dst != src else [])
+        group = ""
+        if files:
+            try:
+                rel = mb.release((FLAC(dst / files[0].name).get("MUSICBRAINZ_ALBUMID") or [""])[0]) or {}
+                group = (rel.get("release-group") or {}).get("id", "")
+            except Exception:  # noqa: BLE001
+                group = ""
+        for step in ((lambda: self.lidarr.refresh(group)) if group else None, lambda: self.plex.scan(new.split("/")[0])):
+            if step:
+                try:
+                    done.append(step())
+                except Exception as e:  # noqa: BLE001
+                    done.append(f"{e}")
+        return {"folder": new, "done": done}
+
     def rescan(self, jid: str) -> list[dict]:
         """The download of this job taken in again from scratch, as the album roots are found now (a
         torrent split into one job per disc folder by an older version): every job of the same
