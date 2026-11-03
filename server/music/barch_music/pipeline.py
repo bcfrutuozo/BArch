@@ -448,6 +448,19 @@ class Pipeline:
             self.log(job, "inbox folder removed")
         self.store.save(job)
 
+    def library_artists(self) -> list[dict]:
+        """The artist folders of /music with how many album folders each holds (the Covers page's list)."""
+        out = []
+        if self.music.is_dir():
+            for d in sorted(self.music.iterdir(), key=lambda x: x.name.casefold()):
+                if d.is_dir() and not d.name.startswith("."):
+                    try:
+                        n = sum(1 for a in d.iterdir() if a.is_dir())
+                    except OSError:
+                        n = 0
+                    out.append({"name": d.name, "albums": n})
+        return out
+
     def rescan(self, jid: str) -> list[dict]:
         """The download of this job taken in again from scratch, as the album roots are found now (a
         torrent split into one job per disc folder by an older version): every job of the same
