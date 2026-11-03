@@ -69,6 +69,15 @@ def search_releases(artist: str = "", album: str = "", tracks: int = 0, limit: i
     return d.get("releases", [])
 
 
+def search_recordings(artist: str, title: str, limit: int = 25) -> list[dict]:
+    """Recordings with this title by this artist, each with the releases (and release groups) it is on."""
+    if not title:
+        return []
+    q = f"recording:{_q(title)}" + (f" AND artist:{_q(artist)}" if artist else "")
+    d = get(f"{MB}/recording", {"query": q, "limit": limit, "fmt": "json"}, mb=True) or {}
+    return d.get("recordings", [])
+
+
 INC = "recordings+artist-credits+release-groups+media+labels+genres+isrcs"
 
 

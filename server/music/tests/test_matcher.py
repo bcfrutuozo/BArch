@@ -22,7 +22,22 @@ class Hints(unittest.TestCase):
             self.assertEqual(h["album"], want, album)
 
     def test_folder_name(self):
-        h = matcher.hints_from("Deep Purple - The Now What! Live Tapes", [])
-        self.assertEqual((h["artist"], h["album"], h["year"]), ("Deep Purple", "The Now What! Live Tapes", ""))
-        h = matcher.hints_from("Pink Floyd - The Wall (1979,2000) [FLAC] 88", [])
-        self.assertEqual((h["artist"], h["album"], h["year"]), ("Pink Floyd", "The Wall", "1979"))
+        # real torrent names of 2026-11-02/03: the release and uploader tags go, the title stays
+        cases = {
+            "Deep Purple - The Now What! Live Tapes": ("Deep Purple", "The Now What! Live Tapes", ""),
+            "Pink Floyd - The Wall (1979,2000) [FLAC] 88": ("Pink Floyd", "The Wall", "1979"),
+            "Deep Purple - The Best Of - [EAC]-[FLAC]": ("Deep Purple", "The Best Of", ""),
+            "Deep Purple - Greatest Hits (2022) (3 CD) [FLAC] [rjk]": ("Deep Purple", "Greatest Hits", "2022"),
+            "Deep Purple - Original Album Classics - (2011)-[FLAC]-[TFM]": ("Deep Purple", "Original Album Classics", "2011"),
+            "Deep Purple - Lazy Sod (2024) [24Bit-48kHz] FLAC [PMEDIA] ⭐️": ("Deep Purple", "Lazy Sod", "2024"),
+            "Dokken - Live From The Sun - 2000 {US, CMC Int., 06076 86285-2}": ("Dokken", "Live From The Sun", "2000"),
+            "Deep Purple - Fireball (1971) (UK PBTHAL LP 24-96) [FLAC] vtwin88cube": ("Deep Purple", "Fireball", "1971"),
+            "Deep Purple - Rapture of the Deep (20th Anniversary Remix) (2001 Metal) [Flac 24-48]":
+                ("Deep Purple", "Rapture of the Deep (20th Anniversary Remix)", "2001"),
+            "Deep Purple–Soldier Of Fortune-The Greatest Hits": ("Deep Purple", "Soldier Of Fortune The Greatest Hits", ""),
+            "Deep Purple - 2017 - Time For Bedlam": ("Deep Purple", "Time For Bedlam", "2017"),
+            "1984 Tooth And Nail": ("", "Tooth And Nail", "1984"),
+        }
+        for name, want in cases.items():
+            h = matcher.hints_from(name, [])
+            self.assertEqual((h["artist"], h["album"], h["year"]), want, name)

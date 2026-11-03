@@ -27,7 +27,11 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
    tags (or the MusicBrainz id they carry), each scored on the track count of every disc, the length
    of every track, the titles and the names. Accepted only when the best one fits (worst track
    within 7 s, mean within 3 s, names close) and no other release with different titles fits as
-   well; editions with the same tracks count as one. An edition MusicBrainz lacks with the same
+   well; editions with the same tracks count as one. When nothing found by the album's name fits,
+   the songs are asked instead: four titles spread over the download are searched as recordings,
+   the release groups they share (studio albums before box sets and compilations) give their
+   releases with the download's track count, scored like the rest; that is how a "The Best Of"
+   folder holding *Stormbringer* whole lands on *Stormbringer* (the candidate says so). An edition MusicBrainz lacks with the same
    songs in another order (an LP) is recognized when every track matches one track by title and
    length; it waits for `--keep-order`, then keeps the download's numbering with each song's own
    MusicBrainz title and id (over an album already in the library: --replace or reject, never a merge).
@@ -129,8 +133,12 @@ barch music undo <id>                # put /music back as it was before that job
 barch music retry|reject <id>
 ```
 
-Claude can do the same (`barch agent ask "resolve the music review"`): the CLI shows everything a
-decision needs. Jobs live in `/data/music-pipeline/<id>/job.json` with their log.
+Claude can do the same, and does when asked: **Fix with Agent** in the Music app, `barch music fix <id>
+["hint"]`, gives him the whole job (prompt `quickshell/music/job-fix.md`, the library's rules spelled
+out): he researches, answers with `barch music resolve` / `barch music cover`, waits for the run and
+goes on with the next problem until the album is in; he never rejects and never takes `--replace` /
+`--replace-tracks` unless the library copy is plainly damaged, so what is left in the queue is a
+decision of Bruno's, named in the answer. Jobs live in `/data/music-pipeline/<id>/job.json` with their log.
 
 ## Install / update
 

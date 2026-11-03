@@ -197,6 +197,18 @@ Singleton {
         })
     }
 
+    // Fix with Agent (barch music fix): Claude takes the job over, resolves it and follows the run
+    function fixJob(id, hint) {
+        setAsk(id, { running: true, text: "The agent took the album over: researching, resolving, following the run… (minutes)", bad: false })
+        run([home + "/.local/bin/barch", "--json", "music", "fix", id, hint || ""], (out, err, code) => {
+            let d = null
+            try { d = JSON.parse(out) } catch (e) {}
+            if (code === 0 && d && d.ok) setAsk(id, { running: false, text: d.summary + (d.cost ? "  ($" + d.cost.toFixed(2) + ")" : ""), bad: !d.fixed, proposed: d.fixed })
+            else setAsk(id, { running: false, text: (err.trim().split("\n").pop() || "the agent did not finish"), bad: true })
+            refresh()
+        })
+    }
+
     // ---------- MusicBrainz (by hand) ----------
     function mbSearch(artist, album) {
         const q = []

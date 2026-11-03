@@ -379,20 +379,21 @@ Item {
                         text: detail.cli; color: Ui.subtext; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 2; wrapMode: Text.WrapAnywhere
                     }
                 }
-                // stopped only for the cover: Claude can search the web for it (the music-cover rule does this by itself)
+                // the agent: a hint for it, Find cover when only the cover is missing (the music-cover rule does
+                // that by itself), Fix with Agent next to Resolve for anything
                 RowLayout {
                     Layout.fillWidth: true
-                    visible: detail.st === "review" && (detail.job.problems || []).some(x => /^no cover/.test(x))
+                    visible: detail.st === "review" || detail.st === "failed"
                     spacing: 6
                     readonly property var ask: Store.asks[detail.jobId] || null
                     UiField {
                         id: coverHint
                         Layout.fillWidth: true
                         enabled: !(parent.ask && parent.ask.running)
-                        placeholderText: "Ask Claude to find the cover online (a hint helps: the edition, where it exists, what to avoid)"
-                        onAccepted: Store.askJobCover(detail.jobId, text.trim())
+                        placeholderText: "Hint for the agent (optional): the edition, what the download really is, where a date or cover exists, what to avoid"
                     }
                     UiButton {
+                        visible: (detail.job.problems || []).some(x => /^no cover/.test(x))
                         label: parent.ask && parent.ask.running ? "Claude is searching…" : "Find cover"; icon: "󰚩"; small: true
                         enabledBtn: !(parent.ask && parent.ask.running)
                         tooltip: "Claude searches the web for the front cover, checks it (square, ≥ 500 px) and runs the album with it; Undo brings it back if it is wrong"
@@ -414,6 +415,14 @@ Item {
                         enabledBtn: detail.decidable && !fDate.bad && (Object.keys(detail.body).length > 0)
                         tooltip: Object.keys(detail.body).length ? "queue it again with these answers" : "fill something in first (or use Retry)"
                         onClicked: Store.act(detail.jobId, "resolve", detail.body)
+                    }
+                    UiButton {
+                        readonly property var ask: Store.asks[detail.jobId] || null
+                        visible: detail.st === "review" || detail.st === "failed"
+                        label: ask && ask.running ? "Agent is working…" : "Fix with Agent"; icon: "󰚩"
+                        enabledBtn: !(ask && ask.running)
+                        tooltip: "Claude takes the album over: finds the release, the date, the genre, the cover, settles the merge, resolves it and follows the run until it is in the library (or tells you the one decision left). Undo brings it back."
+                        onClicked: Store.fixJob(detail.jobId, coverHint.text.trim())
                     }
                     UiButton {
                         label: "Clear"; small: true
