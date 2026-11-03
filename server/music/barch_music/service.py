@@ -14,11 +14,21 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done):
     POST /api/lidarr/flac-only           set every Lidarr quality profile to FLAC / FLAC 24bit
     POST /api/lidarr/monitor             {"ids": [album ids], "monitored": bool}
     POST /api/lidarr/search              {"ids": [album ids]}: monitor them and search the indexers now
+    GET  /api/covers                     the library's covers that were checked, with their verdict
+    GET  /api/covers/image?folder=A/B&which=current|proposal|previous   one of them (JPEG)
+    POST /api/covers/check               {"artist": "Dokken"} ("" = the whole library): check in the background
+    POST /api/covers/apply|undo|keep     {"folder": "Dokken/Tooth and Nail"}: replace cover.jpg and the
+                                          embedded picture (and Plex's poster) / put the old one back / keep it
+    POST /api/covers/pick                {"folder", "alt": n}: candidate n becomes the proposal
+    POST /api/covers/propose             ?folder=A/B&label=.. with an image body, or {"folder", "url", "label"}:
+                                          a new candidate (Claude's edit or find), made the proposal
+    POST /api/restart                    end the process: s6 starts it again (after barch music install)
     GET  /done?hash=<hash>               qBittorrent's "run on torrent finished" (just a scan)
 """
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 import time
@@ -112,6 +122,11 @@ def make_handler(p: Pipeline, token: str):
             if len(parts) == 3 and parts[:2] == ["api", "jobs"]:
                 j = p.store.load(parts[2])
                 return self._send(200, {"ok": True, "job": j}) if j else self._send(404, {"ok": False, "error": "no such job"})
+            if parts == ["api", "covers"]:
+                return self._send(200, {"ok": True, **p.covers.summary()})
+            if parts == ["api", "covers", "image"]:
+                data = p.covers.image((q.get("folder") or [""])[0], (q.get("which") or ["current"])[0])
+                return self._send(200, raw=data, ctype="image/jpeg") if data else self._send(404, {"ok": False, "error": "no image"})
             if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "cover":
                 f = p.store.path(parts[2]) / "work" / "cover.jpg"
                 return self._send(200, raw=f.read_bytes(), ctype="image/jpeg") if f.exists() else self._send(404, {"ok": False})
@@ -123,12 +138,45 @@ def make_handler(p: Pipeline, token: str):
             if not self._auth(q):
                 return
             n = int(self.headers.get("Content-Length") or 0)
+            parts = [x for x in u.path.split("/") if x]
+            if parts == ["api", "covers", "propose"] and (self.headers.get("Content-Type") or "").startswith("image/"):
+                # an image as the body: ?folder=Artist/Album&label=what it is
+                data = self.rfile.read(n)
+                try:
+                    r = p.covers.propose((q.get("folder") or [""])[0], data, (q.get("label") or ["Claude"])[0])
+                    return self._send(200, {"ok": True, "result": r})
+                except (KeyError, ValueError) as e:
+                    return self._send(400, {"ok": False, "error": str(e.args[0] if e.args else e)})
             try:
                 body = json.loads(self.rfile.read(n) or b"{}")
             except json.JSONDecodeError:
                 return self._send(400, {"ok": False, "error": "bad JSON"})
-            parts = [x for x in u.path.split("/") if x]
             try:
+                if parts == ["api", "restart"]:
+                    self._send(200, {"ok": True, "result": "restarting"})
+                    threading.Timer(0.5, lambda: os._exit(0)).start()
+                    return
+                if parts == ["api", "covers", "pick"]:
+                    return self._send(200, {"ok": True, "result": p.covers.pick(str(body.get("folder", "")), int(body.get("alt", -1)))})
+                if parts == ["api", "covers", "propose"]:      # {"folder", "url", "label"}
+                    from . import mb as _mb
+                    data = _mb.download(str(body.get("url", "")))
+                    if not data:
+                        return self._send(400, {"ok": False, "error": "could not download " + str(body.get("url", ""))})
+                    try:
+                        r = p.covers.propose(str(body.get("folder", "")), data, str(body.get("label", "") or body.get("url", "")))
+                    except ValueError as e:
+                        return self._send(400, {"ok": False, "error": str(e)})
+                    return self._send(200, {"ok": True, "result": r})
+                if parts == ["api", "covers", "check"]:
+                    n = p.covers.check(str(body.get("artist", "")))
+                    return self._send(200, {"ok": True, "result": f"checking {n} album(s)", "queued": n})
+                if len(parts) == 3 and parts[:2] == ["api", "covers"] and parts[2] in ("apply", "undo", "keep"):
+                    folder = str(body.get("folder", ""))
+                    if parts[2] == "keep":
+                        p.covers.forget(folder)
+                        return self._send(200, {"ok": True, "result": f"{folder}: the library's cover stays"})
+                    return self._send(200, {"ok": True, "result": getattr(p.covers, parts[2])(folder)})
                 if parts == ["api", "scan"]:
                     return self._send(200, {"ok": True, "new": p.scan()})
                 if parts == ["api", "lidarr", "flac-only"]:
@@ -142,8 +190,9 @@ def make_handler(p: Pipeline, token: str):
                 if len(parts) == 3 and parts[:2] == ["api", "jobs"]:
                     action = body.pop("action", "retry")
                     return self._send(200, {"ok": True, "job": summary(p.resolve(parts[2], action, **body))})
-            except KeyError:
-                return self._send(404, {"ok": False, "error": "no such job"})
+            except KeyError as e:
+                msg = str(e.args[0]) if parts[1:2] == ["covers"] and e.args else "no such job"
+                return self._send(404, {"ok": False, "error": msg})
             except Exception as e:  # noqa: BLE001
                 return self._send(500, {"ok": False, "error": str(e)})
             self._send(404, {"ok": False, "error": "unknown path"})

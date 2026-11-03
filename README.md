@@ -197,7 +197,14 @@ The main pieces:
   cover URL, a title per track, keep the download's order, replace the album, the tracks to swap
   for the download's (the merge's suggestions are switches); the equivalent command is shown under
   it, Resolve queues the album again, Retry and Reject next to it. **Albums**: every job by state,
-  Undo for a delivered one. **Lidarr & scan**: scan now, FLAC only, monitor / search album ids.
+  Undo for a delivered one. **Covers**: the covers already in the library, per artist or all of it:
+  the ones that are a scan of the sleeve with a frame next to the clean artwork of the same album,
+  Replace (cover.jpg, the picture embedded in every track and Plex's poster), Keep mine, Undo; every
+  candidate found is shown too (a click makes it the proposal), and when none is right, a sentence
+  about what is wrong goes to **Ask Claude** (`barch music covers ask`, prompt in
+  `quickshell/music/cover-ask.md`): it looks at the images, adapts one with ImageMagick or searches
+  the web for another, and adds it as the proposal (Replace is still yours).
+  **Lidarr & scan**: scan now, FLAC only, monitor / search album ids.
 - **Audio Mixer** (`quickshell/mixer/`, "Audio Mixer" in the launcher, `barch mixer`): PipeWire through
   `Quickshell.Services.Pipewire`. **Devices**: outputs and inputs with volume, mute, a peak
   meter, their format (`s32le 2ch 192000Hz`) and the default. **Apps**: every stream playing or
@@ -299,6 +306,8 @@ barch snapshot list                # safety snapshot pairs of the agent sessions
 barch aur review                   # verdict on the pending AUR updates
 barch finance import [--dry-run]   # C6 Bank statements → Firefly (see Finance)
 barch music status|browse|list|show|resolve|retry|reject|scan   # the NAS music pipeline and its review queue (see Music)
+barch music covers check [artist]|list|apply|undo|keep|pick|propose <Artist/Album>   # scans with a frame -> the clean artwork
+barch music covers ask <Artist/Album> "keep the red frame"   # Claude adapts one or finds another, as a proposal
 barch replay share [file] [--from 12 --to 40]
                                    # newest replay (or FILE) → <name>-share.mp4 for WhatsApp status:
                                    # H.264 ≤1080p30, HDR tone mapped to SDR, at most 60 s
@@ -427,7 +436,10 @@ finished Lidarr download (and any folder dropped in `/data/music-inbox`) into an
 MusicBrainz release found by track count and lengths, only the library's tags (artist, album,
 title, numbers, the original date to the day (MusicBrainz, Wikidata, every Wikipedia; YYYY-01-01 only when it exists nowhere and Bruno says so), a genre on every track, two MusicBrainz ids), titles in Bruno's style (his
 title-case dictionary, one trailing `[feat. A; B - Bonus - Live]` in a fixed order), a cover of at
-least 500 px (1000 px when any source has it) embedded and as `cover.jpg`, file names with the
+least 500 px (1000 px when any source has it) embedded and as `cover.jpg`, the label's clean
+artwork before a scan of the sleeve (a store's image counts only with the same artist and album
+and when it is visibly the same picture as the scan or the Cover Art Archive's; a scan that still
+wins has its frame trimmed), file names with the
 library's replacements. Then Lidarr rescans and stops looking for the album, Plex scans, the
 torrent is deleted. An album that is already there is completed (the missing tracks only) and
 fixed by the library's rules, never replaced, with an undo log; a track of Bruno's that looks wrong

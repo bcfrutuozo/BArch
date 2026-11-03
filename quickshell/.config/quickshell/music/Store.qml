@@ -87,6 +87,7 @@ Singleton {
 
     function refresh() {
         api("GET", "/api/status", null, d => status = d, true)
+        refreshCovers()
         api("GET", "/api/jobs", null, d => {
             jobs = (d.jobs || []).slice().sort((a, b) => (b.updated || 0) - (a.updated || 0))
             if (!selected) { const r = jobs.filter(j => j.state === "review")[0]; if (r) select(r.id) }
@@ -108,7 +109,7 @@ Singleton {
     }
     function fetchCover(id, stamp) {
         const f = cacheDir + "/" + id + "-" + Math.round(stamp || 0) + ".jpg"
-        run(["sh", "-c", 'mkdir -p "$1" && find "$1" -name "$2-*" ! -path "$3" -delete; [ -s "$3" ] || curl -sSf --max-time 30 -H "X-Barch-Token: $4" -o "$3" "$5"',
+        run(["sh", "-c", 'mkdir -p "$1" && find "$1" -name "$2-*" ! -path "$3" -delete; [ -s "$3" ] || { curl -sSf --max-time 30 -H "X-Barch-Token: $4" -o "$3.$$" "$5" && mv -f "$3.$$" "$3"; } || { rm -f "$3.$$"; exit 1; }',
              "sh", cacheDir, id, f, token, url + "/api/jobs/" + id + "/cover"], (out, err, code) => {
             if (store.selected === id) store.coverFile = code === 0 ? "file://" + f : ""
         })
@@ -126,6 +127,38 @@ Singleton {
     }
     function scan() { say("looking for finished torrents and inbox folders…"); api("POST", "/api/scan", {}, d => { say(d.new + " new album(s) queued"); refresh() }) }
     function lidarr(path, body) { api("POST", "/api/lidarr/" + path, body, d => say(d.result)) }
+
+    // ---------- the library's covers ----------
+    property var covers: ({ running: "", queued: 0, entries: [] })
+    readonly property int coversToLook: covers.entries.filter(e => e.verdict === "better").length
+    function refreshCovers() { api("GET", "/api/covers", null, d => covers = d, true) }
+    function checkCovers(artist) { api("POST", "/api/covers/check", { artist: artist }, d => { say(d.result); refreshCovers() }) }
+    function coverAct(action, folder) {
+        say(action + " " + folder + "…")
+        api("POST", "/api/covers/" + action, { folder: folder }, d => { say(d.result); refreshCovers() })
+    }
+    // one image of the covers check, fetched with curl into the cache: cb("file://...") or cb("")
+    function coverImage(folder, which, stamp, cb) {
+        const f = cacheDir + "/lib-" + Qt.md5(folder) + "-" + which + "-" + Math.round(stamp || 0) + ".jpg"
+        run(["sh", "-c", 'mkdir -p "$1"; [ -s "$2" ] || { curl -sSf --max-time 30 -G -H "X-Barch-Token: $3" --data-urlencode "folder=$4" -d "which=$5" -o "$2.$$" "$6" && mv -f "$2.$$" "$2"; } || { rm -f "$2.$$"; exit 1; }',
+             "sh", cacheDir, f, token, folder, which, url + "/api/covers/image"], (out, err, code) => cb(code === 0 ? "file://" + f : ""))
+    }
+    Timer { interval: 4000; running: store.configured && (store.covers.running !== "" || store.covers.queued > 0); repeat: true; onTriggered: store.refreshCovers() }
+    function pickCover(folder, i) { api("POST", "/api/covers/pick", { folder: folder, alt: i }, d => { say(d.result); refreshCovers() }) }
+
+    // Claude on one album's cover (barch music covers ask): folder -> { running, text, bad }
+    property var asks: ({})
+    function setAsk(folder, v) { const a = Object.assign({}, asks); a[folder] = v; asks = a }
+    function askCover(folder, complaint) {
+        setAsk(folder, { running: true, text: "Claude is looking at the candidates…", bad: false })
+        run([home + "/.local/bin/barch", "--json", "music", "covers", "ask", folder, complaint], (out, err, code) => {
+            let d = null
+            try { d = JSON.parse(out) } catch (e) {}
+            if (code === 0 && d && d.ok) setAsk(folder, { running: false, text: d.summary + (d.cost ? "  ($" + d.cost.toFixed(2) + ")" : ""), bad: false, proposed: d.proposed })
+            else setAsk(folder, { running: false, text: (err.trim().split("\n").pop() || "Claude did not finish"), bad: true })
+            refreshCovers()
+        })
+    }
 
     // ---------- MusicBrainz (by hand) ----------
     function mbSearch(artist, album) {

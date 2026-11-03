@@ -45,9 +45,19 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
      his qualifiers in one trailing `[ ]` in the order feat. → Bonus → Unreleased → kind → Live →
      variant, several guests joined by `; `. `Bonus` = not on the first edition of the album
      (compared by title); `Live` = a live recording on a studio album.
-5. **Cover** (`cover.py`): Cover Art Archive (release, release group), the images in the download,
-   iTunes, Deezer; square, at least 500 px, the first of 1000 px or more wins; a 1000x1000 JPEG
-   embedded in every track and written as `cover.jpg`.
+5. **Cover** (`cover.py`): every source is gathered (Cover Art Archive release and release group,
+   the images in the download, iTunes, Deezer; square, at least 500 px) and each is looked at on a
+   200x200 thumbnail: a scan of an old sleeve has a frame (a flat band at the edge that ends with
+   a jump in brightness, on two sides or more). A store's image counts only when artist and album
+   match and, if any other source has an image, when it is the same picture (24x24 grey
+   fingerprints, correlation 0.75 or more; the same art measured 0.83-0.99, other albums at most
+   0.60). Ranking: confirmed, no frame, store artwork, 1000 px or more, larger. A framed scan that
+   still wins has its frame trimmed. A 1000x1000 JPEG embedded in every track and `cover.jpg`. An
+   album already in the library keeps its cover; when it is a framed scan and a clean one exists,
+   a note says so. **Library covers** (`libcovers.py`, `barch music covers`, Covers in the app):
+   check an artist (or everything), see the scan next to the clean artwork, Replace writes
+   `cover.jpg`, the embedded picture of every track and uploads Plex's poster; Undo puts the old
+   ones back (kept in `<jobs>/covers/undo/`).
 6. **Checks**: every required tag filled, no two tracks with the same file name, the cover. Any
    problem: review, never a partial import.
 6b. **Already in `/music`** (`merge.py`): the album is completed and fixed, never replaced. Each

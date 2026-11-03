@@ -28,6 +28,13 @@ for old in "$dst/app/barch_music.old" "$dst/app"/.old-*; do
   [ -e "$old" ] && { rm -rf "$old" 2>/dev/null || echo "note: $old could not be removed from here (container files); harmless"; }
 done
 echo "app copied to $dst/app/barch_music"
+# the service reloads only when it restarts: ask it to (s6 brings it back with the new code)
+if [ -r "$HOME/.config/barch/music.json" ] && curl -sf --max-time 10 -X POST -H "X-Barch-Token: $(jq -r .token "$HOME/.config/barch/music.json")" \
+     "$(jq -r .url "$HOME/.config/barch/music.json")/api/restart" >/dev/null 2>&1; then
+  echo "pipeline restarted with the new code"
+else
+  echo "the pipeline did not restart itself (older version or not running): docker restart beets on Unraid"
+fi
 
 [ -f "$dst/config.json" ] || { cp "$here/deploy/config.example.json" "$dst/config.json"; echo "config.json created"; }
 if [ ! -f "$dst/secrets.json" ]; then
