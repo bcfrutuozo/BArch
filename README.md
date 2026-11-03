@@ -27,7 +27,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | Folder | Goes to | What it is |
 |---|---|---|
 | `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, `scripts/lock.sh` (locks; starts and supervises the resident lock process); `settings.json` is what the Hyprland Settings app saved (below) |
-| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/` and `mixer/` the other apps, `voice/` the voice control daemon, `ui/` the controls they all share (linked into each) |
+| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/`, `mixer/` and `music/` the other apps, `voice/` the voice control daemon, `ui/` the controls they all share (linked into each) |
 | `foot/` | `~/.config/foot` | Terminal |
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
 | `mpv/` | `~/.config/mpv` | Video player (HDR, NVDEC) |
@@ -188,6 +188,16 @@ The main pieces:
   bar's flow), `.pacnew` files (pacdiff in a terminal) and whether `packages/pacman.txt` and
   `aur.txt` match what is explicitly installed, with a button that regenerates them (the
   removal does it by itself). **History**: the pacman log, newest first, by action and name.
+- **Music** (`quickshell/music/`, "Music" in the launcher, `barch music browse [review|albums|lidarr]`): the
+  music pipeline on the NAS (see Music) through its API. **Review**: the queue, and for each album what
+  the pipeline found (the download, the problems, the MusicBrainz candidates with why they fit, the
+  merge plan for an album already in the library, the proposed files, the log, the cover) and the
+  inputs of `barch music resolve` as a form: Use a candidate or a release found with the
+  MusicBrainz search right there, date (or the year-only last resort), genre, album, artist folder,
+  cover URL, a title per track, keep the download's order, replace the album, the tracks to swap
+  for the download's (the merge's suggestions are switches); the equivalent command is shown under
+  it, Resolve queues the album again, Retry and Reject next to it. **Albums**: every job by state,
+  Undo for a delivered one. **Lidarr & scan**: scan now, FLAC only, monitor / search album ids.
 - **Audio Mixer** (`quickshell/mixer/`, "Audio Mixer" in the launcher, `barch mixer`): PipeWire through
   `Quickshell.Services.Pipewire`. **Devices**: outputs and inputs with volume, mute, a peak
   meter, their format (`s32le 2ch 192000Hz`) and the default. **Apps**: every stream playing or
@@ -288,7 +298,7 @@ barch failure <unit> [--system]    # what OnFailure= calls: log + notification (
 barch snapshot list                # safety snapshot pairs of the agent sessions
 barch aur review                   # verdict on the pending AUR updates
 barch finance import [--dry-run]   # C6 Bank statements → Firefly (see Finance)
-barch music status|list|show|resolve|retry|reject|scan   # the NAS music pipeline and its review queue (see Music)
+barch music status|browse|list|show|resolve|retry|reject|scan   # the NAS music pipeline and its review queue (see Music)
 barch replay share [file] [--from 12 --to 40]
                                    # newest replay (or FILE) → <name>-share.mp4 for WhatsApp status:
                                    # H.264 ≤1080p30, HDR tone mapped to SDR, at most 60 s
@@ -423,7 +433,8 @@ torrent is deleted. An album that is already there is completed (the missing tra
 fixed by the library's rules, never replaced, with an undo log; a track of Bruno's that looks wrong
 is only swapped with his ok. Anything it cannot do completely (no match, a year-only date, no
 cover) waits in a review queue with the reason and the candidates:
-`barch music list`, `barch music show <id>`, `barch music resolve <id> --release …|--date …|--cover …`.
+`barch music list`, `barch music show <id>`, `barch music resolve <id> --release …|--date …|--cover …`,
+or all of it in the **Music** app (`barch music browse`).
 
 ## NAS
 

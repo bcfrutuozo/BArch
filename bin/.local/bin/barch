@@ -101,6 +101,8 @@ Desktop (through the bar):
   voice log                   the daemon's journal
   voice setup [--install]     what is missing (whisper.cpp, model, piper, voice); --install asks paru
   music status|list [state]   the music pipeline on the NAS (server/music): downloads -> /music
+  music browse [<page>]       BArch Music (quickshell/music): the review queue with the resolve inputs
+                              as a form, every album handled (undo), Lidarr [review|albums|lidarr]
   music show <id>             one album: problems, MusicBrainz candidates, the proposed tags
   music resolve <id> [--release MBID|URL] [--cover URL] [--date YYYY-MM-DD] [--genre G]
         [--album A] [--artist A] [--title D.TT=Title]... [--replace-tracks 1.15,2.03] [--replace]
@@ -419,6 +421,7 @@ cmd_music() {
   (($#)) && shift
   need curl; need jq
   case $sub in
+    browse) app_open music BARCH_MUSIC_PAGE "${1:-}" ;;
     status)
       music_api GET /api/status
       show "$OUT" '"music pipeline: " + ((.counts | to_entries | map(select(.value > 0) | "\(.value) \(.key)") | join(", ")) | if . == "" then "idle, nothing queued" else . end) + (if .running != "" then " · working on \(.running)" else "" end) + (if ((.missing // []) | length) > 0 then "\nMISSING in the container: " + (.missing | join(", ")) + " (custom-cont-init.d not run?)" else "" end)' ;;
@@ -479,7 +482,7 @@ cmd_music() {
       fi
       show "$OUT" '.result' ;;
     install) exec "$REPO/server/music/install.sh" ;;
-    *) usage_error "music status|list [state]|show <id>|resolve <id> ...|retry|reject|undo <id>|scan|lidarr-flac-only|install" ;;
+    *) usage_error "music status|browse [page]|list [state]|show <id>|resolve <id> ...|retry|reject|undo <id>|scan|lidarr-flac-only|install" ;;
   esac
 }
 
