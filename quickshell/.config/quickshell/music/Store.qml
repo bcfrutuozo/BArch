@@ -36,6 +36,7 @@ Singleton {
     function when(t) { return t ? Qt.formatDateTime(new Date(t * 1000), "dd/MM HH:mm") : "" }
     function stateColor(s) { return s === "done" ? Ui.green : s === "review" ? Ui.yellow : s === "failed" ? Ui.red : s === "rejected" ? Ui.overlay : Ui.accent }
     function openUrl(u) { if (u) Quickshell.execDetached(["xdg-open", u]) }
+    function copy(t) { if (t) run(["sh", "-c", 'printf %s "$1" | wl-copy', "sh", t], null) }
 
     FileView {
         path: store.confPath

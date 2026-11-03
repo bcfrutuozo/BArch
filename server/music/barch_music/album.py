@@ -242,7 +242,7 @@ def build(cand: Candidate, tracks: list[Track], music: Path, overrides: dict | N
                 "TRACKNUMBER": f"{pos if cand.reorder else int(mt.get('position') or mt.get('number') or 0):02d}",
                 "TRACKTOTAL": f"{len(m.get('tracks', [])):02d}",
                 "DISCNUMBER": str(dn),
-                "DISCTOTAL": str(len(media)),
+                "DISCTOTAL": str(len(audio_media(rel))),       # the release's discs, even when only some came
                 "DATE": a.date,
                 "GENRE": a.genre,
                 "MUSICBRAINZ_ALBUMID": rel["id"],
