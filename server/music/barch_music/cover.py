@@ -30,7 +30,26 @@ from .style import norm
 MIN, TARGET = 500, 1000
 N = 200                      # the analysis thumbnail, N x N
 SAME_ART = 0.75              # fingerprint correlation from which two images are the same artwork
-RANK = {"chosen": 0, "store": 1, "caa": 2, "library": 2, "download": 3}
+RANK = {"chosen": 0, "store": 1, "caa": 2, "library": 2, "download": 3, "other": 4}
+
+# the images a download ships, by their names: the front is wanted; the back, the booklet, the
+# disc and the inlay never are, whatever their size (a 2140 px "Contraportada.jpg" once beat
+# the 2129 px "Portada.jpg" next to it on size alone)
+_NOT_FRONT = re.compile(r"back|rear|contraportada|contracapa|trasera|verso|inlay|inside|interior|exterior|"
+                        r"booklet|libreto|folleto|livret|tray|obi|matrix|label|sticker|\bcd\s*\d*\b|\bdis[ck]\s*\d*\b", re.I)
+_FRONT = re.compile(r"front|cover|folder|portada|frente|\bcapa\b|album", re.I)
+
+
+def image_role(name: str) -> str:
+    """"Front.jpg", "Portada.jpg", "folder.jpg" -> "front"; "Back.jpg", "Booklet 2.jpg", "CD.png"
+    -> "none" (never used as the cover); anything else ("Jolly Roger.png") -> "other", a candidate
+    after the ones named as the front."""
+    stem = Path(name).stem
+    if _NOT_FRONT.search(stem):
+        return "none"
+    if _FRONT.search(stem):
+        return "front"
+    return "other"
 
 
 @dataclass
@@ -259,7 +278,7 @@ def gather(release_mbid: str, group_mbid: str, artist: str, album: str, local: l
             if img.get("url"):
                 add(lambda u=img["url"]: mb.download(u), f"Cover Art Archive ({kind})", "caa")
     for p in local[:6]:
-        add(lambda p=p: p.read_bytes(), f"download: {p.name}", "download")
+        add(lambda p=p: p.read_bytes(), f"download: {p.name}", "download" if image_role(p.name) == "front" else "other")
     for name, fn in (("iTunes", mb.itunes_albums), ("Deezer", mb.deezer_albums)):
         try:
             hits = [h for h in fn(artist, album) if names_match(artist, album, h["artist"], h["album"])][:2]

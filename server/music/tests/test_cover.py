@@ -10,6 +10,28 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from barch_music import cover  # noqa: E402
 
 
+class ImageNames(unittest.TestCase):
+    """What a download ships: the front is a candidate, the back and the booklet never are."""
+
+    def test_role(self):
+        front = ["Front.jpg", "cover.png", "folder.jpg", "Portada.jpg", "Box-Front.PNG", "Tooth And Nail Front.png", "capa.jpg"]
+        never = ["Back.jpg", "Contraportada.jpg", "Contracapa.jpg", "Booklet 2.jpg", "Folleto.jpg", "Libreto_Interior.jpg",
+                 "Inlay.png", "CD.jpg", "cd1.png", "Disc 2.jpg", "Back Cover.jpg", "Trasera.jpg", "Obi.jpg"]
+        other = ["Jolly Roger.png", "scan01.jpg", "image.webp"]
+        for n in front:
+            self.assertEqual(cover.image_role(n), "front", n)
+        for n in never:
+            self.assertEqual(cover.image_role(n), "none", n)
+        for n in other:
+            self.assertEqual(cover.image_role(n), "other", n)
+
+    def test_front_beats_a_bigger_back(self):
+        # New Live & Rare, Volume Two (2026-11-03): Contraportada.jpg (2129x2140) was chosen over Portada.jpg (2128x2129)
+        a = cover.Cand("download: Portada.jpg", "download", Path("a"), 2128, 2129)
+        b = cover.Cand("download: Jolly Roger.png", "other", Path("b"), 2129, 2140)
+        self.assertIs(max([a, b], key=cover.rank_key), a)
+
+
 class StoreNames(unittest.TestCase):
     def test_match(self):
         ok = [("Dokken", "Beast from the East", "Dokken", "Beast from the East (Live)"),
