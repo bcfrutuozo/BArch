@@ -90,6 +90,14 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
 
 ## Review
 
+**In a browser:** `http://<nas>:8338/` (`review.html`, served by the pipeline itself, phone friendly) is the
+review queue and the resolve form of the Music app: every job by state, problems, notes, candidates, a
+MusicBrainz search by hand (`/api/mb/search`), the merge plan, the proposal with its cover and a title field
+per track, the switches (year only, keep order, replace, the tracks to swap), the equivalent `barch music
+resolve` line, Resolve / Retry / Reject / Undo (the last two ask for a second press) and the log. It asks once
+for the token of `~/.config/barch/music.json` and keeps it in the browser only; over Tailscale that is the
+whole setup, nothing else is exposed.
+
 ```bash
 barch music list                     # what waits, and why
 barch music show <id>                # problems, notes, candidates with their scores, the proposal

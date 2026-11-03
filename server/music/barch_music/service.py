@@ -3,7 +3,10 @@
     python3 -m barch_music serve [--config /config/pipeline/config.json]
     python3 -m barch_music once <folder>      process one folder now, as an inbox job (testing)
 
-HTTP API (port 8338, header X-Barch-Token or ?token=, except /done):
+HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page):
+    GET  /  (or /review)                 the review page (review.html next to this file): the queue and the
+                                         resolve form in a browser, phone included; it asks for the token once
+    GET  /api/mb/search?artist=&album=   MusicBrainz releases for the form's search by hand
     GET  /api/status                     counts per state, the job running now
     GET  /api/jobs[?state=review]        summaries
     GET  /api/jobs/<id>                  everything: problems, candidates, the proposed tags
@@ -119,8 +122,25 @@ def make_handler(p: Pipeline, token: str):
             if parts == ["done"]:
                 threading.Thread(target=p.scan, daemon=True).start()
                 return self._send(200, {"ok": True})
+            if parts in ([], ["review"]):          # the review page: static, asks for the token itself
+                return self._send(200, raw=(Path(__file__).with_name("review.html")).read_bytes(), ctype="text/html; charset=utf-8")
+            if parts == ["favicon.ico"]:
+                return self._send(404, {"ok": False, "error": "no icon"})
             if not self._auth(q):
                 return
+            if parts == ["api", "mb", "search"]:
+                from . import mb as _mb
+                try:
+                    rels = _mb.search_releases((q.get("artist") or [""])[0], (q.get("album") or [""])[0], limit=25)
+                except Exception as e:  # noqa: BLE001
+                    return self._send(502, {"ok": False, "error": f"MusicBrainz: {e}"})
+                out = [{"mbid": r["id"], "title": r.get("title", ""), "disambiguation": r.get("disambiguation", ""),
+                        "artist": "".join(a.get("name", "") + a.get("joinphrase", "") for a in r.get("artist-credit", [])),
+                        "date": r.get("date", ""), "country": r.get("country", ""), "tracks": r.get("track-count", 0),
+                        "formats": " + ".join(m.get("format") or "?" for m in r.get("media", [])), "status": r.get("status", ""),
+                        "group": (r.get("release-group") or {}).get("primary-type", ""),
+                        "url": f"https://musicbrainz.org/release/{r['id']}"} for r in rels]
+                return self._send(200, {"ok": True, "releases": out})
             if parts == ["api", "status"]:
                 jobs = p.store.all()
                 return self._send(200, {"ok": True, "running": p.current, "missing": missing_tools(),

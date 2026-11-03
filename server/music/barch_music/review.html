@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BArch Music</title>
+<style>
+  :root {
+    color-scheme: light;
+    --crust: #e6e9ef; --base: #eff1f5; --surface: #ccd0da; --overlay: #9ca0b0; --subtext: #6c6f85; --text: #4c4f69;
+    --accent: #8839ef; --green: #40a02b; --yellow: #df8e1d; --red: #d20f39; --mono: ui-monospace, "JetBrainsMono Nerd Font", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --crust: #191a21; --base: #282a36; --surface: #44475a; --overlay: #6272a4; --subtext: #a7abbe; --text: #f8f8f2;
+      --accent: #bd93f9; --green: #50fa7b; --yellow: #f1fa8c; --red: #ff5555;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--crust); color: var(--text); font: 14px/1.45 system-ui, sans-serif;
+         padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0); }
+  a { color: var(--accent); }
+  header { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 10px 16px; background: var(--base);
+           position: sticky; top: env(safe-area-inset-top, 0); z-index: 2; border-bottom: 1px solid var(--surface); }
+  header h1 { font-size: 16px; margin: 0 6px 0 0; }
+  .counts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .count { padding: 2px 9px; border-radius: 999px; background: var(--surface); color: var(--subtext); font-size: 12px; cursor: pointer; border: 1px solid transparent; }
+  .count.on { border-color: var(--accent); color: var(--text); }
+  .count b { color: var(--text); }
+  .spacer { flex: 1; }
+  main { display: grid; grid-template-columns: minmax(260px, 360px) 1fr; gap: 0; min-height: calc(100vh - 56px); }
+  #list { border-right: 1px solid var(--surface); background: var(--base); overflow-y: auto; max-height: calc(100vh - 56px); position: sticky; top: 56px; }
+  .job { padding: 10px 14px; border-bottom: 1px solid var(--surface); cursor: pointer; }
+  .job:hover, .job.on { background: var(--surface); }
+  .job .n { font-weight: 600; word-break: break-word; }
+  .job .m { color: var(--subtext); font-size: 12px; }
+  .job .p { color: var(--red); font-size: 12px; }
+  #detail { padding: 16px; max-width: 1100px; }
+  section { margin: 0 0 18px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--subtext); margin: 0 0 6px; }
+  .card { background: var(--base); border: 1px solid var(--surface); border-radius: 10px; padding: 12px 14px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+  .mono { font-family: var(--mono); font-size: 12.5px; }
+  .red { color: var(--red); } .green { color: var(--green); } .yellow { color: var(--yellow); } .dim { color: var(--subtext); } .faint { color: var(--overlay); }
+  button { background: var(--surface); color: var(--text); border: 1px solid transparent; border-radius: 8px; padding: 7px 14px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--overlay); }
+  button.primary { background: var(--accent); color: var(--crust); font-weight: 600; }
+  button.danger { color: var(--red); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.small { padding: 3px 10px; font-size: 12px; }
+  input[type=text], input[type=url], input[type=password] { background: var(--crust); color: var(--text); border: 1px solid var(--surface); border-radius: 8px; padding: 7px 10px; font: inherit; width: 100%; }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  label.f { display: block; font-size: 12px; color: var(--subtext); margin-top: 8px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  .sw { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  .sw input { accent-color: var(--accent); width: 16px; height: 16px; }
+  .cand { padding: 8px 0; border-top: 1px solid var(--surface); display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: start; }
+  .cand:first-child { border-top: 0; }
+  .cand .why { color: var(--subtext); font-size: 12px; }
+  .cand.on .t { color: var(--accent); }
+  .track { display: grid; grid-template-columns: 56px 1fr auto; gap: 8px; align-items: center; padding: 3px 0; }
+  .track input[type=text] { padding: 4px 8px; }
+  .track .k { font-family: var(--mono); color: var(--subtext); font-size: 12px; }
+  ul { margin: 4px 0; padding-left: 18px; } li { margin: 2px 0; }
+  pre { background: var(--crust); border-radius: 8px; padding: 10px; overflow-x: auto; font-family: var(--mono); font-size: 12px; margin: 6px 0; white-space: pre-wrap; word-break: break-word; }
+  img.cover { max-width: 240px; width: 100%; border-radius: 8px; display: block; }
+  .coverrow { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+  details summary { cursor: pointer; color: var(--subtext); font-size: 12px; }
+  #toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0)); transform: translateX(-50%); background: var(--surface); color: var(--text);
+           padding: 10px 16px; border-radius: 10px; box-shadow: 0 6px 24px #0006; max-width: 90vw; display: none; z-index: 5; }
+  #toast.err { color: var(--red); }
+  #login { max-width: 420px; margin: 60px auto; }
+  .back { display: none; }
+  @media (max-width: 760px) {
+    main { grid-template-columns: 1fr; }
+    #list { position: static; max-height: none; border-right: 0; }
+    body.detail #list { display: none; } body:not(.detail) #detail { display: none; }
+    .back { display: inline-block; }
+    .grid2 { grid-template-columns: 1fr; }
+    .track { grid-template-columns: 48px 1fr; } .track .r { grid-column: 2; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <button class="back small" onclick="document.body.classList.remove('detail')">‹ Queue</button>
+  <h1>BArch Music</h1>
+  <div class="counts" id="counts"></div>
+  <span class="spacer"></span>
+  <span id="running" class="dim"></span>
+  <button class="small" onclick="scanNow()">Scan now</button>
+  <button class="small" onclick="logout()" title="forget the token">Token</button>
+</header>
+<div id="login" class="card" hidden>
+  <h2>Token</h2>
+  <p class="dim">The token of <span class="mono">~/.config/barch/music.json</span> (the one <span class="mono">barch music</span> uses). It stays in this browser only.</p>
+  <input type="password" id="tok" placeholder="token" autocomplete="off">
+  <div class="row" style="margin-top:10px"><button class="primary" onclick="saveToken()">Enter</button></div>
+</div>
+<main id="main" hidden>
+  <div id="list"></div>
+  <div id="detail"><p class="dim">Pick an album on the left.</p></div>
+</main>
+<div id="toast"></div>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let token = '', jobs = [], filter = 'review', sel = '', job = null, counts = {}, mbResults = [], mbBusy = false;
+const form = blank();
+function blank() { return { release: '', cover: '', date: '', genre: '', album: '', artist: '', yearOnly: false, keepOrder: false, replace: false, titles: {}, replaceTracks: {} }; }
+try { token = localStorage.getItem('barch-token') || ''; } catch (e) {}
+
+function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = err ? 'err' : ''; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', err ? 6000 : 3000); }
+async function api(path, body) {
+  const r = await fetch(path, { method: body ? 'POST' : 'GET', headers: { 'X-Barch-Token': token, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  if (r.status === 401) { showLogin(); throw new Error('token refused'); }
+  const d = await r.json().catch(() => ({ ok: false, error: 'bad answer' }));
+  if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+  return d;
+}
+function showLogin() { $('#login').hidden = false; $('#main').hidden = true; $('#tok').focus(); }
+function saveToken() { token = $('#tok').value.trim(); try { localStorage.setItem('barch-token', token); } catch (e) {} $('#login').hidden = true; $('#main').hidden = false; refresh(); }
+function logout() { token = ''; try { localStorage.removeItem('barch-token'); } catch (e) {} showLogin(); }
+$('#tok').addEventListener('keydown', e => { if (e.key === 'Enter') saveToken(); });
+
+// ---------------------------------------------------------------- queue
+async function refresh() {
+  try {
+    const st = await api('/api/status');
+    counts = st.counts || {};
+    $('#running').textContent = st.running ? 'working on ' + st.running : '';
+    const d = await api('/api/jobs' + (filter ? '?state=' + filter : ''));
+    jobs = (d.jobs || []).slice().reverse();
+    renderCounts(); renderList();
+    if (sel && (['working', 'queued'].includes((job || {}).state) || !job)) loadJob(sel, true);
+  } catch (e) { if (!/token/.test(e.message)) toast(e.message, true); }
+}
+function renderCounts() {
+  $('#counts').innerHTML = ['review', 'queued', 'working', 'done', 'failed', 'rejected'].map(s =>
+    `<span class="count ${filter === s ? 'on' : ''}" onclick="setFilter('${s}')"><b>${counts[s] || 0}</b> ${s}</span>`).join('') +
+    `<span class="count ${filter === '' ? 'on' : ''}" onclick="setFilter('')">all</span>`;
+}
+function setFilter(s) { filter = s; refresh(); }
+function when(ts) { if (!ts) return ''; const d = new Date(ts * 1000); return d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }); }
+function renderList() {
+  $('#list').innerHTML = jobs.length ? jobs.map(j => `<div class="job ${j.id === sel ? 'on' : ''}" onclick="loadJob('${j.id}')">
+      <div class="n">${esc(j.name)}</div>
+      <div class="m">${esc(j.state)} · ${when(j.updated || j.created)}${j.match ? ' · → ' + esc(j.folder || j.match) : ''}</div>
+      ${(j.problems || []).length ? `<div class="p">${esc(j.problems[0])}</div>` : ''}
+    </div>`).join('') : `<p class="dim" style="padding:14px">Nothing ${filter ? 'in ' + filter : 'here'}.</p>`;
+}
+
+// ---------------------------------------------------------------- one job
+async function loadJob(id, keepForm) {
+  sel = id; document.body.classList.add('detail');
+  try {
+    const d = await api('/api/jobs/' + id);
+    job = d.job;
+    if (!keepForm || !form.seeded) { Object.assign(form, blank()); form.seeded = true; form.release = job.chosen || ''; form.cover = job.cover || ''; const ov = job.overrides || {}; form.date = ov.date || ''; form.genre = ov.genre || ''; form.album = ov.album || ''; form.artist = ov.artist_folder || ''; form.yearOnly = !!ov.date_year_only; form.keepOrder = !!job.keep_order; form.replace = !!job.replace; for (const k of (job.replace_tracks || [])) form.replaceTracks[k] = true; for (const k in (ov.tracks || {})) if (ov.tracks[k].TITLE) form.titles[k] = ov.tracks[k].TITLE; mbResults = []; }
+    renderList(); renderJob();
+  } catch (e) { toast(e.message, true); }
+}
+const replaceKeys = line => { const m = /--replace-tracks (\S+)/.exec(line || ''); return m ? m[1].split(',') : []; };
+function suggestedReplace() { const out = []; for (const r of (job.problems || []).concat(((job.merge || {}).review) || [])) for (const k of replaceKeys(r)) if (!out.includes(k)) out.push(k); return out; }
+function decidable() { return ['review', 'failed', 'rejected', 'done'].includes(job.state); }
+function body() {
+  const b = {}, ov = {};
+  if (form.release.trim()) b.release = form.release.trim();
+  if (form.cover.trim()) b.cover = form.cover.trim();
+  if (form.date.trim()) ov.date = form.date.trim();
+  if (form.genre.trim()) ov.genre = form.genre.trim();
+  if (form.album.trim()) ov.album = form.album.trim();
+  if (form.artist.trim()) ov.artist_folder = form.artist.trim();
+  if (form.yearOnly) ov.date_year_only = true;
+  const tk = {}; for (const k in form.titles) tk[k] = { TITLE: form.titles[k] };
+  if (Object.keys(tk).length) ov.tracks = tk;
+  if (Object.keys(ov).length) b.overrides = ov;
+  if (form.keepOrder) b.keep_order = true;
+  if (form.replace) b.replace = true;
+  const rt = Object.keys(form.replaceTracks).sort(); if (rt.length) b.replace_tracks = rt;
+  return b;
+}
+const q = s => /[^A-Za-z0-9_./:=@,-]/.test(s) ? "'" + s.replace(/'/g, "'\\''") + "'" : s;
+function cli() {
+  const b = body(), a = ['barch music resolve', job.id];
+  if (b.release) a.push('--release', q(b.release)); if (b.cover) a.push('--cover', q(b.cover));
+  const ov = b.overrides || {};
+  if (ov.date) a.push('--date', q(ov.date)); if (ov.genre) a.push('--genre', q(ov.genre)); if (ov.album) a.push('--album', q(ov.album)); if (ov.artist_folder) a.push('--artist', q(ov.artist_folder));
+  if (ov.date_year_only) a.push('--date-year-only'); for (const k in (ov.tracks || {})) a.push('--title', q(k + '=' + ov.tracks[k].TITLE));
+  if (b.keep_order) a.push('--keep-order'); if (b.replace) a.push('--replace'); if (b.replace_tracks) a.push('--replace-tracks', b.replace_tracks.join(','));
+  return a.join(' ');
+}
+function field(label, key, type) { return `<label class="f">${label}<input type="${type || 'text'}" value="${esc(form[key])}" oninput="form.${key}=this.value;renderCli()"></label>`; }
+function sw(label, key) { return `<label class="sw"><input type="checkbox" ${form[key] ? 'checked' : ''} onchange="form.${key}=this.checked;renderCli()"> ${label}</label>`; }
+function setTitle(k, v) { if (v.trim()) form.titles[k] = v; else delete form.titles[k]; renderCli(); }
+function setReplace(k, on) { if (on) form.replaceTracks[k] = true; else delete form.replaceTracks[k]; renderJob(); }
+function setReplaceAll(keys, on) { for (const k of keys) { if (on) form.replaceTracks[k] = true; else delete form.replaceTracks[k]; } renderJob(); }
+function useRelease(mbid) { form.release = mbid; renderJob(); }
+function renderCli() { const c = $('#cli'); if (c) c.textContent = cli(); }
+
+function renderJob() {
+  const j = job, p = j.proposal || null, r = j.result || null, m = j.merge || null, a = j.audio || {}, sug = suggestedReplace();
+  const coverUrl = `/api/jobs/${j.id}/cover?token=${encodeURIComponent(token)}&t=${Math.floor((j.updated || 0))}`;
+  const chosen = form.release.trim();
+  const candRow = (c, matched) => `<div class="cand ${chosen && chosen.indexOf(c.mbid) !== -1 ? 'on' : ''}">
+      <div><span class="t">${c.ok ? '<span class="green">✓</span> ' : ''}${esc(c.artist)} – ${esc(c.title)}</span>${c.disambiguation ? ' <span class="dim">(' + esc(c.disambiguation) + ')</span>' : ''}
+        <span class="dim">${esc(c.date)} ${esc(c.country)} · ${c.tracks} tracks${c.formats ? ' · ' + esc(c.formats) : ''}${c.score !== undefined ? ' · score ' + c.score : ''}${matched ? ' · <b class="green">matched</b>' : ''}</span>
+        ${(c.why || []).length ? `<div class="why">${esc(c.why.join('; '))}</div>` : ''}
+        ${(c.bad_tracks || []).length ? `<div class="why yellow">does not fit: ${esc(c.bad_tracks.join(', '))}</div>` : ''}
+        <a class="mono" href="${esc(c.url)}" target="_blank" rel="noopener">${c.mbid}</a></div>
+      <div><button class="small" onclick="useRelease('${c.mbid}')">Use</button></div></div>`;
+  let h = `<section><div class="row"><h2 style="margin:0">${esc(j.state)}</h2><span class="dim">${when(j.created)} · ${esc(j.kind)}${j.siblings > 1 ? ' · ' + j.siblings + ' albums in this download' : ''}</span></div>
+    <div style="font-size:17px;font-weight:600;word-break:break-word">${esc(j.name)}</div>
+    ${a.tracks ? `<div class="dim">${a.tracks} tracks, ${a.discs || 1} disc(s), ${esc((a.format || []).join(', '))}</div>` : ''}
+    ${j.match ? `<div>→ <b>${esc(j.match.artist)} – ${esc(j.match.title)}</b> <span class="dim">${esc(j.match.date)} ${esc(j.match.country)}, score ${j.match.score}</span> <a href="${esc(j.match.url)}" target="_blank" rel="noopener">MusicBrainz</a></div>` : ''}
+  </section>`;
+  if ((j.problems || []).length) h += `<section><h2>Problems</h2><div class="card">${j.problems.map(x => { const ks = replaceKeys(x); const on = ks.length && ks.every(k => form.replaceTracks[k]);
+      return `<div class="row"><span class="red" style="flex:1">${esc(x)}</span>${ks.length && decidable() ? `<label class="sw"><input type="checkbox" ${on ? 'checked' : ''} onchange="setReplaceAll(${JSON.stringify(ks).replace(/"/g, '&quot;')}, this.checked)"> accept ${esc(ks.join(', '))}</label>` : ''}</div>`; }).join('')}</div></section>`;
+  if ((j.notes || []).length) h += `<section><h2>Notes</h2><ul>${j.notes.map(x => `<li class="dim">${esc(x)}</li>`).join('')}</ul></section>`;
+  if (decidable()) {
+    h += `<section><h2>Candidates</h2><div class="card">${(j.candidates || []).length ? j.candidates.map(c => candRow(c, j.match && j.match.mbid === c.mbid)).join('') : '<span class="dim">none found</span>'}</div></section>`;
+    h += `<section><h2>Search MusicBrainz</h2><div class="card"><div class="grid2">
+        <label class="f">Artist<input type="text" id="mbA" value="${esc((j.hints || {}).artist || '')}"></label>
+        <label class="f">Album<input type="text" id="mbB" value="${esc((j.hints || {}).album || '')}"></label></div>
+        <div class="row" style="margin-top:8px"><button onclick="mbSearch()" ${mbBusy ? 'disabled' : ''}>${mbBusy ? 'Searching…' : 'Search'}</button><span class="dim">${mbResults.length ? mbResults.length + ' releases (same track count first)' : ''}</span></div>
+        ${mbResults.map(c => candRow(Object.assign({ ok: a.tracks && c.tracks === a.tracks }, c), false)).join('')}</div></section>`;
+  }
+  if (m) h += `<section><h2>Merge into the library</h2><div class="card mono">
+      ${(m.add || []).map(x => `<div class="green">+ ${esc(x)}</div>`).join('')}
+      ${(m.fix || []).map(f => `<div class="yellow">~ ${esc(f.file)}${f.rename ? ' → ' + esc(f.rename) : ''}${f.set && Object.keys(f.set).length ? '  ' + esc(Object.entries(f.set).map(([k, v]) => k + '=' + v).join(', ')) : ''}${(f.drop || []).length ? '  −' + esc(f.drop.join(' −')) : ''}${f.cover ? '  +cover' : ''}</div>`).join('')}
+      ${(m.keep || []).length ? `<div class="dim">= ${m.keep.length} track(s) stay as they are</div>` : ''}
+      ${(m.review || []).map(x => { const ks = replaceKeys(x); const on = ks.length && ks.every(k => form.replaceTracks[k]);
+        return `<div class="row"><span class="red" style="flex:1">! ${esc(x)}</span>${ks.length && decidable() ? `<label class="sw"><input type="checkbox" ${on ? 'checked' : ''} onchange="setReplaceAll(${JSON.stringify(ks).replace(/"/g, '&quot;')}, this.checked)"> take the download's ${esc(ks.join(', '))}</label>` : ''}</div>`; }).join('')}
+      ${!(m.add || []).length && !(m.fix || []).length && !(m.review || []).length ? '<span class="dim">nothing to change</span>' : ''}</div></section>`;
+  if (r && r.merged) h += `<section><h2>Merged</h2><ul>${r.merged.map(x => `<li class="mono">${esc(x)}</li>`).join('')}</ul></section>`;
+  if (r && r.files) h += `<section><h2>Delivered</h2><div class="card mono"><div><b>${esc(r.folder)}</b></div>${r.files.map(x => `<div class="dim">${esc(x)}</div>`).join('')}</div></section>`;
+  if (p) h += `<section><h2>Proposal</h2><div class="card">
+      <div class="coverrow"><img class="cover" src="${coverUrl}" alt="" onerror="this.style.display='none'">
+      <div style="flex:1;min-width:200px"><div><b>${esc(p.folder)}</b></div><div class="dim">${esc(p.date)} · ${esc(p.genre)} · <a class="mono" href="https://musicbrainz.org/release/${p.mbid}" target="_blank" rel="noopener">${p.mbid}</a></div>
+      ${(j.cover_tried || []).length ? `<details><summary>cover sources tried (${j.cover_tried.length})</summary><ul>${j.cover_tried.map(x => `<li class="dim">${esc(x)}</li>`).join('')}</ul></details>` : ''}</div></div>
+      <div style="margin-top:10px">${(p.tracks || []).map(t => { const k = (t.DISCNUMBER || '1') + '.' + (t.TRACKNUMBER || '00');
+        return `<div class="track"><span class="k">${esc(k)}</span>${decidable() ? `<input type="text" placeholder="${esc(t.TITLE)}" value="${esc(form.titles[k] || '')}" oninput="setTitle('${k}', this.value)">` : `<span>${esc(t.TITLE)}</span>`}
+          <span class="r">${sug.includes(k) && decidable() ? `<label class="sw"><input type="checkbox" ${form.replaceTracks[k] ? 'checked' : ''} onchange="setReplace('${k}', this.checked)"> replace</label>` : `<span class="faint mono">${esc(t.file)}</span>`}</span></div>`; }).join('')}</div></div></section>`;
+  if (decidable()) h += `<section><h2>Resolve</h2><div class="card">
+      ${field('Release (MusicBrainz id or URL)', 'release')}${field('Cover URL', 'cover', 'url')}
+      <div class="grid2">${field('Date (YYYY-MM-DD)', 'date')}${field('Genre', 'genre')}${field('Album', 'album')}${field('Artist folder', 'artist')}</div>
+      <div class="row" style="margin-top:10px">${sw('year only (no source has the day)', 'yearOnly')}${sw('keep the download\'s order', 'keepOrder')}${sw('replace the whole album', 'replace')}</div>
+      <pre id="cli">${esc(cli())}</pre>
+      <div class="row"><button class="primary" onclick="act('resolve')">Resolve</button><button onclick="act('retry')">Retry</button><button class="danger" onclick="act('reject')">Reject</button>${j.state === 'done' ? '<button class="danger" onclick="act(\'undo\')">Undo</button>' : ''}</div></div></section>`;
+  if ((j.after || []).length) h += `<section><h2>After</h2><ul>${j.after.map(x => `<li class="dim">${esc(x)}</li>`).join('')}</ul></section>`;
+  if ((j.log || []).length) h += `<section><h2>Log</h2><pre>${esc(j.log.slice(-40).join('\n'))}</pre></section>`;
+  $('#detail').innerHTML = h;
+}
+async function act(action) {
+  if (action === 'reject' || action === 'undo') { if (!confirmed(action)) return; }
+  try {
+    const b = action === 'resolve' ? Object.assign({ action }, body()) : { action };
+    const d = await api('/api/jobs/' + job.id, b);
+    toast(`${d.job.id}: ${d.job.state}`); form.seeded = false; await refresh(); loadJob(job.id);
+  } catch (e) { toast(e.message, true); }
+}
+let armed = '';
+function confirmed(action) { if (armed === action) { armed = ''; return true; } armed = action; toast(`Press ${action} again to confirm`); setTimeout(() => armed = '', 4000); return false; }
+async function mbSearch() {
+  const artist = $('#mbA').value, album = $('#mbB').value; if (!artist.trim() && !album.trim()) return;
+  mbBusy = true; renderJob();
+  try { const d = await api('/api/mb/search?artist=' + encodeURIComponent(artist) + '&album=' + encodeURIComponent(album)); mbResults = d.releases || []; const n = (job.audio || {}).tracks; mbResults.sort((x, y) => (y.tracks === n) - (x.tracks === n)); if (!mbResults.length) toast('MusicBrainz: nothing found'); }
+  catch (e) { toast(e.message, true); }
+  mbBusy = false; renderJob();
+}
+async function scanNow() { try { const d = await api('/api/scan', {}); toast(`${d.new} new album(s) queued`); refresh(); } catch (e) { toast(e.message, true); } }
+
+if (token) { $('#main').hidden = false; refresh(); } else showLogin();
+setInterval(() => { if (token && !$('#main').hidden) refresh(); }, 30000);
+</script>
+</body>
+</html>

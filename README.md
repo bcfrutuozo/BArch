@@ -452,7 +452,8 @@ fixed by the library's rules, never replaced, with an undo log; a track of Bruno
 is only swapped with his ok. Anything it cannot do completely (no match, a year-only date, no
 cover) waits in a review queue with the reason and the candidates:
 `barch music list`, `barch music show <id>`, `barch music resolve <id> --release …|--date …|--cover …`,
-or all of it in the **Music** app (`barch music browse`). On the Lidarr side it enforces the library's rule every
+all of it in the **Music** app (`barch music browse`), or from the phone: the pipeline serves the same
+review queue and resolve form as a page at `http://<nas>:8338/` (asks for the `barch music` token once). On the Lidarr side it enforces the library's rule every
 hour: every artist on the `BArch` metadata profile (every distinct album: studio, EP, live, compilation; official only),
 new albums monitored, every album without a file monitored once; an album already in the library is completed, and
 another album with the same title (the eight "Greatest Hits" of Deep Purple) gets its own folder from the review.
