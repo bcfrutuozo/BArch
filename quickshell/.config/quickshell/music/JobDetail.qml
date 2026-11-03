@@ -32,11 +32,16 @@ Item {
     onJobChanged: seed()
     Component.onCompleted: seed()
 
+    // "--replace-tracks 1.07,1.08" in a merge review line or in a problem (a new album whose tracks
+    // do not fit MusicBrainz's lengths): the keys it names
+    function replaceKeys(line) { const m = /--replace-tracks (\S+)/.exec(line || ""); return m ? m[1].split(",") : [] }
     function suggestedReplace() {
         const out = []
-        for (const r of ((job || {}).merge || {}).review || []) { const m = /--replace-tracks (\S+)/.exec(r); if (m) out.push(m[1]) }
+        const j = job || {}
+        for (const r of (j.problems || []).concat((j.merge || {}).review || [])) for (const k of replaceKeys(r)) if (!out.includes(k)) out.push(k)
         return out
     }
+    function setReplaceAll(keys, on) { const t = Object.assign({}, replaceTracks); for (const k of keys) { if (on) t[k] = true; else delete t[k] } replaceTracks = t }
     function setTitle(k, v) { const t = Object.assign({}, titles); if (v.trim()) t[k] = v; else delete t[k]; titles = t }
     function setReplace(k, on) { const t = Object.assign({}, replaceTracks); if (on) t[k] = true; else delete t[k]; replaceTracks = t }
 
@@ -169,10 +174,14 @@ Item {
                 Repeater {
                     model: detail.job ? detail.job.problems || [] : []
                     RowLayout {
+                        id: pr
                         required property var modelData
+                        readonly property var keys: detail.replaceKeys(modelData)
                         spacing: 8
                         Text { text: "󰀦"; color: Ui.red; font.family: Ui.iconFont; font.pixelSize: Ui.fontSize; Layout.alignment: Qt.AlignTop }
-                        Line { text: parent.modelData }
+                        Line { text: pr.modelData.replace(/ --replace-tracks \S+/, " --replace-tracks") }
+                        UiSwitch { visible: pr.keys.length > 0; implicitWidth: 32; implicitHeight: 18; checked: pr.keys.every(k => !!detail.replaceTracks[k]); onToggled: v => detail.setReplaceAll(pr.keys, v) }
+                        Label { visible: pr.keys.length > 0; text: "accept" }
                     }
                 }
                 Repeater {
@@ -321,7 +330,7 @@ Item {
                 // titles, track by track
                 Text {
                     visible: detail.tracks.length > 0
-                    text: "Tracks  ·  type a title to override it; tick to replace the library's file with the download's"
+                    text: "Tracks  ·  type a title to override it; tick to replace the library's file with the download's (or accept one that does not fit MusicBrainz's length)"
                     color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1; Layout.topMargin: 6
                 }
                 Repeater {
@@ -340,7 +349,7 @@ Item {
                             onTextChanged: if (text !== (detail.titles[tr.modelData.key] || "")) detail.setTitle(tr.modelData.key, text)
                         }
                         UiSwitch {
-                            visible: !!(detail.job && detail.job.merge)
+                            visible: !!(detail.job && detail.job.merge) || detail.suggestedReplace().includes(tr.modelData.key)
                             implicitWidth: 32; implicitHeight: 18
                             checked: !!detail.replaceTracks[tr.modelData.key]
                             onToggled: v => detail.setReplace(tr.modelData.key, v)

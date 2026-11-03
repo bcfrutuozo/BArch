@@ -256,9 +256,13 @@ class Pipeline:
                            "tracks": [{"file": name, **tags} for _, tags, name in alb.files()]}
         if problems:
             return self.to_review(job, problems)
+        accepted = set(job.get("replace_tracks") or [])
+        unfit = [k for k in best.bad if k not in accepted]
+        if unfit and not existing:
+            return self.to_review(job, [f"the download's track(s) {', '.join(unfit)} do not fit MusicBrainz (cut short or another take): "
+                                        f"find a better download, or accept with --replace-tracks {','.join(unfit)} after checking them"])
         if best.bad and not existing:
-            return self.to_review(job, [f"the download's track(s) {', '.join(best.bad)} do not fit MusicBrainz (cut short or another take): "
-                                        "find a better download, or accept with --replace-tracks after checking them"])
+            job["notes"].append(f"track(s) {', '.join(best.bad)} do not fit MusicBrainz's lengths; accepted from the review (--replace-tracks)")
         if existing and best.reorder:
             return self.to_review(job, [f"{alb.folder} is in the library and this download is another edition (the same songs "
                                         "in another order): positions cannot be merged; --replace takes this edition, reject keeps yours"])
