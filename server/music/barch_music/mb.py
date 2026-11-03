@@ -39,7 +39,7 @@ def get(url: str, params: dict | None = None, timeout: int = 30, raw: bool = Fal
             if e.code == 404:
                 return None
             if e.code in (429, 500, 502, 503) and attempt < 3:
-                time.sleep(2 + attempt * 3)
+                time.sleep(10 * (attempt + 1))      # 503 is MusicBrainz asking for a pause: 10, 20, 30 s
                 continue
             raise NetError(f"{url.split('?')[0]}: HTTP {e.code}")
         except (urllib.error.URLError, TimeoutError, OSError) as e:

@@ -20,7 +20,8 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
 2. **Collect** (`audio.py`), in a work folder: the download is never touched, so it keeps seeding.
    zip/rar/7z are extracted; a CUE that describes an image (FLAC, APE, WV, WAV) is split per track
    with the `flac` tool, sample exact and keeping 16/24 bit, and the split must add up to the image
-   sample for sample; a CUE whose image did not come is only a hint; other lossless formats become
+   sample for sample (an image described by two CUEs, `X.flac.cue` and `X.wav.cue`, is split once);
+   a CUE whose image did not come is only a hint; other lossless formats become
    FLAC; anything lossy stops the album. Every track passes `flac -t`.
 3. **Match** (`matcher.py`): MusicBrainz releases found from the folder name, the CUE and the old
    tags (or the MusicBrainz id they carry), each scored on the track count of every disc, the length
@@ -57,8 +58,10 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
    a jump in brightness, on two sides or more). A store's image counts only when artist and album
    match and, if any other source has an image, when it is the same picture (24x24 grey
    fingerprints, correlation 0.75 or more; the same art measured 0.83-0.99, other albums at most
-   0.60). Ranking: confirmed, no frame, store artwork, 1000 px or more, larger. A framed scan that
-   still wins has its frame trimmed. A 1000x1000 JPEG embedded in every track and `cover.jpg`. An
+   0.60). The download's images count by their names (`cover.image_role`): Front / Cover / Folder /
+   Portada are the front, Back / Contraportada / Booklet / Inlay / CD / Obi are never used, the rest
+   come after the named ones. Ranking: confirmed, no frame, store artwork, named front, 1000 px or
+   more, larger. A framed scan that still wins has its frame trimmed. A 1000x1000 JPEG embedded in every track and `cover.jpg`. An
    album already in the library keeps its cover; when it is a framed scan and a clean one exists,
    a note says so. **Library covers** (`libcovers.py`, `barch music covers`, Covers in the app):
    check an artist (or everything), see the scan next to the clean artwork, Replace writes
@@ -87,6 +90,11 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
 8. **After**: Lidarr rescans the artist and the album is unmonitored (no new download for it),
    Plex scans the folder, and once every album of the torrent is in, the torrent and its files are
    deleted from qBittorrent (inbox folders are removed).
+
+A network error on the way (MusicBrainz answering 503, Wikidata down) is not the album's fault:
+the job goes back to the queue and waits 2, 4, 8, 16 and 32 minutes between tries, with the error
+shown as its problem; only the sixth failure makes it `failed` (Telegram ❌, `barch music retry`).
+Anything else that breaks fails at once.
 
 ## Review
 

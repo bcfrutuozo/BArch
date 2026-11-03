@@ -244,6 +244,7 @@ def collect(source: Path, work: Path) -> tuple[list[Track], list[str]]:
     # 1. CUE sheets that describe an image (several tracks in one file): split them
     cues = sorted(f for f in files if f.suffix.lower() == ".cue")
     images = []
+    seen_images: dict[tuple, str] = {}      # the image files a CUE describes -> that CUE (one split per image)
     for cpath in cues:
         try:
             cue = parse_cue(cpath)
@@ -263,6 +264,12 @@ def collect(source: Path, work: Path) -> tuple[list[Track], list[str]]:
                 notes.append(f"{cue.path.name} describes an image that is not in the download; using the {len(others)} tracks")
                 continue
             raise AudioError(f"{cue.path.name} points to {missing[0]!r}, which is not in the download")
+        # a rip often ships two CUEs for one image ("X.flac.cue" and "X.wav.cue"): split it once
+        key = tuple(sorted(str(_resolve(cue.path.parent, f)) for f in cue.files))
+        if key in seen_images:
+            notes.append(f"{cue.path.name} describes the same image as {seen_images[key]}: skipped")
+            continue
+        seen_images[key] = cue.path.name
         images.append(cue)
     images.sort(key=lambda c: (c.disc or 99, str(c.path)))
     for n, cue in enumerate(images, 1):
@@ -365,13 +372,12 @@ def _old_tags(path: Path) -> dict:
 
 
 def find_images(source: Path, work: Path) -> list[Path]:
-    """Cover candidates shipped with the download (Covers/Front.jpg, folder.jpg...)."""
+    """Cover candidates shipped with the download (Covers/Front.jpg, folder.jpg...), the ones named
+    as the front first; the back, booklet, disc and inlay scans are left out (cover.image_role)."""
+    from .cover import image_role
     roots = [source] + ([work / "_extracted"] if (work / "_extracted").exists() else [])
     found = []
     for r in roots:
         if r.is_dir():
-            found += [p for p in r.rglob("*") if p.is_file() and p.suffix.lower() in IMAGES]
-    def score(p: Path):
-        n = p.stem.lower()
-        return (0 if re.search(r"front|cover|folder", n) else 1 if "album" in n else 2, -p.stat().st_size)
-    return sorted(found, key=score)
+            found += [p for p in r.rglob("*") if p.is_file() and p.suffix.lower() in IMAGES and image_role(p.name) != "none"]
+    return sorted(found, key=lambda p: (0 if image_role(p.name) == "front" else 1, -p.stat().st_size))

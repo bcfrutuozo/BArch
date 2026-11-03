@@ -25,6 +25,7 @@ from .libcovers import LibraryCovers
 from .integrations import Lidarr, Plex, QBit, Telegram
 
 STATES = ("queued", "working", "review", "done", "failed", "rejected")
+NET_RETRIES = 5          # a job cut by a network error (MusicBrainz 503...) waits 2, 4, 8, 16, 32 min, then fails
 
 
 class Store:
@@ -182,8 +183,9 @@ class Pipeline:
 
     # ------------------------------------------------------------ the work
     def next_job(self) -> dict | None:
+        now = time.time()
         for j in self.store.all():
-            if j["state"] == "queued":
+            if j["state"] == "queued" and float(j.get("retry_at") or 0) <= now:
                 return j
         return None
 
@@ -202,15 +204,29 @@ class Pipeline:
             self.current = job["id"]
             try:
                 self.process(job)
-            except Exception as e:  # noqa: BLE001
+            except mb.NetError as e:
+                # the network, not the album: back in the queue with a growing wait, failed only after NET_RETRIES
                 job = self.store.load(job["id"]) or job
-                job["state"] = "failed"
-                job["problems"] = [f"{type(e).__name__}: {e}"]
-                self.log(job, "failed: " + traceback.format_exc().strip().splitlines()[-1])
-                self.store.save(job)
-                self.tg.send(f"❌ Música: {job['name']}\n{e}")
+                n = int(job.get("net_retries") or 0) + 1
+                if n > NET_RETRIES:
+                    self.fail(job, e)
+                else:
+                    wait = 2 ** n                                      # minutes: 2, 4, 8, 16, 32
+                    job.update(state="queued", net_retries=n, retry_at=time.time() + wait * 60, problems=[f"network: {e}"])
+                    self.log(job, f"network error: {e}; retry {n}/{NET_RETRIES} in {wait} min")
+                    self.store.save(job)
+            except Exception as e:  # noqa: BLE001
+                self.fail(self.store.load(job["id"]) or job, e)
             finally:
                 self.current = ""
+
+    def fail(self, job: dict, e: Exception) -> None:
+        job["state"] = "failed"
+        job["problems"] = [f"{type(e).__name__}: {e}"]
+        job.pop("retry_at", None)
+        self.log(job, "failed: " + traceback.format_exc().strip().splitlines()[-1])
+        self.store.save(job)
+        self.tg.send(f"❌ Música: {job['name']}\n{e}")
 
     def enforce_lidarr(self, force: bool = False) -> str:
         """Every hour (or now): every artist Lidarr has on the library's metadata profile, every album
@@ -236,6 +252,7 @@ class Pipeline:
             time.sleep(300)
             return
         job.update(state="working", problems=[], notes=[])
+        job.pop("retry_at", None)
         self.store.save(job)
         src = Path(job["source"])
         if not src.exists():
@@ -343,6 +360,7 @@ class Pipeline:
     def to_review(self, job: dict, problems: list[str]) -> None:
         job["state"] = "review"
         job["problems"] = problems
+        job.pop("net_retries", None)
         self.log(job, "review: " + " | ".join(problems))
         self.store.save(job)
         if self.cfg.get("qbittorrent") and job.get("hash"):
@@ -393,6 +411,7 @@ class Pipeline:
                 done.append(f"{e}")
         job["state"] = "done"
         job["after"] = done
+        job.pop("net_retries", None)
         shutil.rmtree(self.store.path(job["id"]) / "work", ignore_errors=True)
         self.store.save(job)
         self.cleanup_source(job)
@@ -471,6 +490,8 @@ class Pipeline:
             if kw.get("replace_tracks"):
                 job["replace_tracks"] = sorted(set(job.get("replace_tracks") or []) | set(kw["replace_tracks"]))
             job["state"] = "queued"
+            job.pop("net_retries", None)
+            job.pop("retry_at", None)
             self.log(job, f"queued again from the review ({action})")
         self.store.save(job)
         self.wake.set()

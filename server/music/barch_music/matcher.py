@@ -45,7 +45,8 @@ class Candidate:
 
 # ---------------------------------------------------------------- hints
 
-_DISC_SUFFIX = re.compile(r"\s*[\[(]?\s*(?:cd|disc|disk|vol\.?|volume)\s*\d{1,2}\s*[\])]?\s*$|\s*\(\d\)\s*$", re.I)
+# "Album CD 1", "Album (Disc 2)", "Album (CD1, VICP-70192)" (a catalogue number after the disc), "Album (1)"
+_DISC_SUFFIX = re.compile(r"\s*[\[(]?\s*(?:cd|disc|disk|vol\.?|volume)\s*\d{1,2}(?:\s*[,;:][^\])]*)?\s*[\])]?\s*$|\s*\(\d\)\s*$", re.I)
 
 
 def hints_from(folder_name: str, tracks: list[Track]) -> dict:
