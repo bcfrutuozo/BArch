@@ -41,6 +41,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `backup/` | — | `barch backup`: what restic saves to the NAS (`include.txt`, `exclude.txt`), see Backup |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
 | `agent/` | — | Scheduled agent tasks (`tasks/`), the reactive rules (`rules.json`) and their daemon (`events.py`), the failure ignore list and the upstream watch list; used by `barch` |
+| `server/` | NAS | `music/`: the music pipeline (beets container), downloads to `/music` in the library's style with a review queue (`barch music`, see Music); `unraid/`: the SMBus driver OpenRGB needs there, built per Unraid kernel (see NAS) |
 | `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, sixteen scenes in the colors of each palette), Limine theme (`limine-theme.py`) |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
 | `packages/` | — | Explicitly installed packages (`pacman.txt`, `aur.txt`, `aur-ignore.txt`) |
@@ -287,6 +288,7 @@ barch failure <unit> [--system]    # what OnFailure= calls: log + notification (
 barch snapshot list                # safety snapshot pairs of the agent sessions
 barch aur review                   # verdict on the pending AUR updates
 barch finance import [--dry-run]   # C6 Bank statements → Firefly (see Finance)
+barch music status|list|show|resolve|retry|reject|scan   # the NAS music pipeline and its review queue (see Music)
 barch replay share [file] [--from 12 --to 40]
                                    # newest replay (or FILE) → <name>-share.mp4 for WhatsApp status:
                                    # H.264 ≤1080p30, HDR tone mapped to SDR, at most 60 s
@@ -406,6 +408,35 @@ task (`barch agent run …`) or open Claude on something (`barch agent ask "…"
 
 Token, `config.json` (URL, PDF password), dictionary and files never enter the repo; the ledger and
 the import logs (IDs of everything written) are in `~/.local/state/barch/finance/`.
+
+## Music
+
+`server/music` (details in its README) runs inside the beets container on the NAS and turns every
+finished Lidarr download (and any folder dropped in `/data/music-inbox`) into an album of
+`/music` exactly like the hand-made ones: lossless only, CUE images split per track, the
+MusicBrainz release found by track count and lengths, only the library's tags (artist, album,
+title, numbers, the original date to the day (MusicBrainz, Wikidata, every Wikipedia; YYYY-01-01 only when it exists nowhere and Bruno says so), a genre on every track, two MusicBrainz ids), titles in Bruno's style (his
+title-case dictionary, one trailing `[feat. A; B - Bonus - Live]` in a fixed order), a cover of at
+least 500 px (1000 px when any source has it) embedded and as `cover.jpg`, file names with the
+library's replacements. Then Lidarr rescans and stops looking for the album, Plex scans, the
+torrent is deleted. An album that is already there is completed (the missing tracks only) and
+fixed by the library's rules, never replaced, with an undo log; a track of Bruno's that looks wrong
+is only swapped with his ok. Anything it cannot do completely (no match, a year-only date, no
+cover) waits in a review queue with the reason and the candidates:
+`barch music list`, `barch music show <id>`, `barch music resolve <id> --release …|--date …|--cover …`.
+
+## NAS
+
+The NAS (NASfrutuozo) runs Unraid on an ASUS Maximus IX Code (Z270). Its on-board Aura RGB sits
+behind the SMBus of the Nuvoton NCT6793D Super I/O, which only the out-of-tree `i2c-nct6793`
+driver exposes (the `i2c-i801` of the chipset is not enough, and the old ich777 OpenRGB plugin
+stops at Unraid 7.1; the "no patch needed with recent kernels" only covers the AMD `i2c-piix4`
+part). `server/unraid/build-i2c-nct6793.sh`, run inside ich777's `Unraid-Kernel` container on
+the NAS (it downloads the pre-compiled tree of the running kernel), builds it as a Slackware
+package: copy the `.txz` to `/boot/extra/` (installed at every boot) and add
+`modprobe -a i2c-dev i2c-i801 i2c-nct6793` to `/boot/config/go`; the new `/dev/i2c-N` ("SMBus
+NCT6793D adapter") goes to the OpenRGB container. The package is per kernel: redo it after every
+Unraid update. The header of the script has the exact commands.
 
 ## Backup
 

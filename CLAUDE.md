@@ -84,6 +84,12 @@ reusing the widget's own functions.
   it can listen in (`barch voice lang`), which skip the table and go straight to Claude. Test a sentence with
   `barch voice match "..."` (prints what would run, runs nothing); `barch voice test "..."` runs it
   for real on the live desktop, so never use it on a list of examples.
+- **Music pipeline** (`server/music/`): runs on the NAS in the beets container, not on this machine;
+  `barch music install` copies it there. The naming rules are in `style.py` and were measured over
+  the whole library: change them only with `tests/test_style.py` passing. Never write to `/music`
+  from here (the share is read only for this user); fixes go through scripts run in the container.
+- **NAS kernel module** (`server/unraid/`): the `i2c-nct6793` build script for OpenRGB on the NAS
+  (README "NAS"). It runs on the NAS, never here; the package is per Unraid kernel.
 - **Theme:** `quickshell/.config/quickshell/theme/palettes.json` holds the palettes (ten tones
   each) and `theme/Theme.qml` derives everything else from them. Change colors there (or with
   `barch theme edit`), never in the generated files (they are git-ignored and get overwritten).

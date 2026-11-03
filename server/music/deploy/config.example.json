@@ -1,0 +1,13 @@
+{
+  "_doc": "Music pipeline settings (copied to appdata/beets/pipeline/config.json once; edit it there). Tokens and passwords go in secrets.json next to it, never here.",
+  "music": "/music",
+  "jobs": "/data/music-pipeline",
+  "inbox": "/data/music-inbox",
+  "categories": ["lidarr", "music"],
+  "poll_s": 120,
+  "port": 8338,
+  "delete_torrent": true,
+  "qbittorrent": {"url": "http://qbittorrent:8080"},
+  "lidarr": {"url": "http://lidarr:8686"},
+  "plex": {"url": "http://100.100.0.10:32400", "path_prefix": "/data/music"}
+}
