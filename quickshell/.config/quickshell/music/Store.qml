@@ -156,11 +156,24 @@ Singleton {
     // ---------- the library's covers ----------
     property var covers: ({ running: "", queued: 0, entries: [] })
     readonly property int coversToLook: covers.entries.filter(e => e.verdict === "better").length
-    function refreshCovers() { api("GET", "/api/covers", null, d => covers = d, true) }
+    // the answer replaces the model only when it changed: a new object every 8 s would rebuild the
+    // list, reload every thumbnail and send the scroll back to the top
+    function refreshCovers() { api("GET", "/api/covers", null, d => { if (JSON.stringify(d) !== JSON.stringify(covers)) covers = d }, true) }
+    readonly property bool coversBusy: covers.running !== "" || (covers.queued || 0) > 0
     property var artists: []              // the artist folders of /music: [{ name, albums }] (the Covers page's list)
     property string coversArtist: ""      // the artist the Covers page shows
-    function loadArtists() { api("GET", "/api/library/artists", null, d => artists = d.artists || [], true) }
-    function checkCovers(artist) { coversArtist = artist; api("POST", "/api/covers/check", { artist: artist }, d => { say(d.result); refreshCovers() }) }
+    property var albums: []               // that artist's album folders: [{ folder, cover }] (every one, checked or not)
+    function loadArtists() { api("GET", "/api/library/artists", null, d => { const a = d.artists || []; if (JSON.stringify(a) !== JSON.stringify(artists)) artists = a }, true) }
+    function loadAlbums(artist) {
+        if (!artist) { albums = []; return }
+        api("GET", "/api/library/albums?artist=" + encodeURIComponent(artist), null, d => {
+            const a = d.albums || []
+            if (coversArtist === artist && JSON.stringify(a) !== JSON.stringify(albums)) albums = a
+        }, true)
+    }
+    onCoversArtistChanged: loadAlbums(coversArtist)
+    // target: an artist folder (every album) or "Artist/Album" (that one)
+    function checkCovers(target) { coversArtist = target.split("/")[0]; api("POST", "/api/covers/check", { artist: target }, d => { say(d.result); refreshCovers() }) }
     function coverAct(action, folder) {
         say(action + " " + folder + "…")
         api("POST", "/api/covers/" + action, { folder: folder }, d => { say(d.result); refreshCovers() })

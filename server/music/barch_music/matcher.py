@@ -46,7 +46,7 @@ class Candidate:
 # ---------------------------------------------------------------- hints
 
 # "Album CD 1", "Album (Disc 2)", "Album (CD1, VICP-70192)" (a catalogue number after the disc), "Album (1)"
-_DISC_SUFFIX = re.compile(r"[\s,]*[\[(]?\s*(?:cd|disc|disk|vol\.?|volume)\s*\d{1,2}(?:\s*[,;:][^\])]*)?\s*[\])]?\s*$|\s*\(\d\)\s*$", re.I)
+_DISC_SUFFIX = re.compile(r"[\s,]*[\[(]?\s*(?:cd|disc|disk|vol\.?|volume)\s*\d{1,2}(?:\s*[,;:-][^\])]*)?\s*[\])]?\s*$|\s*\(\d\)\s*$", re.I)
 
 
 def hints_from(folder_name: str, tracks: list[Track]) -> dict:
@@ -131,9 +131,11 @@ def score(cand: Candidate, tracks: list[Track], hints: dict) -> None:
     ours = [len(v) for _, v in sorted(discs.items())]
     theirs = [len(m.get("tracks") or []) for m in media]
     # a download of only some discs of a box: match the discs we have, by track count
+    partial = False
     if len(ours) < len(theirs) and ours == theirs[:len(ours)]:
         media = media[:len(ours)]
         theirs = theirs[:len(ours)]
+        partial = True
         cand.why.append(f"only the first {len(ours)} of {len(audio_media(rel))} discs downloaded")
     cand.media = media
     if ours != theirs:
@@ -171,6 +173,8 @@ def score(cand: Candidate, tracks: list[Track], hints: dict) -> None:
     if hints.get("year") and cand.date[:4] == hints["year"]:
         s += 0.03
     s -= 0.005 * min(mean, 4)                       # tie-break: the edition whose lengths fit best
+    if partial:
+        s -= 0.1                                    # the album itself beats "disc 1 of a box" that reissues it
     cand.score = s
     cand.why.append(f"lengths: worst {worst:.1f}s, mean {mean:.1f}s over {len(diffs)} tracks"
                     + (f" (left out: {', '.join(cand.bad)}, which do not fit)" if cand.bad else ""))

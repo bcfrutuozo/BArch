@@ -17,7 +17,8 @@ class Hints(unittest.TestCase):
         cases = {"The Now What! Live Tapes (CD1, VICP-70192)": "The Now What! Live Tapes",
                  "Pandora's Box CD 1": "Pandora's Box", "The Wall (1)": "The Wall", "Made in Japan (Disc 2)": "Made in Japan",
                  "Live to Rock (Rock to Live)": "Live to Rock (Rock to Live)", "Volume Two": "Volume Two",
-                 "The platinum collection, disc 2": "The platinum collection"}
+                 "The platinum collection, disc 2": "The platinum collection",
+                 "Aerosmith (CD1- Box Of Fire)": "Aerosmith", "Toys In The Attic (CD3 - Box Of Fire)": "Toys In The Attic"}
         for album, want in cases.items():
             h = matcher.hints_from("Deep Purple - Something", [track(album=album, artist="Deep Purple")])
             self.assertEqual(h["album"], want, album)

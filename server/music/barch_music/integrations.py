@@ -198,6 +198,8 @@ class Lidarr:
         alb = self.album_by_group(group_mbid)
         if not alb or not alb.get("monitored"):
             return ""
+        if (alb.get("statistics") or {}).get("trackFileCount", 0) > 0:
+            return ""                      # the album is in the library already: its monitoring is not this download's business
         self.h.call("PUT", "/api/v1/album/monitor", body={"albumIds": [alb["id"]], "monitored": False})
         return f"Lidarr: {alb.get('title')!r} unmonitored" + (f" ({why})" if why else "")
 
