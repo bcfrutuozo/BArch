@@ -112,6 +112,8 @@ Desktop (through the bar):
   music retry|reject|undo <id>   run again / give up / put back what it changed in /music
   music scan                  look for finished torrents and inbox folders now
   music lidarr-flac-only      every Lidarr quality profile: FLAC and FLAC 24bit only
+  music lidarr-monitor <ids> on|off   monitor or not these Lidarr album ids
+  music lidarr-search <ids>   monitor these Lidarr albums and search the indexers now
   music install               copy server/music to the NAS (server/music/install.sh)
 
 Automation (agent/rules.json + agent/events.py, barch-events.service):
@@ -464,6 +466,17 @@ cmd_music() {
       show "$OUT" '"music pipeline: \(.new) new album(s) queued"' ;;
     lidarr-flac-only)
       music_api POST /api/lidarr/flac-only '{}'
+      show "$OUT" '.result' ;;
+    lidarr-monitor | lidarr-search)
+      [[ -n ${1:-} ]] || usage_error "music $sub <album ids, comma separated> [on|off]"
+      local ids body
+      ids=$(jq -cn --arg v "$1" '$v | split(",") | map(tonumber)')
+      if [[ $sub == lidarr-monitor ]]; then
+        body=$(jq -cn --argjson ids "$ids" --arg m "${2:-on}" '{ids: $ids, monitored: ($m == "on")}')
+        music_api POST /api/lidarr/monitor "$body"
+      else
+        music_api POST /api/lidarr/search "{\"ids\": $ids}"
+      fi
       show "$OUT" '.result' ;;
     install) exec "$REPO/server/music/install.sh" ;;
     *) usage_error "music status|list [state]|show <id>|resolve <id> ...|retry|reject|undo <id>|scan|lidarr-flac-only|install" ;;

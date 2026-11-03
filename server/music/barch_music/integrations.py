@@ -92,6 +92,20 @@ class Lidarr:
             return f"Lidarr: artist rescanned, album {alb2.get('title')!r} unmonitored"
         return f"Lidarr: artist rescanned ({alb2.get('title')!r})"
 
+    def monitor(self, ids: list[int], monitored: bool) -> str:
+        if not self.enabled:
+            return "Lidarr: no API key configured"
+        self.h.call("PUT", "/api/v1/album/monitor", body={"albumIds": ids, "monitored": monitored})
+        return f"Lidarr: {len(ids)} album(s) {'monitored' if monitored else 'unmonitored'}"
+
+    def search(self, ids: list[int]) -> str:
+        """Lidarr looks for these albums on the indexers now (it also monitors them)."""
+        if not self.enabled:
+            return "Lidarr: no API key configured"
+        self.h.call("PUT", "/api/v1/album/monitor", body={"albumIds": ids, "monitored": True})
+        r = self.h.call("POST", "/api/v1/command", body={"name": "AlbumSearch", "albumIds": ids})
+        return f"Lidarr: searching {len(ids)} album(s) (command {(r or {}).get('id', '?')})"
+
     def flac_only_profile(self) -> str:
         """Every quality profile: only FLAC and FLAC 24bit allowed, cutoff FLAC."""
         if not self.enabled:
