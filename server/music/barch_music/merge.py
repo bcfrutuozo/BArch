@@ -96,8 +96,8 @@ def plan(alb: Album, target: Path, replace_ok: set[str]) -> Plan:
             if album_vals["ALBUM"]:
                 new["ALBUM"] = album_vals["ALBUM"]          # the album as the library already has it
             new["DATE"], new["GENRE"] = p.date, p.genre
-            if one_artist and album_vals["ARTIST"] and new["ARTIST"] == alb.artist_folder:
-                new["ARTIST"] = album_vals["ARTIST"]
+            if one_artist and album_vals["ARTIST"] and alb.artist_folder != "Various Artists":
+                new["ARTIST"] = album_vals["ARTIST"]        # the album's artist as the library spells it
             p.add.append((t, new, style.file_name(new["DISCNUMBER"], new["TRACKNUMBER"], new["TITLE"])))
             continue
         path, x = lib[key]

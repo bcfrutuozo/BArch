@@ -31,7 +31,13 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
    length; it waits for `--keep-order`, then keeps the download's numbering with each song's own
    MusicBrainz title and id (over an album already in the library: --replace or reject, never a merge).
 4. **Tags** (`album.py`, `style.py`), only the library's set: ARTIST, ALBUM, TITLE, TRACKNUMBER,
-   TRACKTOTAL, DISCNUMBER, DISCTOTAL, DATE, GENRE, MUSICBRAINZ_ALBUMID, MUSICBRAINZ_TRACKID.
+   TRACKTOTAL, DISCNUMBER, DISCTOTAL, DATE, GENRE, MUSICBRAINZ_ALBUMID, MUSICBRAINZ_TRACKID
+   (ALBUMARTIST only on Various Artists albums, as the library has them).
+   - ARTIST is the album's artist credit on every track (`A; B` for a collaboration). A track
+     MusicBrainz credits to someone else (a solo song on a band's compilation: "Don Dokken" on
+     The Very Best of Dokken) is tagged like the rest, with a note in the job; a track credited to
+     the album's artist and others ("Dokken & X") puts the others in the title as `[feat. X]`.
+     Only a Various Artists album keeps each track's own credit.
    - DATE is the original release day, never just the year: the release group's on MusicBrainz,
      the earliest dated edition of that year, Wikidata's publication date, then the release field of
      the album's infobox on every Wikipedia that has it (references removed; only dates of the first

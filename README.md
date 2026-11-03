@@ -433,8 +433,9 @@ the import logs (IDs of everything written) are in `~/.local/state/barch/finance
 `server/music` (details in its README) runs inside the beets container on the NAS and turns every
 finished Lidarr download (and any folder dropped in `/data/music-inbox`) into an album of
 `/music` exactly like the hand-made ones: lossless only, CUE images split per track, the
-MusicBrainz release found by track count and lengths, only the library's tags (artist, album,
-title, numbers, the original date to the day (MusicBrainz, Wikidata, every Wikipedia; YYYY-01-01 only when it exists nowhere and Bruno says so), a genre on every track, two MusicBrainz ids), titles in Bruno's style (his
+MusicBrainz release found by track count and lengths, only the library's tags (artist: the album's on
+every track, even one MusicBrainz credits to someone else, extra names going to the title; `Various Artists`
+albums keep each track's own and get `ALBUMARTIST`; album, title, numbers, the original date to the day (MusicBrainz, Wikidata, every Wikipedia; YYYY-01-01 only when it exists nowhere and Bruno says so), a genre on every track, two MusicBrainz ids), titles in Bruno's style (his
 title-case dictionary, one trailing `[feat. A; B - Bonus - Live]` in a fixed order), a cover of at
 least 500 px (1000 px when any source has it) embedded and as `cover.jpg`, the label's clean
 artwork before a scan of the sleeve (a store's image counts only with the same artist and album

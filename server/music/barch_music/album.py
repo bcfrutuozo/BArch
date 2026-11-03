@@ -12,8 +12,8 @@ from .audio import Track
 from .matcher import Candidate, audio_media
 
 # the only tags a track keeps (the library's set, plus the two MusicBrainz ids Bruno approved)
-KEEP = ["ARTIST", "ALBUM", "TITLE", "TRACKNUMBER", "TRACKTOTAL", "DISCNUMBER", "DISCTOTAL", "DATE", "GENRE",
-        "MUSICBRAINZ_ALBUMID", "MUSICBRAINZ_TRACKID"]
+KEEP = ["ARTIST", "ALBUMARTIST", "ALBUM", "TITLE", "TRACKNUMBER", "TRACKTOTAL", "DISCNUMBER", "DISCTOTAL", "DATE",
+        "GENRE", "MUSICBRAINZ_ALBUMID", "MUSICBRAINZ_TRACKID"]
 REQUIRED = ["ARTIST", "ALBUM", "TITLE", "TRACKNUMBER", "TRACKTOTAL", "DISCNUMBER", "DISCTOTAL", "DATE", "GENRE"]
 
 
@@ -176,7 +176,8 @@ def build(cand: Candidate, tracks: list[Track], music: Path, overrides: dict | N
     gfull = mb.release_group(group["id"]) if group.get("id") else None
     album_artists, _ = split_credit(rel.get("artist-credit"))
     various = any(n.lower() == "various artists" for n in album_artists)
-    artist_folder = "Various Artists" if various else "; ".join(album_artists)
+    album_artist = "; ".join(album_artists)         # ARTIST of every track of a one-artist album (below)
+    artist_folder = "Various Artists" if various else album_artist
     if not various and len(album_artists) > 1:
         artist_folder = album_artists[0]            # the library files collaborations under the first artist
     live_album = "Live" in (group.get("secondary-types") or [])
@@ -217,6 +218,17 @@ def build(cand: Candidate, tracks: list[Track], music: Path, overrides: dict | N
         for pos, (t, mt) in enumerate(zip(ts, mts), 1):
             rec = mt.get("recording") or {}
             main, feats = split_credit(mt.get("artist-credit") or rec.get("artist-credit") or rel.get("artist-credit"))
+            # ARTIST is the same on every track of an album that has an artist (Bruno's rule, 2026-11-03): a
+            # track MusicBrainz credits to someone else (a solo song on a band's compilation, "Don Dokken" on
+            # The Very Best of Dokken) keeps the album's artist; other main artists of the track that are
+            # not the album's become guests in the title. Only Various Artists keeps the track's own credit.
+            if not various:
+                others = [n for n in main if n.lower() not in {x.lower() for x in album_artists}]
+                if others and not any(n.lower() in {x.lower() for x in album_artists} for n in main):
+                    a.notes.append(f"{dn}.{pos:02d} is credited to {'; '.join(main)} on MusicBrainz: tagged {album_artist}, like the rest of the album")
+                elif others:
+                    feats = others + [f for f in feats if f not in others]
+                main = album_artists
             parts = []
             if original is not None and style.norm(style.split_title(mt.get("title", ""))[0]) not in original:
                 parts.append("bonus")
@@ -236,6 +248,8 @@ def build(cand: Candidate, tracks: list[Track], music: Path, overrides: dict | N
                 "MUSICBRAINZ_ALBUMID": rel["id"],
                 "MUSICBRAINZ_TRACKID": rec.get("id", ""),
             }
+            if various:
+                tags["ALBUMARTIST"] = "Various Artists"     # as every Various Artists album of the library has
             key = f"{dn}.{tags['TRACKNUMBER']}"
             tags.update((ov.get("tracks") or {}).get(key, {}))
             a.lengths[key] = (mt.get("length") or rec.get("length") or 0) / 1000
