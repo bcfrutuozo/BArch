@@ -10,7 +10,11 @@
 # Output: /usr/src/<kernel>/i2c-nct6793-<kernel>-1.txz. Then, on Unraid itself:
 #   cp /mnt/cache/appdata/unraid-kernel/<kernel>/i2c-nct6793-<kernel>-1.txz /boot/extra/   # installed at every boot
 #   installpkg /boot/extra/i2c-nct6793-<kernel>-1.txz && depmod -a
-#   modprobe -a i2c-dev i2c-i801 i2c-nct6793        # same line in /boot/config/go (-a, or only the first loads)
+#   depmod -a && modprobe -a i2c-dev i2c-i801 i2c-nct6793
+# and that same last line in /boot/config/go: Unraid installs /boot/extra at boot without running
+# depmod, so without it modprobe -a silently skips i2c-nct6793 (2026-11-02: no NCT6793 bus after a
+# reboot). It came up as i2c-12, after the i915 and NVIDIA buses; the number can move if the driver
+# order changes, so give the OpenRGB container every /dev/i2c-* (or --privileged), not one of them.
 # and pass the new /dev/i2c-N ("SMBus NCT6793D adapter" in /sys/bus/i2c/devices/i2c-*/name) to
 # the OpenRGB container.
 set -euo pipefail
