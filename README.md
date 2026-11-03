@@ -194,7 +194,10 @@ The main pieces:
   merge plan for an album already in the library, the proposed files, the log, the cover) and the
   inputs of `barch music resolve` as a form: Use a candidate or a release found with the
   MusicBrainz search right there, date (or the year-only last resort), genre, album, artist folder,
-  cover URL, a title per track, keep the download's order, replace the album, the tracks to swap
+  the cover (a URL, or **Upload…** an image found online: checked, kept with the job and shown at
+  once; **Find cover** sends Claude to search the web for it, `barch music cover-ask <id>`, which
+  the `music-cover` rule already does by itself for every album that waits only for a cover),
+  a title per track, keep the download's order, replace the album, the tracks to swap
   for the download's (the merge's suggestions are switches); the equivalent command is shown under
   it, Resolve queues the album again, Retry and Reject next to it. **Albums**: every job by state,
   Undo for a delivered one. **Covers**: the covers already in the library, per artist or all of it:
@@ -308,6 +311,8 @@ barch finance import [--dry-run]   # C6 Bank statements → Firefly (see Finance
 barch music status|browse|list|show|resolve|retry|reject|scan   # the NAS music pipeline and its review queue (see Music)
 barch music covers check [artist]|list|apply|undo|keep|pick|propose <Artist/Album>   # scans with a frame -> the clean artwork
 barch music covers ask <Artist/Album> "keep the red frame"   # Claude adapts one or finds another, as a proposal
+barch music cover <id> <file|URL> [label]   # the cover you found for an album waiting on it: checked, then the album runs
+barch music cover-ask <id> ["hint"]   # Claude searches the web for it and runs the album (the music-cover rule does this alone)
 barch music lidarr-artists|lidarr-albums <artist>|lidarr-search <ids>|lidarr-profile <name> ...|lidarr-list <Type> <name> field=value..
                                    # what Lidarr tracks, search albums, metadata profiles (studio albums only), import lists
 barch music lidarr-queue|lidarr-queue-remove <ids>|all|lidarr-commands|lidarr-cancel <id>   # what Lidarr is downloading and running
@@ -383,7 +388,8 @@ without any AI:
   `monitor.removed`), `vpn.up`, `vpn.down` (the tunnel dropped) and `vpn.off` (turned off: Disconnect, Anonymous Mode off, a voice command; `pia.sh disconnect` leaves the time in `stopped`), both with the tunnel that went away and whether the kill switch is holding the traffic, `anon.on`/`anon.off`, `net.up`/`net.down` (default
   route), `pods.connected`/`pods.disconnected`, `session.locked`/`unlocked`, `failure` (a new
   log from `barch failure`), `boot`, `claude.cost` (every agent task run and voice fallback writes
-  a line to `~/.local/state/barch/claude-cost.log`), `startup`.
+  a line to `~/.local/state/barch/claude-cost.log`), `music.review` (an album of the NAS music
+  pipeline landed in the review queue, polled every 2 min: id, name, problem, `cover_only`), `startup`.
 - **Rules** in `agent/rules.json`: `when` is an event name plus regexes on its fields
   (`{"event": "window.open", "class": "^steam_app_"}`) or a metric with `above`/`below` and a
   `clear` value for hysteresis (`{"metric": "disk.root.pct", "above": 90, "clear": 85}` fires once
@@ -393,7 +399,9 @@ without any AI:
   `cooldown` how long before it may fire again, `critical` and `enabled`. The daemon reloads the
   file when it changes. It ships with: disk above 90 %, CPU above 90 °C, GPU above 85 °C, VPN
   dropped (spoken), network down and back, AirPods below 20 % per side, monitor connected or
-  removed, a boot over 60 s and a Claude call over a dollar; two disabled ones keep caffeine on
+  removed, a boot over 60 s, a Claude call over a dollar and an album of the music pipeline waiting
+  only for a cover (`music.review` with `cover_only`: Claude searches the web for it, `barch music
+  cover-ask`, in a transient unit so the daemon never waits); two disabled ones keep caffeine on
   while a game window is open (Bruno wants notifications while playing, so no DND there).
 
 ```bash

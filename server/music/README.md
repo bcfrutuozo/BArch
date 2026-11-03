@@ -53,7 +53,8 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
      variant, several guests joined by `; `. `Bonus` = not on the first edition of the album
      (compared by title); `Live` = a live recording on a studio album.
 5. **Cover** (`cover.py`): every source is gathered (Cover Art Archive release and release group,
-   the images in the download, iTunes, Deezer; square, at least 500 px) and each is looked at on a
+   the images in the download, iTunes, Deezer, Amazon by the release's ASIN, Discogs by name when
+   `discogs_token` is in `secrets.json`; square, at least 500 px) and each is looked at on a
    200x200 thumbnail: a scan of an old sleeve has a frame (a flat band at the edge that ends with
    a jump in brightness, on two sides or more). A store's image counts only when artist and album
    match and, if any other source has an image, when it is the same picture (24x24 grey
@@ -102,7 +103,15 @@ Anything else that breaks fails at once.
 review queue and the resolve form of the Music app: every job by state, problems, notes, candidates, a
 MusicBrainz search by hand (`/api/mb/search`), the merge plan, the proposal with its cover and a title field
 per track, the switches (year only, keep order, replace, the tracks to swap), the equivalent `barch music
-resolve` line, Resolve / Retry / Reject / Undo (the last two ask for a second press) and the log. It asks once
+resolve` line, Resolve / Retry / Reject / Undo (the last two ask for a second press) and the log. When no
+cover was good enough, the one you find goes in as a URL or as an upload (`POST /api/jobs/<id>/cover`, the
+phone's camera roll works): it is checked (square, at least 500 px), kept with the job as `cover-chosen.jpg`,
+shown in place of the proposal's, and Resolve runs the album with it (`barch music cover <id> <file|URL>` does
+both at once). Before that is even needed, `barch-events` on the desktop sees the album land in the queue
+with only the cover missing (`music.review`, `cover_only`) and the `music-cover` rule runs
+`barch music cover-ask <id>`: Claude searches the web for the front (prompt `quickshell/music/job-cover-ask.md`),
+checks it and delivers it with `barch music cover`, so the album comes in on its own; **Find cover** in the
+Music app does the same on demand, with a hint. It asks once
 for the token of `~/.config/barch/music.json` and keeps it in the browser only; over Tailscale that is the
 whole setup, nothing else is exposed.
 
@@ -113,6 +122,7 @@ barch music resolve <id> --release https://musicbrainz.org/release/<mbid>
 barch music resolve <id> --date 1981-09-01 --genre "Hard Rock"
 barch music resolve <id> --date-year-only   # no source anywhere has the day: YYYY-01-01
 barch music resolve <id> --cover https://.../front.jpg --title 1.03="Some Title [Bonus]"
+barch music resolve <id> --cover ~/Downloads/front.jpg   # a file: uploaded first (square, >= 500 px), then the album runs with it
 barch music resolve <id> --replace-tracks 1.07   # an existing track is wrong: take the download's audio
 barch music resolve <id> --replace   # replace the whole album (the old one is kept with the job)
 barch music undo <id>                # put /music back as it was before that job

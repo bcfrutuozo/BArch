@@ -314,7 +314,19 @@ Item {
                     Label { text: "Artist folder" }
                     UiField { id: fArtist; Layout.fillWidth: true; placeholderText: ((detail.job || {}).proposal || {}).artist_folder || "folder under /music" }
                     Label { text: "Cover" }
-                    UiField { id: fCover; Layout.fillWidth: true; mono: true; placeholderText: "image URL (≥ 500 px, 1000 preferred)" }
+                    RowLayout {
+                        spacing: 8
+                        UiField {
+                            id: fCover; Layout.fillWidth: true; mono: true
+                            placeholderText: detail.job && detail.job.cover ? "chosen: " + (detail.job.cover_label || detail.job.cover) : "image URL (square, ≥ 500 px, 1000 preferred)"
+                        }
+                        UiButton {
+                            label: "Upload…"; icon: "󰕒"; small: true
+                            tooltip: "an image from this machine (square, ≥ 500 px): checked and kept with the job; Resolve runs the album with it"
+                            onClicked: Store.pickJobCover(detail.jobId)
+                        }
+                        UiButton { visible: !!(detail.job && detail.job.cover); label: "Clear"; small: true; tooltip: "forget the chosen cover"; onClicked: Store.clearJobCover(detail.jobId) }
+                    }
                 }
                 RowLayout {
                     spacing: 10
@@ -366,6 +378,34 @@ Item {
                         anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; margins: 8 }
                         text: detail.cli; color: Ui.subtext; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 2; wrapMode: Text.WrapAnywhere
                     }
+                }
+                // stopped only for the cover: Claude can search the web for it (the music-cover rule does this by itself)
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: detail.st === "review" && (detail.job.problems || []).some(x => /^no cover/.test(x))
+                    spacing: 6
+                    readonly property var ask: Store.asks[detail.jobId] || null
+                    UiField {
+                        id: coverHint
+                        Layout.fillWidth: true
+                        enabled: !(parent.ask && parent.ask.running)
+                        placeholderText: "Ask Claude to find the cover online (a hint helps: the edition, where it exists, what to avoid)"
+                        onAccepted: Store.askJobCover(detail.jobId, text.trim())
+                    }
+                    UiButton {
+                        label: parent.ask && parent.ask.running ? "Claude is searching…" : "Find cover"; icon: "󰚩"; small: true
+                        enabledBtn: !(parent.ask && parent.ask.running)
+                        tooltip: "Claude searches the web for the front cover, checks it (square, ≥ 500 px) and runs the album with it; Undo brings it back if it is wrong"
+                        onClicked: Store.askJobCover(detail.jobId, coverHint.text.trim())
+                    }
+                }
+                Text {
+                    readonly property var ask: Store.asks[detail.jobId] || null
+                    visible: !!ask
+                    Layout.fillWidth: true
+                    text: ask ? ask.text : ""
+                    color: ask && ask.bad ? Ui.red : ask && ask.running ? Ui.accent : Ui.text
+                    font.family: Ui.font; font.pixelSize: Ui.fontSize - 1; wrapMode: Text.Wrap
                 }
                 RowLayout {
                     spacing: 8

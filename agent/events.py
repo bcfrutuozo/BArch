@@ -6,7 +6,8 @@ One daemon (barch-events.service) does three things:
     network latency, AirPods battery, health issues) into ~/.local/state/barch/metrics.db;
   * turns what changes into events: Hyprland's socket2 (windows opened/closed, monitors,
     fullscreen), VPN and Anonymous Mode up/down, network down/up, AirPods connected, session
-    locked/unlocked, a new failure log, a boot, what Claude cost (agent tasks, voice);
+    locked/unlocked, a new failure log, a boot, what Claude cost (agent tasks, voice), an album of
+    the music pipeline landing in the review queue;
   * runs the rules of agent/rules.json: "when <event or metric threshold>, do <commands>", with
     notification, spoken sentence, cooldown and an optional "ask first" button.
 
@@ -433,6 +434,7 @@ class Daemon:
         self.stop = threading.Event()
         self.prev_cpu = None
         self.last_health = 0.0
+        self.last_music = 0.0
         self.last_prune = 0.0
         self.flags: dict[str, object] = {}        # last known state of the things that transition
         self.hwmon = self._hwmon()
@@ -647,6 +649,39 @@ class Daemon:
         except Exception:  # noqa: BLE001
             pass
 
+    def sample_music(self):
+        """The music pipeline on the NAS (server/music): an album that lands in the review queue is an
+        event, music.review (id, name, problem, cover_only), once per job (`music_seen` in the state).
+        Needs ~/.config/barch/music.json (barch music install); every `music_every_s`, 120 by default."""
+        conf = HOME / ".config/barch/music.json"
+        now = time.time()
+        if not conf.exists() or now - self.last_music < float(self.cfg.get("music_every_s", 120)):
+            return
+        self.last_music = now
+        try:
+            c = json.loads(conf.read_text())
+            import urllib.request
+            req = urllib.request.Request(c["url"].rstrip("/") + "/api/jobs?state=review", headers={"X-Barch-Token": c.get("token", "")})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                jobs = json.loads(r.read().decode()).get("jobs") or []
+        except Exception:  # noqa: BLE001 - the NAS or the pipeline is down: nothing to say
+            return
+        st = self.rules.state
+        seen = set(st.get("music_seen") or [])
+        first = not seen and "music_seen" not in st
+        new = [j for j in jobs if j.get("id") and j["id"] not in seen]
+        for j in new:
+            problems = [str(x) for x in (j.get("problems") or [])]
+            data = {"id": j["id"], "name": j.get("name", ""), "folder": j.get("folder") or "", "problem": problems[0][:200] if problems else "",
+                    "problems": len(problems), "cover_only": "yes" if problems and all(x.startswith("no cover") for x in problems) else "no"}
+            if first:
+                self.store.event("music.review", data | {"imported": True}, ts=int(j.get("updated") or now))
+            else:
+                self.emit("music.review", data)
+        if new or first:
+            st["music_seen"] = sorted((seen | {j["id"] for j in jobs}))[-500:]
+            self.rules.save_state()
+
     # -- files that grow: failure logs, the Claude cost log, agent reports
     def watch_files(self, first=False):
         st = self.rules.state
@@ -823,6 +858,7 @@ class Daemon:
                     except Exception as e:  # noqa: BLE001
                         log(fn.__name__, "failed:", e)
                 self.sample_lock()
+                self.sample_music()
                 if rows:
                     self.store.samples(rows)
                     for m, v in rows:

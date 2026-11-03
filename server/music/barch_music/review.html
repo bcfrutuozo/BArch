@@ -158,7 +158,7 @@ async function loadJob(id, keepForm) {
   try {
     const d = await api('/api/jobs/' + id);
     job = d.job;
-    if (!keepForm || !form.seeded) { Object.assign(form, blank()); form.seeded = true; form.release = job.chosen || ''; form.cover = job.cover || ''; const ov = job.overrides || {}; form.date = ov.date || ''; form.genre = ov.genre || ''; form.album = ov.album || ''; form.artist = ov.artist_folder || ''; form.yearOnly = !!ov.date_year_only; form.keepOrder = !!job.keep_order; form.replace = !!job.replace; for (const k of (job.replace_tracks || [])) form.replaceTracks[k] = true; for (const k in (ov.tracks || {})) if (ov.tracks[k].TITLE) form.titles[k] = ov.tracks[k].TITLE; mbResults = []; }
+    if (!keepForm || !form.seeded) { Object.assign(form, blank()); form.seeded = true; form.release = job.chosen || ''; form.cover = /^https?:/.test(job.cover || '') ? job.cover : ''; const ov = job.overrides || {}; form.date = ov.date || ''; form.genre = ov.genre || ''; form.album = ov.album || ''; form.artist = ov.artist_folder || ''; form.yearOnly = !!ov.date_year_only; form.keepOrder = !!job.keep_order; form.replace = !!job.replace; for (const k of (job.replace_tracks || [])) form.replaceTracks[k] = true; for (const k in (ov.tracks || {})) if (ov.tracks[k].TITLE) form.titles[k] = ov.tracks[k].TITLE; mbResults = []; }
     renderList(); renderJob();
   } catch (e) { toast(e.message, true); }
 }
@@ -198,6 +198,18 @@ function setTitle(k, v) { if (v.trim()) form.titles[k] = v; else delete form.tit
 function setReplace(k, on) { if (on) form.replaceTracks[k] = true; else delete form.replaceTracks[k]; renderJob(); }
 function setReplaceAll(keys, on) { for (const k of keys) { if (on) form.replaceTracks[k] = true; else delete form.replaceTracks[k]; } renderJob(); }
 function useRelease(mbid) { form.release = mbid; renderJob(); }
+// the cover found by hand: uploaded (the phone's camera roll works) or a URL; the pipeline checks it
+// (square, >= 500 px) and keeps it with the job; Resolve runs the album with it
+async function uploadCover(f) {
+  if (!f) return;
+  try {
+    const r = await fetch(`/api/jobs/${job.id}/cover?label=${encodeURIComponent(f.name)}`, { method: 'POST', headers: { 'X-Barch-Token': token, 'Content-Type': f.type || 'image/jpeg' }, body: f });
+    const d = await r.json().catch(() => ({ ok: false, error: 'bad answer' }));
+    if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    toast(d.result); form.cover = ''; await loadJob(job.id, true);
+  } catch (e) { toast(e.message, true); }
+}
+async function clearCover() { try { const d = await api(`/api/jobs/${job.id}/cover`, { url: '' }); toast(d.result); await loadJob(job.id, true); } catch (e) { toast(e.message, true); } }
 function renderCli() { const c = $('#cli'); if (c) c.textContent = cli(); }
 
 function renderJob() {
@@ -244,7 +256,9 @@ function renderJob() {
         return `<div class="track"><span class="k">${esc(k)}</span>${decidable() ? `<input type="text" placeholder="${esc(t.TITLE)}" value="${esc(form.titles[k] || '')}" oninput="setTitle('${k}', this.value)">` : `<span>${esc(t.TITLE)}</span>`}
           <span class="r">${sug.includes(k) && decidable() ? `<label class="sw"><input type="checkbox" ${form.replaceTracks[k] ? 'checked' : ''} onchange="setReplace('${k}', this.checked)"> replace</label>` : `<span class="faint mono">${esc(t.file)}</span>`}</span></div>`; }).join('')}</div></div></section>`;
   if (decidable()) h += `<section><h2>Resolve</h2><div class="card">
-      ${field('Release (MusicBrainz id or URL)', 'release')}${field('Cover URL', 'cover', 'url')}
+      ${field('Release (MusicBrainz id or URL)', 'release')}${field('Cover URL (square, ≥ 500 px)', 'cover', 'url')}
+      <div class="row"><span class="dim">or an image from this device:</span><input type="file" accept="image/*" onchange="uploadCover(this.files[0])">
+      ${j.cover ? `<span class="dim">chosen: ${esc(j.cover_label || j.cover)}</span><button onclick="clearCover()">clear</button>` : ''}</div>
       <div class="grid2">${field('Date (YYYY-MM-DD)', 'date')}${field('Genre', 'genre')}${field('Album', 'album')}${field('Artist folder', 'artist')}</div>
       <div class="row" style="margin-top:10px">${sw('year only (no source has the day)', 'yearOnly')}${sw('keep the download\'s order', 'keepOrder')}${sw('replace the whole album', 'replace')}</div>
       <pre id="cli">${esc(cli())}</pre>

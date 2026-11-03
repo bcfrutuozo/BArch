@@ -104,7 +104,7 @@ Desktop (through the bar):
   music browse [<page>]       BArch Music (quickshell/music): the review queue with the resolve inputs
                               as a form, every album handled (undo), Lidarr [review|albums|covers|lidarr]
   music show <id>             one album: problems, MusicBrainz candidates, the proposed tags
-  music resolve <id> [--release MBID|URL] [--cover URL] [--date YYYY-MM-DD] [--genre G]
+  music resolve <id> [--release MBID|URL] [--cover URL|file] [--date YYYY-MM-DD] [--genre G]
         [--album A] [--artist A] [--title D.TT=Title]... [--replace-tracks 1.15,2.03] [--replace]
         [--date-year-only]    (only when no source on earth has the day: the date becomes YYYY-01-01)
         [--keep-order]        (an edition MusicBrainz lacks, e.g. an LP: same songs, the download's order)
@@ -112,6 +112,10 @@ Desktop (through the bar):
                               and fixed by the library's rules; --replace-tracks swaps the audio of
                               those tracks, --replace the whole album)
   music retry|reject|undo <id>   run again / give up / put back what it changed in /music
+  music cover <id> <file|URL> [label]   the cover you found for an album waiting on it: checked, kept
+                              with the job and the album runs again with it (= --cover + resolve)
+  music cover-ask <id> ["hint"]   Claude searches the web for the album's front cover and runs the
+                              album with it (what the music-cover rule does by itself)
   music scan                  look for finished torrents and inbox folders now
   music covers [list]         the library's covers that were checked: a scan with a frame, a cleaner one
   music covers check [<artist>]   look for scans with a frame (and the clean artwork) in /music
@@ -435,6 +439,16 @@ music_api() {   # music_api GET|POST <path> [json body]
 }
 
 # music_upload <Artist/Album> <image file> <label>: POST the image itself as a new cover proposal
+music_upload_job() {   # music_upload_job <id> <file>: the image becomes the job's chosen cover (checked by the pipeline)
+  local conf="$HOME/.config/barch/music.json" url token ctype
+  url=$(jq -r .url "$conf"); token=$(jq -r .token "$conf")
+  case ${2,,} in *.png) ctype=image/png ;; *.webp) ctype=image/webp ;; *) ctype=image/jpeg ;; esac
+  OUT=$(curl -sS --max-time 120 -X POST -H "X-Barch-Token: $token" -H "Content-Type: $ctype" \
+    --data-binary "@$2" "$url/api/jobs/$1/cover?label=$(jq -rn --arg l "$(basename "$2")" '$l | @uri')" 2>&1) || die 3 "music pipeline not reachable ($OUT)"
+  jq -e . >/dev/null 2>&1 <<<"$OUT" || die 3 "music pipeline answered: ${OUT:0:200}"
+  [[ $(jq -r .ok <<<"$OUT") == true ]] || die 1 "$(jq -r '.error // "refused"' <<<"$OUT")"
+}
+
 music_upload() {
   local conf="$HOME/.config/barch/music.json" url token qs
   url=$(jq -r .url "$conf"); token=$(jq -r .token "$conf")
@@ -488,18 +502,61 @@ music_covers_ask() {
     jq -r '.tried // [] | map("- " + .) | join("\n")' <<<"$entry"
   } >"$run/context.md"
   { cat "$REPO/quickshell/.config/quickshell/music/cover-ask.md"; echo; cat "$run/context.md"; } >"$run/prompt.md"
-  local schema='{"type":"object","properties":{"summary":{"type":"string"},"proposed":{"type":"boolean"}},"required":["summary","proposed"]}'
-  local rc=0
-  (cd "$run" && timeout 20m claude -p --output-format json --permission-mode dontAsk --strict-mcp-config \
-    --add-dir "$run" --json-schema "$schema" --disallowedTools Edit Write NotebookEdit \
-    --allowedTools Read Glob WebSearch WebFetch "Bash(curl *)" "Bash(magick *)" "Bash(ffprobe *)" "Bash(barch music covers propose *)" \
-    <"$run/prompt.md" >"$run/result.json" 2>"$run/claude.log") || rc=$?
-  cost_log music-cover "$(jq -r '.total_cost_usd // empty' "$run/result.json" 2>/dev/null)" "$folder"
-  jq -e '.structured_output | type == "object"' "$run/result.json" >/dev/null 2>&1 ||
-    die 1 "Claude did not finish (exit $rc): see $run/claude.log"
+  music_claude_cover "$run" "barch music covers propose" "$folder"
   OUT=$(jq -c --arg f "$folder" --arg run "$run" '{ok: true, folder: $f, run: $run, summary: .structured_output.summary,
     proposed: .structured_output.proposed, session: .session_id, cost: .total_cost_usd}' "$run/result.json")
   show "$OUT" '.summary + (if .proposed then "\n(new proposal in Covers: barch music covers apply \"" + .folder + "\" to use it)" else "" end)'
+}
+
+# music_claude_cover <run dir> <deliver command> <cost note>: Claude on $run/prompt.md (dontAsk, read-only
+# but for the one barch command that delivers the image), the answer in $run/result.json
+music_claude_cover() {
+  local run=$1 deliver=$2 note=$3 rc=0
+  local schema='{"type":"object","properties":{"summary":{"type":"string"},"proposed":{"type":"boolean"}},"required":["summary","proposed"]}'
+  (cd "$run" && timeout 20m claude -p --output-format json --permission-mode dontAsk --strict-mcp-config \
+    --add-dir "$run" --json-schema "$schema" --disallowedTools Edit Write NotebookEdit \
+    --allowedTools Read Glob WebSearch WebFetch "Bash(curl *)" "Bash(magick *)" "Bash(ffprobe *)" "Bash($deliver *)" \
+    <"$run/prompt.md" >"$run/result.json" 2>"$run/claude.log") || rc=$?
+  cost_log music-cover "$(jq -r '.total_cost_usd // empty' "$run/result.json" 2>/dev/null)" "$note"
+  jq -e '.structured_output | type == "object"' "$run/result.json" >/dev/null 2>&1 ||
+    die 1 "Claude did not finish (exit $rc): see $run/claude.log"
+}
+
+# music cover-ask <id> ["hint"]: an album stopped for its cover (or about to get a bad one): Claude
+# searches the web for the real front, checks it and delivers it with `barch music cover`, which runs
+# the album again. The music-cover rule of agent/rules.json calls this for every album that waits
+# only for a cover; the Review tab has a button for it too.
+music_cover_ask_job() {
+  local id=${1:-} hint=${2:-}
+  [[ -n $id ]] || usage_error "music cover-ask <id> [\"hint\"]"
+  need claude
+  music_api GET "/api/jobs/$id"
+  local job run
+  job=$(jq -c .job <<<"$OUT")
+  run=$STATE/music-covers/job-$id-$(date +%Y%m%d-%H%M%S)
+  mkdir -p "$run"
+  {
+    echo "# Context"
+    echo
+    echo "- Job id: \`$id\` (use exactly this with barch music cover)"
+    jq -r '"- Download: \(.name)\n- State: \(.state)\n- Artist folder: \(.proposal.artist_folder // .hints.artist // "?") · album tag: \(.proposal.album // .hints.album // "?") · date: \(.proposal.date // "?")"' <<<"$job"
+    jq -r 'if .match.mbid then "- MusicBrainz release: https://musicbrainz.org/release/\(.match.mbid)  (\(.match.title) · \(.match.date) · \(.match.country))" else "- No MusicBrainz release matched yet" end' <<<"$job"
+    echo "- Run folder (write here only): $run"
+    echo
+    echo "## Why it stopped"
+    echo
+    jq -r '.problems // [] | map("- " + .) | join("\n")' <<<"$job"
+    if [[ -n $hint ]]; then echo; echo "## Bruno's hint"; echo; echo "$hint"; fi
+    echo
+    echo "## What the pipeline tried"
+    echo
+    jq -r '.cover_tried // [] | map("- " + .) | join("\n")' <<<"$job"
+  } >"$run/context.md"
+  { cat "$REPO/quickshell/.config/quickshell/music/job-cover-ask.md"; echo; cat "$run/context.md"; } >"$run/prompt.md"
+  music_claude_cover "$run" "barch music cover" "job $id"
+  OUT=$(jq -c --arg id "$id" --arg run "$run" '{ok: true, id: $id, run: $run, summary: .structured_output.summary,
+    proposed: .structured_output.proposed, session: .session_id, cost: .total_cost_usd}' "$run/result.json")
+  show "$OUT" '.summary'
 }
 
 cmd_music() {
@@ -528,14 +585,25 @@ cmd_music() {
       [[ -n ${1:-} ]] || usage_error "music $sub <id>"
       music_api POST "/api/jobs/$1" "{\"action\": \"$sub\"}"
       show "$OUT" '"\(.job.id): \(.job.state)"' ;;
+    cover)                                           # the cover found by hand, then the album runs with it
+      [[ -n ${1:-} && -n ${2:-} ]] || usage_error "music cover <id> <file|URL> [label]"
+      if [[ -f $2 ]]; then music_upload_job "$1" "$2"
+      else music_api POST "/api/jobs/$1/cover" "$(jq -cn --arg u "$2" --arg l "${3:-}" '{url: $u, label: $l}')"; fi
+      echo "$(jq -r .result <<<"$OUT")"
+      music_api POST "/api/jobs/$1" '{"action": "resolve"}'
+      show "$OUT" '"\(.job.id): \(.job.state) (queued again)"' ;;
+    cover-ask) music_cover_ask_job "$@" ;;
     resolve)
-      [[ -n ${1:-} ]] || usage_error "music resolve <id> [--release ..] [--cover ..] [--date ..] [--genre ..] [--album ..] [--artist ..] [--title D.TT=..] [--replace]"
+      [[ -n ${1:-} ]] || usage_error "music resolve <id> [--release ..] [--cover URL|file] [--date ..] [--genre ..] [--album ..] [--artist ..] [--title D.TT=..] [--replace]"
       local id=$1 body='{"action": "resolve"}'
       shift
       while (($#)); do
         case $1 in
           --release) body=$(jq --arg v "$2" '.release = $v' <<<"$body"); shift ;;
-          --cover) body=$(jq --arg v "$2" '.cover = $v' <<<"$body"); shift ;;
+          --cover)                                   # a URL goes with the decision; a file is uploaded first
+            if [[ -f $2 ]]; then music_upload_job "$id" "$2"; echo "$(jq -r .result <<<"$OUT")"
+            else body=$(jq --arg v "$2" '.cover = $v' <<<"$body"); fi
+            shift ;;
           --date|--genre|--album) body=$(jq --arg k "${1#--}" --arg v "$2" '.overrides[$k] = $v' <<<"$body"); shift ;;
           --artist) body=$(jq --arg v "$2" '.overrides.artist_folder = $v' <<<"$body"); shift ;;
           --title) [[ $2 == *=* ]] || usage_error "--title D.TT=Title (e.g. 1.03=Song)"
