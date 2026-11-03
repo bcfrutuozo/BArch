@@ -14,6 +14,16 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done):
     POST /api/lidarr/flac-only           set every Lidarr quality profile to FLAC / FLAC 24bit
     POST /api/lidarr/monitor             {"ids": [album ids], "monitored": bool}
     POST /api/lidarr/search              {"ids": [album ids]}: monitor them and search the indexers now
+    GET  /api/lidarr/artists[?q=name]    the artists Lidarr tracks; /api/lidarr/albums?artist=<name|id> their albums
+    GET  /api/lidarr/metadata-profiles   the metadata profiles (allowed types and statuses)
+    POST /api/lidarr/metadata-profile    {"name", "primary", "secondary", "statuses", "apply_to": "all" | [artist ids]}
+    GET  /api/lidarr/import-lists        POST /api/lidarr/import-list {"type": "LastFmUser", "name", "fields", "monitor"}
+    GET  /api/lidarr/commands            Lidarr's running and recent commands (a RefreshArtist in flight undoes monitor changes)
+    POST /api/lidarr/command-cancel      {"id": command id}: stop it
+    POST /api/lidarr/enforce             the library's rule on every artist now (done every hour by itself): the
+                                         "BArch" metadata profile, new albums monitored, albums without a file monitored once
+    GET  /api/lidarr/queue               what Lidarr grabbed and still waits for; POST /api/lidarr/queue-remove {"ids", "blocklist", "from_client"}
+    POST /api/lidarr/artists             {"ids": "all" | [artist ids], "monitored": bool, "monitor_new_items": "all|none|new"}
     GET  /api/covers                     the library's covers that were checked, with their verdict
     GET  /api/covers/image?folder=A/B&which=current|proposal|previous   one of them (JPEG)
     POST /api/covers/check               {"artist": "Dokken"} ("" = the whole library): check in the background
@@ -124,6 +134,23 @@ def make_handler(p: Pipeline, token: str):
                 return self._send(200, {"ok": True, "job": j}) if j else self._send(404, {"ok": False, "error": "no such job"})
             if parts == ["api", "covers"]:
                 return self._send(200, {"ok": True, **p.covers.summary()})
+            if parts[:2] == ["api", "lidarr"] and len(parts) == 3 and parts[2] in ("artists", "albums", "metadata-profiles", "import-lists", "queue", "commands"):
+                try:
+                    if parts[2] == "artists":
+                        return self._send(200, {"ok": True, "artists": p.lidarr.artists((q.get("q") or [""])[0])})
+                    if parts[2] == "albums":
+                        return self._send(200, {"ok": True, "albums": p.lidarr.albums((q.get("artist") or [""])[0])})
+                    if parts[2] == "metadata-profiles":
+                        return self._send(200, {"ok": True, "profiles": p.lidarr.metadata_profiles()})
+                    if parts[2] == "queue":
+                        return self._send(200, {"ok": True, "queue": p.lidarr.queue()})
+                    if parts[2] == "commands":
+                        return self._send(200, {"ok": True, "commands": p.lidarr.commands()})
+                    return self._send(200, {"ok": True, "lists": p.lidarr.import_lists()})
+                except ValueError as e:
+                    return self._send(400, {"ok": False, "error": str(e)})
+                except Exception as e:  # noqa: BLE001
+                    return self._send(500, {"ok": False, "error": str(e)})
             if parts == ["api", "covers", "image"]:
                 data = p.covers.image((q.get("folder") or [""])[0], (q.get("which") or ["current"])[0])
                 return self._send(200, raw=data, ctype="image/jpeg") if data else self._send(404, {"ok": False, "error": "no image"})
@@ -187,6 +214,45 @@ def make_handler(p: Pipeline, token: str):
                 if parts == ["api", "lidarr", "search"]:
                     ids = [int(i) for i in body.get("ids", [])]
                     return self._send(200, {"ok": True, "result": p.lidarr.search(ids)})
+                if parts == ["api", "lidarr", "enforce"]:
+                    try:
+                        return self._send(200, {"ok": True, "result": p.enforce_lidarr(force=True) or "Lidarr: profile check is off"})
+                    except ValueError as e:
+                        return self._send(400, {"ok": False, "error": str(e)})
+                if parts == ["api", "lidarr", "command-cancel"]:
+                    return self._send(200, {"ok": True, "result": p.lidarr.cancel_command(int(body.get("id", 0)))})
+                if parts == ["api", "lidarr", "queue-remove"]:
+                    ids = [int(i) for i in body.get("ids", [])]
+                    return self._send(200, {"ok": True, "result": p.lidarr.remove_queue(ids, bool(body.get("blocklist", True)),
+                                                                                         bool(body.get("from_client", True)))})
+                if parts == ["api", "lidarr", "artists"]:
+                    # {"ids": "all" | [artist ids], "monitored": bool (optional), "monitor_new_items": "all" | "none" | "new"}
+                    try:
+                        ids = body.get("ids") or []
+                        r = p.lidarr.set_artists(ids if ids == "all" else [int(i) for i in ids],
+                                                 None if body.get("monitored") is None else bool(body.get("monitored")),
+                                                 str(body.get("monitor_new_items") or ""))
+                    except ValueError as e:
+                        return self._send(400, {"ok": False, "error": str(e)})
+                    return self._send(200, {"ok": True, "result": r})
+                if parts == ["api", "lidarr", "metadata-profile"]:
+                    # {"name", "primary": [..], "secondary": [..], "statuses": [..], "apply_to": "all" | [artist ids]}
+                    try:
+                        r = p.lidarr.set_metadata_profile(str(body.get("name", "")), list(body.get("primary") or []),
+                                                          list(body.get("secondary") or []), list(body.get("statuses") or ["Official"]),
+                                                          body.get("apply_to") or "")
+                    except ValueError as e:
+                        return self._send(400, {"ok": False, "error": str(e)})
+                    return self._send(200, {"ok": True, "result": r})
+                if parts == ["api", "lidarr", "import-list"]:
+                    # {"type": "LastFmUser", "name", "fields": {..}, "monitor", "search", "metadata_profile", "quality_profile"}
+                    try:
+                        r = p.lidarr.add_import_list(str(body.get("type", "")), str(body.get("name", "")), dict(body.get("fields") or {}),
+                                                     str(body.get("monitor") or "specificAlbum"), bool(body.get("search")),
+                                                     str(body.get("metadata_profile") or ""), str(body.get("quality_profile") or ""))
+                    except ValueError as e:
+                        return self._send(400, {"ok": False, "error": str(e)})
+                    return self._send(200, {"ok": True, "result": r})
                 if len(parts) == 3 and parts[:2] == ["api", "jobs"]:
                     action = body.pop("action", "retry")
                     return self._send(200, {"ok": True, "job": summary(p.resolve(parts[2], action, **body))})

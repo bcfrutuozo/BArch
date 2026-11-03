@@ -308,6 +308,11 @@ barch finance import [--dry-run]   # C6 Bank statements → Firefly (see Finance
 barch music status|browse|list|show|resolve|retry|reject|scan   # the NAS music pipeline and its review queue (see Music)
 barch music covers check [artist]|list|apply|undo|keep|pick|propose <Artist/Album>   # scans with a frame -> the clean artwork
 barch music covers ask <Artist/Album> "keep the red frame"   # Claude adapts one or finds another, as a proposal
+barch music lidarr-artists|lidarr-albums <artist>|lidarr-search <ids>|lidarr-profile <name> ...|lidarr-list <Type> <name> field=value..
+                                   # what Lidarr tracks, search albums, metadata profiles (studio albums only), import lists
+barch music lidarr-queue|lidarr-queue-remove <ids>|all|lidarr-commands|lidarr-cancel <id>   # what Lidarr is downloading and running
+barch music lidarr-enforce         # the library's rule on every artist now: BArch profile, every album without a file monitored (hourly by itself)
+barch music lidarr-artist-set all|<ids> --new-albums all|new|none [--monitored on|off]   # what happens to an album that shows up later
 barch replay share [file] [--from 12 --to 40]
                                    # newest replay (or FILE) → <name>-share.mp4 for WhatsApp status:
                                    # H.264 ≤1080p30, HDR tone mapped to SDR, at most 60 s
@@ -447,7 +452,10 @@ fixed by the library's rules, never replaced, with an undo log; a track of Bruno
 is only swapped with his ok. Anything it cannot do completely (no match, a year-only date, no
 cover) waits in a review queue with the reason and the candidates:
 `barch music list`, `barch music show <id>`, `barch music resolve <id> --release …|--date …|--cover …`,
-or all of it in the **Music** app (`barch music browse`).
+or all of it in the **Music** app (`barch music browse`). On the Lidarr side it enforces the library's rule every
+hour: every artist on the `BArch` metadata profile (every distinct album: studio, EP, live, compilation; official only),
+new albums monitored, every album without a file monitored once; an album already in the library is completed, and
+another album with the same title (the eight "Greatest Hits" of Deep Purple) gets its own folder from the review.
 
 ## NAS
 

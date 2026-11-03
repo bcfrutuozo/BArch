@@ -3,6 +3,7 @@ brave-origin-bin
 disktree-bin
 dmg2img
 gpu-t
+hexchat
 limine-mkinitcpio-hook
 limine-snapper-sync
 linux-cachyos

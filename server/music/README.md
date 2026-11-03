@@ -66,7 +66,10 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
    ones back (kept in `<jobs>/covers/undo/`).
 6. **Checks**: every required tag filled, no two tracks with the same file name, the cover. Any
    problem: review, never a partial import.
-6b. **Already in `/music`** (`merge.py`): the album is completed and fixed, never replaced. Each
+6b. **Already in `/music`** (`merge.py`): the album is completed and fixed, never replaced. First the
+   library's MUSICBRAINZ_ALBUMID is checked against the match: a folder that holds *another* album with
+   the same name (MusicBrainz has eight "Greatest Hits" release groups for Deep Purple) goes to review,
+   to get its own folder with `--album "Greatest Hits (2008)"` or be rejected, never merged. Each
    position is judged by its MusicBrainz length (5 s): missing in the library and right in the
    download → added with the album's own ALBUM/ARTIST/DATE/GENRE; in the library and right → its
    audio stays, whatever the download has; in the library and wrong but right in the download →
@@ -118,6 +121,26 @@ owns it; Unraid's own share permissions, so the SMB user can update it) and `chm
 `/custom-services.d` (read only), port 8338, network `frutuozoproxy`. Secrets (Lidarr API key, Plex
 token, Telegram bot, optional AcoustID key) go in `appdata/beets/pipeline/secrets.json`.
 `barch music lidarr-flac-only` sets every Lidarr quality profile to FLAC / FLAC 24bit.
+`barch music lidarr-artists [q]` and `lidarr-albums <artist>` show what Lidarr tracks (album ids for
+`lidarr-search`); `lidarr-profiles` / `lidarr-profile <name> --primary Album --secondary Studio
+--statuses Official --apply all|<artist ids>` define what an artist's list holds (MusicBrainz has 340 "albums"
+for Deep Purple: 195 compilations, 73 live, 37 EPs, 24 studio albums; `BArch` = Album + EP, Studio + Compilation
++ Live, Official, on every artist; `BArch Studio` lists the 24 and is unused); `lidarr-lists` / `lidarr-list <Type> <name> field=value..` add an import list from Lidarr's own
+schema (`LastFmUser userId=.. count=50`; the Spotify ones need the OAuth step in Lidarr's UI).
+`lidarr-queue` shows what Lidarr grabbed and is downloading, `lidarr-queue-remove <ids>|all` drops them (blocklisted,
+deleted from qBittorrent; `--keep` leaves the download); `lidarr-commands` the running commands (`lidarr-cancel <id>`
+stops a queued one; a started one cannot be stopped, and a RefreshArtist in flight writes every album back as it was
+when it started, undoing a monitor change made meanwhile).
+
+**The rule, enforced by the pipeline** (`Lidarr.enforce`, every hour while idle, or `barch music lidarr-enforce`):
+Bruno wants every distinct album of every artist (studio, EP, live, compilation; official releases only; no singles,
+no bootlegs) and never the same album twice. So every artist is put on the `BArch` metadata profile (`lidarr.profile`
+in config.json; "" turns the check off), with "monitor new items: all", and every album Lidarr lists without a single
+file is monitored and searched once (`lidarr-seen.json` in the jobs folder remembers the ids, so an album unmonitored
+by hand or by a reject stays that way). A newly added artist gets the same treatment within the hour. Rejecting a job
+in the review unmonitors its album in Lidarr, otherwise the RSS sync would grab another release of it. The profile change
+makes Lidarr recreate the artist's albums and search them all at once (Deep Purple: 316 albums, 2026-11-03): expected.
+`lidarr-artist-set all --new-albums none|new|all` changes the monitoring of new albums by hand (the hourly check puts it back to all).
 
 ## Tests
 
