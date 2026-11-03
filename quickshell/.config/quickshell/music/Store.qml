@@ -155,7 +155,7 @@ Singleton {
 
     // ---------- the library's covers ----------
     property var covers: ({ running: "", queued: 0, entries: [] })
-    readonly property int coversToLook: covers.entries.filter(e => e.verdict === "better").length
+    readonly property int coversToLook: covers.entries.filter(e => e.verdict === "better" && !e.applied).length   // waiting for Replace / Keep mine
     // the answer replaces the model only when it changed: a new object every 8 s would rebuild the
     // list, reload every thumbnail and send the scroll back to the top
     function refreshCovers() { api("GET", "/api/covers", null, d => { if (JSON.stringify(d) !== JSON.stringify(covers)) covers = d }, true) }

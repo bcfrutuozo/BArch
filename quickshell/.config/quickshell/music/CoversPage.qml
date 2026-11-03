@@ -22,7 +22,10 @@ Item {
     }
     // every album folder of the artist, with what the check found when it ran ("unchecked" otherwise);
     // without "show all" the fine ones are left out, the rest (to look at, not yet checked) stay
+    // "to decide": the albums of every artist whose check found a cleaner cover, still unanswered (the tab's badge)
+    property bool pending: Store.coversToLook > 0 && !Store.coversArtist      // the tab opens on them when there are any
     readonly property var list: {
+        if (pending) return Store.covers.entries.filter(e => e.verdict === "better" && !e.applied)
         if (!artist) return []
         const found = {}
         for (const e of Store.covers.entries) if (e.folder.indexOf(artist + "/") === 0) found[e.folder] = e
@@ -105,7 +108,13 @@ Item {
                 id: artistCombo; Layout.preferredWidth: 300
                 entries: page.filtered.map(a => ({ label: a.name + "  (" + a.albums + ")", value: a.name }))
                 value: page.artist
-                onPicked: v => Store.coversArtist = String(v)
+                onPicked: v => { page.pending = false; Store.coversArtist = String(v) }
+            }
+            UiButton {
+                visible: Store.coversToLook > 0 || page.pending
+                label: Store.coversToLook + " to decide"; icon: "󰋩"; small: true; primary: page.pending
+                tooltip: "every album, of any artist, whose check found a cleaner cover and still waits for Replace or Keep mine"
+                onClicked: page.pending = !page.pending
             }
             UiButton {
                 label: "Load"; icon: "󰑐"; primary: true
@@ -130,7 +139,7 @@ Item {
         Text {
             Layout.leftMargin: 14
             visible: page.shown.length === 0 && !Store.coversBusy
-            text: !page.artist ? "Pick an artist (type to filter the list)."
+            text: page.pending ? "Nothing waits for a decision." : !page.artist ? "Pick an artist (type to filter the list)."
                 : Store.albums.length === 0 ? "No album folder with FLAC files under " + page.artist + "."
                 : "Every cover of " + page.artist + " is fine (show all to see them)."
             color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize
