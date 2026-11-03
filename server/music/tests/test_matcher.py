@@ -16,7 +16,8 @@ class Hints(unittest.TestCase):
     def test_disc_suffix(self):
         cases = {"The Now What! Live Tapes (CD1, VICP-70192)": "The Now What! Live Tapes",
                  "Pandora's Box CD 1": "Pandora's Box", "The Wall (1)": "The Wall", "Made in Japan (Disc 2)": "Made in Japan",
-                 "Live to Rock (Rock to Live)": "Live to Rock (Rock to Live)", "Volume Two": "Volume Two"}
+                 "Live to Rock (Rock to Live)": "Live to Rock (Rock to Live)", "Volume Two": "Volume Two",
+                 "The platinum collection, disc 2": "The platinum collection"}
         for album, want in cases.items():
             h = matcher.hints_from("Deep Purple - Something", [track(album=album, artist="Deep Purple")])
             self.assertEqual(h["album"], want, album)
@@ -37,6 +38,7 @@ class Hints(unittest.TestCase):
             "Deep Purple–Soldier Of Fortune-The Greatest Hits": ("Deep Purple", "Soldier Of Fortune The Greatest Hits", ""),
             "Deep Purple - 2017 - Time For Bedlam": ("Deep Purple", "Time For Bedlam", "2017"),
             "1984 Tooth And Nail": ("", "Tooth And Nail", "1984"),
+            "Deep Purple - The platinum collection, disc 1": ("Deep Purple", "The platinum collection", ""),
         }
         for name, want in cases.items():
             h = matcher.hints_from(name, [])

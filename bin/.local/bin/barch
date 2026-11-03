@@ -119,6 +119,8 @@ Desktop (through the bar):
   music fix <id> ["hint"]     Fix with Agent: Claude takes the album over (release, date, genre, cover,
                               the merge), resolves it, waits for the run and goes on until it is in
   music scan                  look for finished torrents and inbox folders now
+  music rescan <id>           take that job's download in again from scratch, as the albums are found
+                              now (a torrent split per disc folder by an older version); old jobs superseded
   music covers [list]         the library's covers that were checked: a scan with a frame, a cleaner one
   music covers check [<artist>]   look for scans with a frame (and the clean artwork) in /music
   music covers apply|undo|keep <Artist/Album>   replace cover.jpg + embedded art + Plex poster / undo / keep it
@@ -639,6 +641,10 @@ cmd_music() {
       music_api POST "/api/jobs/$1" '{"action": "resolve"}'
       show "$OUT" '"\(.job.id): \(.job.state) (queued again)"' ;;
     cover-ask) music_cover_ask_job "$@" ;;
+    rescan)                                          # the download taken in again from scratch (its old jobs superseded)
+      [[ -n ${1:-} ]] || usage_error "music rescan <id>"
+      music_api POST "/api/jobs/$1/rescan" '{}'
+      show "$OUT" '.result + ": " + (.jobs | map(.id + "  " + .name) | join(", "))' ;;
     fix) music_fix_job "$@" ;;
     resolve)
       [[ -n ${1:-} ]] || usage_error "music resolve <id> [--release ..] [--cover URL|file] [--date ..] [--genre ..] [--album ..] [--artist ..] [--title D.TT=..] [--replace]"

@@ -77,7 +77,7 @@ def album_roots(source: Path) -> list[Path]:
     for f in source.rglob("*"):
         if f.is_file() and (f.suffix.lower() in audio.LOSSLESS or f.suffix.lower() in (".cue",) or f.suffix.lower() in audio.ARCHIVES):
             d = f.parent
-            while d != source and re.fullmatch(r"(?i)(cd|disc|disk|dvd|vol(ume)?)[\s._-]*\d{1,2}.*", d.name):
+            while d != source and is_disc_folder(d.name):
                 d = d.parent
             roots.add(d)
     if len(roots) > 1 and source in roots:
@@ -85,6 +85,16 @@ def album_roots(source: Path) -> list[Path]:
     # nested album folders under one album folder (a CD1 not named CD1): keep the outermost
     roots = {r for r in roots if not any(r != o and o in r.parents for o in roots)} if len(roots) > 1 else roots
     return sorted(roots) or [source]
+
+
+_DISC_ONLY = re.compile(r"(?i)(cd|disc|disk|dvd|vol(ume)?)[\s._-]*\d{1,2}.*")
+_DISC_AT_END = re.compile(r"(?i)(?:^|[\s,._(\[-])(?:cd|disc|disk|dvd|vol(?:ume)?)[\s._-]*\d{1,2}\s*[)\]]?\s*$")
+
+
+def is_disc_folder(name: str) -> bool:
+    """"CD1", "Disc 2 - The Battle", "The Platinum Collection, disc 2", "Album (CD 3)": one disc of
+    the album in the folder above, not an album of its own."""
+    return bool(_DISC_ONLY.fullmatch(name) or _DISC_AT_END.search(name))
 
 
 def other_album_in(target: Path, group_mbid: str) -> str:
@@ -427,7 +437,7 @@ class Pipeline:
     def cleanup_source(self, job: dict) -> None:
         """When every album of the torrent (or inbox folder) is in the library: delete it."""
         key = "hash" if job.get("kind") == "torrent" else "inbox"
-        group = [j for j in self.store.all() if j.get(key) == job.get(key)]
+        group = [j for j in self.store.all() if j.get(key) == job.get(key) and not j.get("superseded")]
         if any(j["state"] != "done" for j in group) or len(group) < job.get("siblings", 1):
             return
         if job.get("kind") == "torrent" and self.cfg.get("delete_torrent", True):
@@ -437,6 +447,32 @@ class Pipeline:
             shutil.rmtree(job["inbox"], ignore_errors=True)
             self.log(job, "inbox folder removed")
         self.store.save(job)
+
+    def rescan(self, jid: str) -> list[dict]:
+        """The download of this job taken in again from scratch, as the album roots are found now (a
+        torrent split into one job per disc folder by an older version): every job of the same
+        torrent or inbox folder is marked superseded (cleanup ignores them; the ones in review are
+        rejected), the torrent loses its pipeline tags and the next scan makes the new jobs."""
+        job = self.store.load(jid)
+        if not job:
+            raise KeyError(jid)
+        key = "hash" if job.get("kind") == "torrent" else "inbox"
+        old = [j for j in self.store.all() if j.get(key) and j.get(key) == job.get(key)]
+        for j in old:
+            j["superseded"] = True
+            if j["state"] in ("review", "failed", "queued"):
+                j["state"] = "rejected"
+            self.log(j, f"superseded: the download is taken in again (rescan from {jid})")
+            self.store.save(j)
+        if key == "hash":
+            self.qbit.tag(job["hash"], remove="pipeline,pipeline:review")
+            t = self.qbit.torrent(job["hash"])
+            new = self.from_torrent(t) if t else []
+        else:
+            (Path(job["inbox"]) / ".pipeline").unlink(missing_ok=True)
+            new = self.from_inbox(Path(job["inbox"])) if Path(job["inbox"]).is_dir() else []
+        self.wake.set()
+        return new
 
     # ------------------------------------------------------------ decisions from the review
     def set_cover(self, jid: str, data: bytes | None, label: str = "", url: str = "") -> dict:

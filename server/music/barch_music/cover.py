@@ -224,7 +224,9 @@ def rank_key(c: Cand):
 def choose(cands: list[Cand], keep_library: bool = False) -> Cand | None:
     """The chosen image, after the stores were checked against the other sources. keep_library:
     an album already in the library keeps its own cover.jpg (only an explicit choice replaces it)."""
-    refs = [c for c in cands if c.kind not in CHECKED and c.fp]
+    # what a store hit is compared with: the archive, the library, the download's images named as the
+    # front; never an unnamed image (an uploader's logo next to the album vetoed Deezer's artwork once)
+    refs = [c for c in cands if c.kind in ("chosen", "caa", "library", "download") and c.fp]
     for c in cands:
         if c.kind in CHECKED and refs:
             c.same = max(similarity(c.fp, r.fp) for r in refs)

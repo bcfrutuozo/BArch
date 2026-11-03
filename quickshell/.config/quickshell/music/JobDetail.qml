@@ -85,6 +85,13 @@ Item {
     component Label: Text { color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1 }
     component Line: Text { Layout.fillWidth: true; color: Ui.text; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1; wrapMode: Text.Wrap }
     component Mono: Text { Layout.fillWidth: true; color: Ui.text; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 2; wrapMode: Text.WrapAnywhere }
+    // the header is selectable (drag to select, Ctrl+C), so a name can go straight into a search
+    component Sel: TextEdit {
+        Layout.fillWidth: true
+        readOnly: true; selectByMouse: true; persistentSelection: false
+        color: Ui.text; selectionColor: Ui.accent; selectedTextColor: Ui.crust
+        font.family: Ui.font; font.pixelSize: Ui.fontSize - 1; wrapMode: TextEdit.Wrap
+    }
 
     Text {
         anchors.centerIn: parent
@@ -138,16 +145,25 @@ Item {
                             spacing: 8
                             Badge { text: detail.st; tint: Store.stateColor(detail.st) }
                             Badge { text: detail.job ? detail.job.kind : ""; tint: Ui.overlay }
-                            Label { text: detail.job ? detail.jobId + " · " + Store.when(detail.job.updated) : "" }
+                            Sel { Layout.fillWidth: false; text: detail.job ? detail.jobId + " · " + Store.when(detail.job.updated) : ""; color: Ui.subtext }
                         }
-                        Text { Layout.fillWidth: true; text: detail.job ? detail.job.name : ""; color: Ui.text; font.family: Ui.font; font.pixelSize: Ui.fontSize + 3; font.bold: true; wrapMode: Text.Wrap }
-                        Mono { text: detail.job ? detail.job.source || "" : ""; color: Ui.subtext }
-                        Line {
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Sel { id: nameText; text: detail.job ? detail.job.name : ""; font.pixelSize: Ui.fontSize + 3; font.bold: true }
+                            UiButton {
+                                Layout.alignment: Qt.AlignTop
+                                icon: "󰆏"; small: true; tooltip: "copy the download's name (to search it)"
+                                onClicked: { Store.copy(nameText.text); Store.say("copied: " + nameText.text) }
+                            }
+                        }
+                        Sel { text: detail.job ? detail.job.source || "" : ""; color: Ui.subtext; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 2; wrapMode: TextEdit.WrapAnywhere }
+                        Sel {
                             readonly property var a: detail.job ? detail.job.audio || {} : {}
                             visible: a.tracks !== undefined
                             text: a.tracks + " track" + (a.tracks === 1 ? "" : "s") + (a.discs > 1 ? " on " + a.discs + " discs" : "") + "  ·  " + (a.format || []).join(", ")
                         }
-                        Line {
+                        Sel {
                             readonly property var r: detail.job ? detail.job.result || detail.job.proposal || null : null
                             visible: !!(r && r.folder)
                             text: (detail.st === "done" ? "in the library: " : "would go to: ") + (r ? r.folder : "")
@@ -216,7 +232,7 @@ Item {
                         id: cand
                         required property var modelData
                         readonly property bool chosen: fRelease.text.indexOf(modelData.mbid) !== -1
-                        readonly property bool matched: detail.job && detail.job.match && detail.job.match.mbid === modelData.mbid
+                        readonly property bool matched: !!(detail.job && detail.job.match && detail.job.match.mbid === modelData.mbid)
                         Layout.fillWidth: true
                         implicitHeight: cc.implicitHeight + 12
                         radius: Ui.radius
@@ -393,7 +409,7 @@ Item {
                         placeholderText: "Hint for the agent (optional): the edition, what the download really is, where a date or cover exists, what to avoid"
                     }
                     UiButton {
-                        visible: (detail.job.problems || []).some(x => /^no cover/.test(x))
+                        visible: ((detail.job && detail.job.problems) || []).some(x => /^no cover/.test(x))
                         label: parent.ask && parent.ask.running ? "Claude is searching…" : "Find cover"; icon: "󰚩"; small: true
                         enabledBtn: !(parent.ask && parent.ask.running)
                         tooltip: "Claude searches the web for the front cover, checks it (square, ≥ 500 px) and runs the album with it; Undo brings it back if it is wrong"

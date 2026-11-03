@@ -16,7 +16,10 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
 1. **Intake.** Every 2 min (or right away via `/done`) it takes the completed torrents of the
    categories in `config.json` that do not carry the `pipeline` tag yet, and the folders in
    `/data/music-inbox` that stopped changing two minutes ago. A torrent with several albums (a
-   discography) becomes one job per album; disc folders (`CD1`, `Disc 2`) stay one album.
+   discography) becomes one job per album; disc folders (`CD1`, `Disc 2 - Title`, `Album, disc 2`,
+   `Album (CD 3)`: `pipeline.is_disc_folder`) stay one album. `barch music rescan <id>` takes a
+   download in again from scratch when an older version split it wrong (the old jobs are
+   superseded; one that delivered something should be undone first).
 2. **Collect** (`audio.py`), in a work folder: the download is never touched, so it keeps seeding.
    zip/rar/7z are extracted; a CUE that describes an image (FLAC, APE, WV, WAV) is split per track
    with the `flac` tool, sample exact and keeping 16/24 bit, and the split must add up to the image

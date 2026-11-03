@@ -46,7 +46,7 @@ class Candidate:
 # ---------------------------------------------------------------- hints
 
 # "Album CD 1", "Album (Disc 2)", "Album (CD1, VICP-70192)" (a catalogue number after the disc), "Album (1)"
-_DISC_SUFFIX = re.compile(r"\s*[\[(]?\s*(?:cd|disc|disk|vol\.?|volume)\s*\d{1,2}(?:\s*[,;:][^\])]*)?\s*[\])]?\s*$|\s*\(\d\)\s*$", re.I)
+_DISC_SUFFIX = re.compile(r"[\s,]*[\[(]?\s*(?:cd|disc|disk|vol\.?|volume)\s*\d{1,2}(?:\s*[,;:][^\])]*)?\s*[\])]?\s*$|\s*\(\d\)\s*$", re.I)
 
 
 def hints_from(folder_name: str, tracks: list[Track]) -> dict:
@@ -75,9 +75,10 @@ def hints_from(folder_name: str, tracks: list[Track]) -> dict:
         h["album_folder"] = re.sub(r"\s*\((19|20)\d\d[^)]*\)\s*$", "", " ".join(parts[1:])).strip()
     elif parts:
         h["album_folder"] = re.sub(r"^(19|20)\d\d\s+", "", re.sub(r"\s*\((19|20)\d\d[^)]*\)", "", parts[0])).strip()
+    h["album_folder"] = _DISC_SUFFIX.sub("", h["album_folder"]).strip()                              # ", disc 1" before the stray number
     h["album_folder"] = re.sub(r"\s*\((?:19|20)\d\d[^)]*\)|\s+\d{1,3}$", "", h["album_folder"]).strip()   # "(1979,2000)", a stray "88"
-    h["album_folder"] = _DISC_SUFFIX.sub("", h["album_folder"]).strip()
-    h["album"] = h["album"] or h["album_folder"]
+    h["album_folder"] = h["album_folder"].rstrip(" ,;:-")
+    h["album"] = (h["album"] or h["album_folder"]).rstrip(" ,;:-")
     return h
 
 

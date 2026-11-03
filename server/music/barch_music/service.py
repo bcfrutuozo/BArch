@@ -17,6 +17,8 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
     POST /api/jobs/<id>                  {"action": "retry|resolve|reject", "release": mbid or URL,
                                           "cover": URL, "overrides": {...}, "replace": bool}
     POST /api/scan                       look for new torrents and inbox folders now
+    POST /api/jobs/<id>/rescan           take this job's download in again from scratch (one job per album as
+                                         found now); its old jobs are superseded
     POST /api/lidarr/flac-only           set every Lidarr quality profile to FLAC / FLAC 24bit
     POST /api/lidarr/monitor             {"ids": [album ids], "monitored": bool}
     POST /api/lidarr/search              {"ids": [album ids]}: monitor them and search the indexers now
@@ -236,6 +238,9 @@ def make_handler(p: Pipeline, token: str):
                         p.covers.forget(folder)
                         return self._send(200, {"ok": True, "result": f"{folder}: the library's cover stays"})
                     return self._send(200, {"ok": True, "result": getattr(p.covers, parts[2])(folder)})
+                if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "rescan":
+                    new = p.rescan(parts[2])
+                    return self._send(200, {"ok": True, "jobs": [summary(j) for j in new], "result": f"{len(new)} new job(s) from the download"})
                 if parts == ["api", "scan"]:
                     return self._send(200, {"ok": True, "new": p.scan()})
                 if parts == ["api", "lidarr", "flac-only"]:
