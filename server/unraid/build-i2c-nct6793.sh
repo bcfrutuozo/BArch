@@ -15,6 +15,11 @@
 # depmod, so without it modprobe -a silently skips i2c-nct6793 (2026-11-02: no NCT6793 bus after a
 # reboot). It came up as i2c-12, after the i915 and NVIDIA buses; the number can move if the driver
 # order changes, so give the OpenRGB container every /dev/i2c-* (or --privileged), not one of them.
+#
+# Not reachable (2026-11-02): the ASUS ROG Strix GTX 1080 A8G LEDs (1043:85aa, Aura GPU at 0x29).
+# OpenRGB 1.0 knows the card, the container sees its buses (i2c-5..11 report 10de:1b80 1043:85aa,
+# I2C yes, no SMBus), but the proprietary NVIDIA driver only publishes the display (DDC) buses and
+# nothing answers on any address of them. Its mode is kept on the card: set it once from Windows.
 # and pass the new /dev/i2c-N ("SMBus NCT6793D adapter" in /sys/bus/i2c/devices/i2c-*/name) to
 # the OpenRGB container.
 set -euo pipefail
