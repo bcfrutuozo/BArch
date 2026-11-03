@@ -125,6 +125,30 @@ Singleton {
         say(action + " " + id + "…")
         api("POST", "/api/jobs/" + id, body, d => { say(id + ": " + d.job.state + (action === "resolve" || action === "retry" ? " (queued again)" : "")); refresh() })
     }
+    // the cover Bruno found himself for a job: a file picked with zenity (uploaded with curl, the token
+    // in a header) or a URL; the pipeline checks it (square, >= 500 px) and keeps it with the job
+    function pickJobCover(id) {
+        const start = home + "/Downloads/"
+        run(["zenity", "--file-selection", "--title=Cover for " + id, "--file-filter=Images | *.png *.jpg *.jpeg *.webp", "--filename=" + start],
+            (out, err, code) => { const f = out.trim(); if (code === 0 && f) uploadJobCover(id, f) })
+    }
+    function uploadJobCover(id, file) {
+        const name = file.split("/").pop()
+        const ctype = /\.png$/i.test(file) ? "image/png" : /\.webp$/i.test(file) ? "image/webp" : "image/jpeg"
+        say("uploading " + name + "…")
+        busy++
+        run(["curl", "-sS", "--max-time", "120", "-X", "POST", "-H", "X-Barch-Token: " + token, "-H", "Content-Type: " + ctype,
+             "--data-binary", "@" + file, url + "/api/jobs/" + id + "/cover?label=" + encodeURIComponent(name)], (out, err, code) => {
+            busy--
+            let d = null
+            try { d = JSON.parse(out) } catch (e) {}
+            if (code !== 0 || !d) { say("upload failed" + (err.trim() ? ": " + err.trim().split("\n").pop() : ""), true); return }
+            if (!d.ok) { say(d.error || "the pipeline refused the image", true); return }
+            say(d.result)
+            loadJob(id)
+        })
+    }
+    function clearJobCover(id) { api("POST", "/api/jobs/" + id + "/cover", { url: "" }, d => { say(d.result); loadJob(id) }) }
     function scan() { say("looking for finished torrents and inbox folders…"); api("POST", "/api/scan", {}, d => { say(d.new + " new album(s) queued"); refresh() }) }
     function lidarr(path, body) { api("POST", "/api/lidarr/" + path, body, d => say(d.result)) }
 
@@ -157,6 +181,19 @@ Singleton {
             if (code === 0 && d && d.ok) setAsk(folder, { running: false, text: d.summary + (d.cost ? "  ($" + d.cost.toFixed(2) + ")" : ""), bad: false, proposed: d.proposed })
             else setAsk(folder, { running: false, text: (err.trim().split("\n").pop() || "Claude did not finish"), bad: true })
             refreshCovers()
+        })
+    }
+
+    // Claude on a job that stopped for its cover (barch music cover-ask): finds the front on the web
+    // and runs the album with it; asks[id] follows it like the covers page does
+    function askJobCover(id, hint) {
+        setAsk(id, { running: true, text: "Claude is searching the web for the cover…", bad: false })
+        run([home + "/.local/bin/barch", "--json", "music", "cover-ask", id, hint || ""], (out, err, code) => {
+            let d = null
+            try { d = JSON.parse(out) } catch (e) {}
+            if (code === 0 && d && d.ok) setAsk(id, { running: false, text: d.summary + (d.cost ? "  ($" + d.cost.toFixed(2) + ")" : ""), bad: false, proposed: d.proposed })
+            else setAsk(id, { running: false, text: (err.trim().split("\n").pop() || "Claude did not finish"), bad: true })
+            refresh()
         })
     }
 

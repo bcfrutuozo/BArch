@@ -8,7 +8,7 @@
     "      {metric: name, above|below: value, clear: value} fires once when the metric crosses the line and re-arms past clear.",
     "Events: window.open/close/urgent (address, class, title, workspace), window.fullscreen (on), monitor.added/removed (name,",
     "description), vpn.up (region, name, country), vpn.down (it dropped) / vpn.off (turned off: Disconnect, Anonymous Mode off, voice), both with the tunnel that went away (region, name, country) plus killswitch (armed|off) and note, anon.on/off, net.up/down (dev), pods.connected/disconnected (name),",
-    "session.locked/unlocked, failure (unit, path), boot (seconds, text, kernel), claude.cost (source, usd, note), startup (boot_age_s).",
+    "session.locked/unlocked, failure (unit, path), boot (seconds, text, kernel), claude.cost (source, usd, note), startup (boot_age_s), music.review (an album of the NAS music pipeline waits in the review queue: id, name, folder, problem, problems, cover_only yes|no).",
     "Metrics: cpu.temp cpu.pct cpu.load1 temp.<hwmon> gpu.temp gpu.util gpu.power gpu.vram_pct ram.pct swap.pct disk.<root|home>.pct",
     "disk.<..>.free_gb net.latency_ms vpn.latency_ms vpn.connected pods.<left|right|case>.pct health.issues health.failed_units boot.seconds.",
     "`barch rules list|test|fire|enable|disable`, `barch events log`, `barch metrics list|series|summary`; the daemon reloads this file by itself."
@@ -175,6 +175,19 @@
       },
       "notify": "{source}: US$ {usd} em uma chamada ({note}).",
       "cooldown": "10m"
+    },
+    {
+      "id": "music-cover",
+      "description": "Album waiting only for a cover",
+      "when": {
+        "event": "music.review",
+        "cover_only": "^yes$"
+      },
+      "do": [
+        "systemd-run --user --quiet --collect --unit barch-music-cover-{id} -- barch music cover-ask {id}"
+      ],
+      "notify": "{name}: nenhuma fonte tinha uma capa boa. Claude está procurando uma na web; se achar, o álbum entra sozinho.",
+      "cooldown": "5s"
     }
   ]
 }

@@ -30,7 +30,8 @@ from .style import norm
 MIN, TARGET = 500, 1000
 N = 200                      # the analysis thumbnail, N x N
 SAME_ART = 0.75              # fingerprint correlation from which two images are the same artwork
-RANK = {"chosen": 0, "store": 1, "caa": 2, "library": 2, "download": 3, "other": 4}
+RANK = {"chosen": 0, "store": 1, "caa": 2, "library": 2, "discogs": 3, "download": 3, "other": 4}
+CHECKED = ("store", "discogs")   # found by a name search: used only when they show the same art as a trusted source
 
 # the images a download ships, by their names: the front is wanted; the back, the booklet, the
 # disc and the inlay never are, whatever their size (a 2140 px "Contraportada.jpg" once beat
@@ -223,9 +224,9 @@ def rank_key(c: Cand):
 def choose(cands: list[Cand], keep_library: bool = False) -> Cand | None:
     """The chosen image, after the stores were checked against the other sources. keep_library:
     an album already in the library keeps its own cover.jpg (only an explicit choice replaces it)."""
-    refs = [c for c in cands if c.kind != "store" and c.fp]
+    refs = [c for c in cands if c.kind not in CHECKED and c.fp]
     for c in cands:
-        if c.kind == "store" and refs:
+        if c.kind in CHECKED and refs:
             c.same = max(similarity(c.fp, r.fp) for r in refs)
             c.trusted = c.same >= SAME_ART
     chosen = [c for c in cands if c.kind == "chosen"]
@@ -239,7 +240,8 @@ def choose(cands: list[Cand], keep_library: bool = False) -> Cand | None:
 
 
 def gather(release_mbid: str, group_mbid: str, artist: str, album: str, local: list[Path], explicit: str,
-           tmp: Path, tried: list[str], library: Path | None = None) -> list[Cand]:
+           tmp: Path, tried: list[str], library: Path | None = None, asin: str = "", discogs_token: str = "",
+           explicit_label: str = "", year: str = "") -> list[Cand]:
     cands: list[Cand] = []
 
     def add(get, label: str, kind: str):
@@ -263,7 +265,7 @@ def gather(release_mbid: str, group_mbid: str, artist: str, album: str, local: l
 
     if explicit:
         src = Path(explicit)
-        add(lambda: src.read_bytes() if src.exists() else mb.download(explicit), f"chosen: {explicit}", "chosen")
+        add(lambda: src.read_bytes() if src.exists() else mb.download(explicit), f"chosen: {explicit_label or explicit}", "chosen")
     if library is not None and library.exists():
         add(library.read_bytes, "the library's cover.jpg", "library")
     for kind, mbid in (("release", release_mbid), ("release-group", group_mbid)):
@@ -289,16 +291,32 @@ def gather(release_mbid: str, group_mbid: str, artist: str, album: str, local: l
             tried.append(f"{name}: no album with this artist and title")
         for h in hits:
             add(lambda u=h["url"]: mb.download(u), f"{name}: {h['album']}", "store")
+    for u in mb.amazon_images(asin):                       # the label's artwork for this very release
+        add(lambda u=u: mb.download(u), f"Amazon ({asin})", "store")
+    if discogs_token:
+        try:
+            hits = [h for h in mb.discogs_albums(discogs_token, artist, album, year) if names_match(artist, album, h["artist"], h["album"])][:3]
+        except mb.NetError as e:
+            hits = []
+            tried.append(f"Discogs: {e}")
+        else:
+            if not hits:
+                tried.append("Discogs: no album with this artist and title")
+        for h in hits:
+            add(lambda u=h["url"]: mb.download(u), f"Discogs: {h['album']} ({h['year'] or '?'}, {h['format']})", "discogs")
     return cands
 
 
 def find(release_mbid: str, group_mbid: str, artist: str, album: str, local: list[Path], explicit: str = "",
-         library: Path | None = None, keep_library: bool = True) -> tuple[Cover | None, list[str]]:
+         library: Path | None = None, keep_library: bool = True, asin: str = "", discogs_token: str = "",
+         explicit_label: str = "", year: str = "") -> tuple[Cover | None, list[str]]:
     """(the cover or None, what was tried) - explicit is a URL or path chosen in the review;
-    library is the album's cover.jpg when it is already in /music (kept unless keep_library=False)."""
+    library is the album's cover.jpg when it is already in /music (kept unless keep_library=False);
+    asin and discogs_token open two more sources (Amazon's image of this release, Discogs by name)."""
     tried: list[str] = []
     with tempfile.TemporaryDirectory(prefix="barch-cover-") as td:
-        cands = gather(release_mbid, group_mbid, artist, album, local, explicit, Path(td), tried, library)
+        cands = gather(release_mbid, group_mbid, artist, album, local, explicit, Path(td), tried, library,
+                       asin, discogs_token, explicit_label, year)
         best = choose(cands, keep_library)
         alt = choose(cands) if best is not None and best.kind == "library" else None
         better = ""

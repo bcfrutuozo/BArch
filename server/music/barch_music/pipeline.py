@@ -297,7 +297,9 @@ class Pipeline:
         local = audio.find_images(src, work)
         lib_cover = target / "cover.jpg"
         cov, tried = cover.find(alb.mbid, alb.group_mbid, alb.artist_folder, alb.album, local, job.get("cover", ""),
-                                library=lib_cover if existing else None)
+                                library=lib_cover if existing else None, asin=(best.release or {}).get("asin") or "",
+                                discogs_token=self.cfg.get("discogs_token", ""), explicit_label=job.get("cover_label", ""),
+                                year=(alb.date or best.date or "")[:4])
         job["cover_tried"] = tried
         problems = list(alb.problems)
         if existing:
@@ -437,6 +439,51 @@ class Pipeline:
         self.store.save(job)
 
     # ------------------------------------------------------------ decisions from the review
+    def set_cover(self, jid: str, data: bytes | None, label: str = "", url: str = "") -> dict:
+        """The cover Bruno found himself for a job (an image uploaded from the app or the phone, or a
+        URL): checked like any candidate (square, at least 500 px), kept with the job as
+        cover-chosen.jpg and made the chosen cover; Resolve then runs the job with it. An empty url
+        with no data clears the choice."""
+        job = self.store.load(jid)
+        if not job:
+            raise KeyError(jid)
+        chosen = self.store.path(jid) / "cover-chosen.jpg"
+        if data is None:
+            if not url:
+                chosen.unlink(missing_ok=True)
+                job["cover"] = ""
+                self.log(job, "cover choice cleared")
+                self.store.save(job)
+                return {"result": "cover choice cleared", "cover": ""}
+            data = mb.download(url)
+            if not data:
+                raise ValueError(f"could not download {url}")
+            label = label or url
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix="barch-cover-") as td:
+            p = Path(td) / "in"
+            p.write_bytes(data)
+            w, h = cover._size(p)
+            if not cover._square(w, h) or min(w, h) < cover.MIN:
+                raise ValueError(f"the image is {w}x{h}: it has to be square (±10 %) and at least {cover.MIN} px")
+            b, fp = cover.look(p)
+            jpeg, nw, nh = cover._to_jpeg(cover.Cand(label or "upload", "chosen", p, w, h, b, fp), trim=False)
+        chosen.parent.mkdir(parents=True, exist_ok=True)
+        chosen.write_bytes(jpeg)
+        job["cover"] = str(chosen)
+        job["cover_label"] = label or "upload"
+        self.log(job, f"cover chosen: {label or 'upload'} ({w}x{h} -> {nw}x{nh}); Resolve runs the album with it")
+        self.store.save(job)
+        return {"result": f"cover set from {label or 'upload'} ({w}x{h}, kept as {nw}x{nh}): Resolve to use it",
+                "cover": str(chosen), "w": nw, "h": nh}
+
+    def job_cover(self, jid: str) -> Path | None:
+        """The image to show for a job: the one chosen by hand (what the next run uses), else the proposal's."""
+        for p in (self.store.path(jid) / "cover-chosen.jpg", self.store.path(jid) / "work" / "cover.jpg"):
+            if p.exists():
+                return p
+        return None
+
     def resolve(self, jid: str, action: str, **kw) -> dict:
         job = self.store.load(jid)
         if not job:

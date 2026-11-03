@@ -10,7 +10,10 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
     GET  /api/status                     counts per state, the job running now
     GET  /api/jobs[?state=review]        summaries
     GET  /api/jobs/<id>                  everything: problems, candidates, the proposed tags
-    GET  /api/jobs/<id>/cover            the proposed cover (JPEG)
+    GET  /api/jobs/<id>/cover            the proposed cover (JPEG), or the one chosen by hand
+    POST /api/jobs/<id>/cover            an image as the body (Content-Type image/*, ?label=), or {"url": ...}:
+                                         checked (square, >= 500 px), kept with the job and made its cover;
+                                         {"url": ""} clears the choice. Resolve then runs the album with it
     POST /api/jobs/<id>                  {"action": "retry|resolve|reject", "release": mbid or URL,
                                           "cover": URL, "overrides": {...}, "replace": bool}
     POST /api/scan                       look for new torrents and inbox folders now
@@ -175,8 +178,8 @@ def make_handler(p: Pipeline, token: str):
                 data = p.covers.image((q.get("folder") or [""])[0], (q.get("which") or ["current"])[0])
                 return self._send(200, raw=data, ctype="image/jpeg") if data else self._send(404, {"ok": False, "error": "no image"})
             if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "cover":
-                f = p.store.path(parts[2]) / "work" / "cover.jpg"
-                return self._send(200, raw=f.read_bytes(), ctype="image/jpeg") if f.exists() else self._send(404, {"ok": False})
+                f = p.job_cover(parts[2])
+                return self._send(200, raw=f.read_bytes(), ctype="image/jpeg") if f else self._send(404, {"ok": False})
             self._send(404, {"ok": False, "error": "unknown path"})
 
         def do_POST(self):
@@ -194,6 +197,15 @@ def make_handler(p: Pipeline, token: str):
                     return self._send(200, {"ok": True, "result": r})
                 except (KeyError, ValueError) as e:
                     return self._send(400, {"ok": False, "error": str(e.args[0] if e.args else e)})
+            if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "cover" and (self.headers.get("Content-Type") or "").startswith("image/"):
+                # the cover Bruno found: the image itself as the body, ?label= what it is
+                data = self.rfile.read(n)
+                try:
+                    return self._send(200, {"ok": True, **p.set_cover(parts[2], data, (q.get("label") or ["upload"])[0])})
+                except KeyError:
+                    return self._send(404, {"ok": False, "error": "no such job"})
+                except ValueError as e:
+                    return self._send(400, {"ok": False, "error": str(e)})
             try:
                 body = json.loads(self.rfile.read(n) or b"{}")
             except json.JSONDecodeError:
@@ -273,6 +285,11 @@ def make_handler(p: Pipeline, token: str):
                     except ValueError as e:
                         return self._send(400, {"ok": False, "error": str(e)})
                     return self._send(200, {"ok": True, "result": r})
+                if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "cover":      # {"url": ...} or {"url": ""}
+                    try:
+                        return self._send(200, {"ok": True, **p.set_cover(parts[2], None, str(body.get("label") or ""), str(body.get("url") or ""))})
+                    except ValueError as e:
+                        return self._send(400, {"ok": False, "error": str(e)})
                 if len(parts) == 3 and parts[:2] == ["api", "jobs"]:
                     action = body.pop("action", "retry")
                     return self._send(200, {"ok": True, "job": summary(p.resolve(parts[2], action, **body))})

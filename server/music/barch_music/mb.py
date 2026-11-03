@@ -20,10 +20,11 @@ class NetError(Exception):
     pass
 
 
-def get(url: str, params: dict | None = None, timeout: int = 30, raw: bool = False, mb: bool = False):
+def get(url: str, params: dict | None = None, timeout: int = 30, raw: bool = False, mb: bool = False,
+        headers: dict | None = None):
     if params:
         url += ("&" if "?" in url else "?") + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json", **(headers or {})})
     for attempt in range(4):
         if mb:
             with _lock:
@@ -118,6 +119,35 @@ def deezer_albums(artist: str, album: str) -> list[dict]:
     d = get("https://api.deezer.com/search/album", {"q": f'artist:"{artist}" album:"{album}"', "limit": 10}) or {}
     return [{"url": r["cover_xl"], "artist": (r.get("artist") or {}).get("name", ""), "album": r.get("title", "")}
             for r in d.get("data", []) if r.get("cover_xl")]
+
+
+def discogs_albums(token: str, artist: str, album: str, year: str = "") -> list[dict]:
+    """[{url, artist, album, year, format}] from Discogs, the editions of the asked year first. The
+    images need a personal access token (discogs.com/settings/developers, `discogs_token` in
+    secrets.json); without one the search answers but every image is blank."""
+    if not token:
+        return []
+    d = get("https://api.discogs.com/database/search", {"artist": artist, "release_title": album, "type": "release", "per_page": 15},
+            headers={"Authorization": f"Discogs token={token}"}) or {}
+    out = []
+    for r in d.get("results", []):
+        if not r.get("cover_image") or r["cover_image"].endswith("spacer.gif"):
+            continue
+        title = r.get("title", "")
+        a, _, b = title.partition(" - ")
+        out.append({"url": r["cover_image"], "artist": a if b else artist, "album": b or title, "year": str(r.get("year") or ""),
+                    "format": ", ".join(r.get("format") or [])})
+    out.sort(key=lambda x: (0 if year and x["year"] == year else 1, 0 if "CD" in x["format"] else 1))
+    return out
+
+
+def amazon_images(asin: str) -> list[str]:
+    """The product images Amazon serves for a release's ASIN (the label's artwork, large); a missing
+    one comes back as a 1x1 GIF, which the size check drops."""
+    if not asin:
+        return []
+    return [f"https://images-na.ssl-images-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg",
+            f"https://images-na.ssl-images-amazon.com/images/P/{asin}.01._SCRL_.jpg"]
 
 
 def download(url: str, timeout: int = 60) -> bytes | None:
