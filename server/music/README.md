@@ -134,7 +134,14 @@ barch music resolve <id> --replace-tracks 1.07   # an existing track is wrong: t
 barch music resolve <id> --replace   # replace the whole album (the old one is kept with the job)
 barch music undo <id>                # put /music back as it was before that job
 barch music retry|reject <id>
+barch music reject <id> --delete     # and the torrent (or inbox folder) goes once every album of it is done or rejected
 ```
+
+A box set that only reissues albums the library has (Aerosmith's *Box of Fire*: twelve albums plus a
+bonus disc) is one job per disc folder; Bruno does not want it (every album once), so its jobs are
+rejected with `--delete`. A rejected download never changes Lidarr's monitoring of an album that
+already has files; only an album still missing is unmonitored, so the RSS sync does not grab another
+copy of what was refused.
 
 Claude can do the same, and does when asked: **Fix with Agent** in the Music app, `barch music fix <id>
 ["hint"]`, gives him the whole job (prompt `quickshell/music/job-fix.md`, the library's rules spelled

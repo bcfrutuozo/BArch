@@ -207,7 +207,10 @@ The main pieces:
   is in, never rejecting and never replacing your audio on its own; the answer says what it found and,
   if something is left, the one decision that is yours. **Albums**: every job by state,
   Undo for a delivered one. **Covers**: the covers already in the library, one artist at a time
-  (picked from the list of `/music`, filtered as you type, then Check; nothing is shown before that):
+  (picked from the list of `/music`, filtered as you type): every album of the artist with its cover
+  as it is and what its last check found, the ones never checked marked as such; Load reads the
+  folders again, Check is per album (its row) and runs under a veil with the progress while the
+  list stays still; a replaced one stays marked replaced, with Undo:
   the ones that are a scan of the sleeve with a frame next to the clean artwork of the same album,
   Replace (cover.jpg, the picture embedded in every track and Plex's poster), Keep mine, Undo; every
   candidate found is shown too (a click makes it the proposal), and when none is right, a sentence

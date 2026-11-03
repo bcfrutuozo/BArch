@@ -434,11 +434,12 @@ class Pipeline:
         else:
             self.tg.send(f"✅ Música: {alb.artist_folder} - {alb.album} ({len(alb.tracks)} faixas)\n" + "\n".join(done))
 
-    def cleanup_source(self, job: dict) -> None:
-        """When every album of the torrent (or inbox folder) is in the library: delete it."""
+    def cleanup_source(self, job: dict, finished: tuple = ("done",)) -> None:
+        """When every album of the torrent (or inbox folder) is in the library: delete it. A reject
+        with delete counts the rejected ones as finished too (a box set Bruno does not want)."""
         key = "hash" if job.get("kind") == "torrent" else "inbox"
         group = [j for j in self.store.all() if j.get(key) == job.get(key) and not j.get("superseded")]
-        if any(j["state"] != "done" for j in group) or len(group) < job.get("siblings", 1):
+        if any(j["state"] not in finished for j in group) or len(group) < job.get("siblings", 1):
             return
         if job.get("kind") == "torrent" and self.cfg.get("delete_torrent", True):
             self.qbit.delete(job["hash"], files=True)
@@ -539,11 +540,14 @@ class Pipeline:
             raise KeyError(jid)
         if action == "reject":
             job["state"] = "rejected"
-            self.log(job, "rejected in the review")
+            self.log(job, "rejected in the review" + (" (download deleted once every album of it is settled)" if kw.get("delete") else ""))
             rel = mb.release((job.get("match") or {}).get("mbid", "")) if job.get("match") else None
             note = self.lidarr.unmonitor_group(((rel or {}).get("release-group") or {}).get("id", ""), "rejected")
             if note:
                 job.setdefault("notes", []).append(note)
+            if kw.get("delete"):
+                self.store.save(job)
+                self.cleanup_source(job, finished=("done", "rejected"))
         elif action == "undo":
             u = self.store.path(jid) / "undo.json"
             if u.exists():

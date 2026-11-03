@@ -56,7 +56,8 @@ class LibraryCovers:
         return out
 
     def check(self, artist: str) -> int:
-        folders = self.albums(artist)
+        """Queue every album of an artist folder, or one album given as "Artist/Album"."""
+        folders = [artist] if "/" in artist and (self.music / artist).is_dir() else self.albums(artist)
         with self.lock:
             new = [f for f in folders if f not in self.queue and f != self.running]
             self.queue += new

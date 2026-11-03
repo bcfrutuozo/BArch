@@ -112,6 +112,7 @@ Desktop (through the bar):
                               and fixed by the library's rules; --replace-tracks swaps the audio of
                               those tracks, --replace the whole album)
   music retry|reject|undo <id>   run again / give up / put back what it changed in /music
+  music reject <id> --delete  give up and delete the download once every album of it is done or rejected
   music cover <id> <file|URL> [label]   the cover you found for an album waiting on it: checked, kept
                               with the job and the album runs again with it (= --cover + resolve)
   music cover-ask <id> ["hint"]   Claude searches the web for the album's front cover and runs the
@@ -630,8 +631,10 @@ cmd_music() {
         + (if .result.merged then "\nmerged:\n  " + (.result.merged | join("\n  ")) else "" end)
         + (if .proposal then "\nproposal: \(.proposal.folder)  (\(.proposal.date), \(.proposal.genre))\n" + (.proposal.tracks | map("  " + .file) | join("\n")) else "" end)' ;;
     retry | reject | undo)
-      [[ -n ${1:-} ]] || usage_error "music $sub <id>"
-      music_api POST "/api/jobs/$1" "{\"action\": \"$sub\"}"
+      [[ -n ${1:-} ]] || usage_error "music $sub <id> [--delete]"
+      local del=false
+      [[ $sub == reject && ${2:-} == --delete ]] && del=true    # the torrent / inbox folder goes once every album of it is settled
+      music_api POST "/api/jobs/$1" "$(jq -cn --arg a "$sub" --argjson d "$del" '{action: $a} + (if $d then {delete: true} else {} end)')"
       show "$OUT" '"\(.job.id): \(.job.state)"' ;;
     cover)                                           # the cover found by hand, then the album runs with it
       [[ -n ${1:-} && -n ${2:-} ]] || usage_error "music cover <id> <file|URL> [label]"

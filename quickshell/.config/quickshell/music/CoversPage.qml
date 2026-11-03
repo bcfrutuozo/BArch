@@ -20,12 +20,36 @@ Item {
         // the typed filter narrows the combo; the first match becomes the choice when the current one left
         if (filtered.length && !filtered.some(a => a.name === page.artist)) Store.coversArtist = filtered[0].name
     }
-    readonly property var list: !artist ? [] : Store.covers.entries.filter(e => e.folder.indexOf(artist + "/") === 0
-        && (all || e.verdict === "better" || e.verdict === "framed" || e.applied || e.queued || e.verdict === "queued"))
+    // every album folder of the artist, with what the check found when it ran ("unchecked" otherwise);
+    // without "show all" the fine ones are left out, the rest (to look at, not yet checked) stay
+    readonly property var list: {
+        if (!artist) return []
+        const found = {}
+        for (const e of Store.covers.entries) if (e.folder.indexOf(artist + "/") === 0) found[e.folder] = e
+        return Store.albums.map(a => found[a.folder] || { folder: a.folder, verdict: "unchecked", has_cover: a.cover })
+            .filter(e => all || !(e.verdict === "fine" || e.verdict === "kept" || e.verdict === "nothing") || e.applied || e.queued)
+    }
+    readonly property int unchecked: list.filter(e => e.verdict === "unchecked").length
+    // what the ListView shows: frozen while a check runs (the overlay says how far it is) and replaced
+    // only when the content differs, so nothing blinks and the scroll stays where it was
+    property var shown: []
+    property string shownKey: ""
+    function sync() {
+        if (Store.coversBusy && shown.length) return
+        const key = JSON.stringify(list)
+        if (key !== shownKey) { shownKey = key; shown = list }
+    }
+    onListChanged: sync()
+    Connections { target: Store; function onCoversBusyChanged() { page.sync() } }
+    // the progress of the check: the queue is longest right after Check, the rest is done
+    property int total: 0
+    readonly property int remaining: Store.coversBusy ? (Store.covers.queued || 0) + (Store.covers.running ? 1 : 0) : 0
+    onRemainingChanged: { if (remaining > total) total = remaining; if (!remaining) total = 0 }
     Component.onCompleted: if (!Store.artists.length) Store.loadArtists()
 
     function verdictText(e) {
-        return e.verdict === "better" ? "a cleaner cover exists" : e.verdict === "framed" ? "a scan, nothing cleaner found"
+        return e.verdict === "unchecked" ? (e.has_cover === false ? "no cover.jpg · not checked yet" : "not checked yet")
+             : e.verdict === "better" ? "a cleaner cover exists" : e.verdict === "framed" ? "a scan, nothing cleaner found"
              : e.verdict === "fine" ? "fine" : e.verdict === "kept" ? "kept as it is" : e.verdict === "nothing" ? "no image anywhere"
              : e.verdict === "queued" ? "waiting to be checked" : e.verdict === "error" ? "error: " + (e.error || "") : e.verdict
     }
@@ -75,8 +99,7 @@ Item {
             UiField {
                 id: filter; Layout.preferredWidth: 200
                 placeholderText: "filter artists…"
-                onTextChanged: page.filterText = text
-                onAccepted: if (page.artist) Store.checkCovers(page.artist)
+                onTextChanged: page.filterText = text          // Enter picks nothing more: only the Check buttons check
             }
             UiCombo {
                 id: artistCombo; Layout.preferredWidth: 300
@@ -85,32 +108,31 @@ Item {
                 onPicked: v => Store.coversArtist = String(v)
             }
             UiButton {
-                label: "Check"; icon: "󰍉"; primary: true; enabledBtn: page.artist !== "" && !Store.covers.entries.some(e => e.folder.indexOf(page.artist + "/") === 0 && e.queued)
-                tooltip: "look at every album of this artist: a scan with a frame, and the clean artwork of the same album in the stores and the archive (a few seconds per album)"
-                onClicked: Store.checkCovers(page.artist)
+                label: "Load"; icon: "󰑐"; primary: true
+                enabledBtn: page.artist !== "" && !Store.coversBusy
+                tooltip: "read the artist's folders again (an album added or changed meanwhile) and what the checks found; nothing is checked here, each row has its own Check"
+                onClicked: { Store.loadArtists(); Store.loadAlbums(page.artist); Store.refreshCovers() }
             }
-            UiButton { icon: "󰑐"; small: true; tooltip: "reload the list of artists"; onClicked: Store.loadArtists() }
-            Item { Layout.fillWidth: true }
             Text {
-                visible: Store.covers.running !== ""
-                text: "checking " + Store.covers.running + (Store.covers.queued ? "  (+" + Store.covers.queued + ")" : "")
-                color: Ui.accent; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1; elide: Text.ElideMiddle; Layout.maximumWidth: 380
+                visible: page.artist !== "" && page.unchecked > 0
+                text: page.unchecked + " not checked yet"
+                color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1
             }
+            Item { Layout.fillWidth: true }
             UiSwitch { implicitWidth: 32; implicitHeight: 18; checked: page.all; onToggled: v => page.all = v }
             Text { text: "show all"; color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1 }
         }
         Text {
             Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.fillWidth: true
-            text: "A scan of an old sleeve usually brings a frame (the scanner bed, the cardboard edge). The check looks for the label's clean artwork of the same album (iTunes, Deezer, Cover Art Archive), confirmed by comparing the pictures. Replace writes cover.jpg, the picture embedded in every track and Plex's poster; Undo puts the old ones back. Click a cover to see it large."
+            text: "Every album of the artist, with its cover as it is. Check (one album at a time) looks for a scan frame and for the label's clean artwork of the same album (iTunes, Deezer, Cover Art Archive, Discogs), confirmed by comparing the pictures. Replace writes cover.jpg, the picture embedded in every track and Plex's poster; Undo puts the old ones back. Click a cover to see it large."
             color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2; wrapMode: Text.Wrap
         }
         Text {
             Layout.leftMargin: 14
-            visible: page.list.length === 0
-            text: !page.artist ? "Pick an artist (type to filter the list) and press Check."
-                : Store.covers.entries.some(e => e.folder.indexOf(page.artist + "/") === 0)
-                    ? "Every checked cover of " + page.artist + " is fine (show all to see them)."
-                    : page.artist + " was not checked yet: press Check."
+            visible: page.shown.length === 0 && !Store.coversBusy
+            text: !page.artist ? "Pick an artist (type to filter the list)."
+                : Store.albums.length === 0 ? "No album folder with FLAC files under " + page.artist + "."
+                : "Every cover of " + page.artist + " is fine (show all to see them)."
             color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize
         }
         ListView {
@@ -118,7 +140,8 @@ Item {
             Layout.fillHeight: true
             clip: true
             spacing: 8
-            model: page.list
+            model: page.shown
+            enabled: !Store.coversBusy
             ScrollBar.vertical: ScrollBar {}
             delegate: Rectangle {
                 id: row
@@ -136,7 +159,7 @@ Item {
                     spacing: 14
                     Thumb {
                         folder: row.e.folder; which: row.e.applied ? "previous" : "current"; stamp: row.e.checked || 0
-                        label: row.e.applied ? "before" : row.e.current && row.e.current.w ? row.e.current.w + "×" + row.e.current.h + (row.e.current.framed ? " · scan frame" : " · clean") : "no cover.jpg"
+                        label: row.e.applied ? "before" : row.e.current && row.e.current.w ? row.e.current.w + "×" + row.e.current.h + (row.e.current.framed ? " · scan frame" : " · clean") : row.e.verdict === "unchecked" && row.e.has_cover !== false ? "cover.jpg" : "no cover.jpg"
                     }
                     Text { visible: !!row.e.proposal; text: "󰁔"; color: Ui.overlay; font.family: Ui.iconFont; font.pixelSize: 26; Layout.alignment: Qt.AlignVCenter }
                     Thumb {
@@ -162,7 +185,7 @@ Item {
                             UiButton { visible: !!row.e.proposal && !row.e.applied; label: "Replace"; icon: "󰄬"; primary: true; small: true; tooltip: "cover.jpg, every track's embedded art and Plex's poster"; onClicked: Store.coverAct("apply", row.e.folder) }
                             UiButton { visible: !!row.e.proposal && !row.e.applied; label: "Keep mine"; small: true; onClicked: Store.coverAct("keep", row.e.folder) }
                             UiButton { visible: !!row.e.applied; label: "Undo"; icon: "󰕌"; small: true; danger: true; onClicked: Store.coverAct("undo", row.e.folder) }
-                            UiButton { visible: !row.e.queued && row.e.verdict !== "queued"; label: "Check again"; icon: "󰑐"; small: true; onClicked: Store.checkCovers(row.e.folder.split("/")[0]) }
+                            UiButton { visible: !row.e.queued && row.e.verdict !== "queued"; label: row.e.verdict === "unchecked" ? "Check" : "Check again"; icon: "󰑐"; small: true; tooltip: "this album only"; onClicked: Store.checkCovers(row.e.folder) }
                         }
 
                         // every candidate: click makes it the proposal, right-click shows it large
@@ -223,6 +246,33 @@ Item {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // a check running: the list stays as it was under a veil, the cursor waits, the text says how far
+    Rectangle {
+        anchors.fill: parent
+        visible: Store.coversBusy
+        color: Qt.rgba(Ui.base.r, Ui.base.g, Ui.base.b, 0.72)
+        MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.BusyCursor; onWheel: w => w.accepted = true }
+        ColumnLayout {
+            anchors.centerIn: parent
+            spacing: 8
+            width: Math.min(parent.width - 80, 520)
+            Text {
+                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter
+                text: page.total ? Math.round(100 * (page.total - page.remaining) / page.total) + " %" : "…"
+                color: Ui.text; font.family: Ui.font; font.pixelSize: Ui.fontSize + 14; font.bold: true
+            }
+            Rectangle {
+                Layout.fillWidth: true; implicitHeight: 6; radius: 3; color: Ui.surface
+                Rectangle { width: page.total ? parent.width * (page.total - page.remaining) / page.total : 0; height: parent.height; radius: 3; color: Ui.accent }
+            }
+            Text {
+                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter
+                text: (page.total ? (page.total - page.remaining) + " of " + page.total + " albums checked · " : "") + "now: " + (Store.covers.running || "…")
+                color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1; elide: Text.ElideMiddle
             }
         }
     }

@@ -15,7 +15,8 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
                                          checked (square, >= 500 px), kept with the job and made its cover;
                                          {"url": ""} clears the choice. Resolve then runs the album with it
     POST /api/jobs/<id>                  {"action": "retry|resolve|reject", "release": mbid or URL,
-                                          "cover": URL, "overrides": {...}, "replace": bool}
+                                          "cover": URL, "overrides": {...}, "replace": bool,
+                                          "delete": bool (reject: the torrent / inbox folder goes once every album of it is done or rejected)}
     POST /api/scan                       look for new torrents and inbox folders now
     POST /api/jobs/<id>/rescan           take this job's download in again from scratch (one job per album as
                                          found now); its old jobs are superseded
@@ -33,6 +34,7 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
     GET  /api/lidarr/queue               what Lidarr grabbed and still waits for; POST /api/lidarr/queue-remove {"ids", "blocklist", "from_client"}
     POST /api/lidarr/artists             {"ids": "all" | [artist ids], "monitored": bool, "monitor_new_items": "all|none|new"}
     GET  /api/library/artists            the artist folders of /music with their album count (the Covers page's list)
+    GET  /api/library/albums?artist=X    the album folders of one artist, and whether each has a cover.jpg
     GET  /api/covers                     the library's covers that were checked, with their verdict
     GET  /api/covers/image?folder=A/B&which=current|proposal|previous   one of them (JPEG)
     POST /api/covers/check               {"artist": "Dokken"} ("" = the whole library): check in the background
@@ -162,6 +164,9 @@ def make_handler(p: Pipeline, token: str):
                 return self._send(200, {"ok": True, **p.covers.summary()})
             if parts == ["api", "library", "artists"]:
                 return self._send(200, {"ok": True, "artists": p.library_artists()})
+            if parts == ["api", "library", "albums"]:
+                folders = p.covers.albums((q.get("artist") or [""])[0]) if (q.get("artist") or [""])[0] else []
+                return self._send(200, {"ok": True, "albums": [{"folder": f, "cover": (p.music / f / "cover.jpg").exists()} for f in folders]})
             if parts[:2] == ["api", "lidarr"] and len(parts) == 3 and parts[2] in ("artists", "albums", "metadata-profiles", "import-lists", "queue", "commands"):
                 try:
                     if parts[2] == "artists":
