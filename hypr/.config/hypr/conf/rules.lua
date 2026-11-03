@@ -99,10 +99,10 @@ hl.window_rule({
     center = true,
     size   = "1320 840",
 })
--- os outros apps do BArch (backup, pacotes, mixer): mesmo tratamento
+-- os outros apps do BArch (backup, pacotes, mixer, música): mesmo tratamento
 hl.window_rule({
     name  = "barch-apps",
-    match = { title = "^BArch (Backup|Packages|Mixer)$" },
+    match = { title = "^BArch (Backup|Packages|Mixer|Music)$" },
     float  = true,
     center = true,
     size   = "1240 800",

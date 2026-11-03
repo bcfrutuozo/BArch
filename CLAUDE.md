@@ -72,10 +72,10 @@ reusing the widget's own functions.
   (`BArch.settings.apply`). To change an option for Bruno, prefer `barch hypr set <opt> <value>`
   over editing the Lua by hand when it is a one-off; hand-written files stay the base.
 - **Apps with their own window** (`quickshell/hypr`, `center`, `backup`, `packages`, `mixer`,
-  `palette`) run as `qs -p <dir>` and cannot import outside their folder: the shared controls live
+  `music`, `palette`) run as `qs -p <dir>` and cannot import outside their folder: the shared controls live
   in `quickshell/ui/` and are symlinked into each app (`ln -s ../ui/X.qml`), and every component
   must be listed in the app's `qmldir`. Closing the window quits the process; `barch hypr|center|
-  packages|mixer`, `barch backup browse` start a new one. In their shell commands resolve the repo
+  packages|mixer`, `barch backup browse`, `barch music browse` start a new one. In their shell commands resolve the repo
   with `readlink -f` (`Quickshell.shellDir/../../../..` only works physically, the shell dir is a
   symlink). `hypridle.conf` and `hyprsunset.conf` are edited by the Hyprland app's Idle and Night
   light pages (hyprlang parser in `hypr/hypr.js`, comments kept).
