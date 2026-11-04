@@ -217,6 +217,38 @@ at most five minutes, so the first pass over the library takes a few hours; an a
 and judges the artist on the spot. Since this check is what monitors a new album, every artist is kept on "monitor new
 items: none" (`lidarr.canon: false` in config.json goes back to "all" and every album the profile lets in).
 
+## Upkeep (what runs between jobs)
+
+The loop works the queue first; when it is empty it runs the hourly Lidarr check and then the library
+sweep, one album per turn, so a new download never waits for either.
+
+- **Library sweep** (`library.py`, `library.json` and `library-undo/` in the jobs folder; `library_sweep: false`
+  turns it off): every album folder of `/music` without MusicBrainz ids goes through `matcher.find` with the
+  lengths read from its own files (tags or the `1.03 - ` name give disc and position; a "(2008)" folder suffix
+  is dropped for the search). Accepted (the same rules as a download: lengths, names, no rival with other
+  titles, nothing reordered or cut) -> `MUSICBRAINZ_ALBUMID` and `MUSICBRAINZ_TRACKID` written on the files,
+  only those, the old values in an undo log, and a Lidarr `RescanFolders` of that artist's folder. Otherwise the
+  album waits with its candidates (`GET /api/library/sweep`, the Music app's Library tab: compare, `tag`,
+  `skip`, `retry`, `barch music mb-add "Artist/Album"`); "none" and "ambiguous" are tried again after a month.
+  About 30 s per album (MusicBrainz's one request per second): the first pass over the library takes hours.
+- **Release profile** (`Lidarr.release_rules`, every hour): one profile ignoring box sets, discographies and
+  "complete albums" packs (`Lidarr.BLOCK`, regexes on the release title), restored if edited. Vinyl rips are
+  not blocked (Purpendicular came right from one).
+- **Stalled downloads** (`clean_stalled`, `lidarr.stalled_hours`, 48; 0 off): a queue item whose torrent is
+  stalled, fetching metadata or in error with no activity for that long, at two hourly checks in a row, is
+  removed with its download, blocklisted, and Lidarr searches another release; Telegram says which.
+- **Pending artists** (`lidarr-pending.json`): `add-artists` keeps the ones Lidarr's metadata server does not
+  know yet (it copies new MusicBrainz artists days later) and tries them every hour; Telegram says when one is in.
+  Adding artists cancels the whole-library `RescanFolders` Lidarr queues per artist (about 40 min each) and
+  queues one of just their folders.
+- **Same title, own folder**: an album whose library folder already holds another release group with the same
+  title gets `--album "<title> (<year>)"` by itself (one try; a second collision goes to the review).
+- **Box set discs**: "1975 - Toys In The Attic (CD3 - Box Of Fire)" -> album "Toys In The Attic", year 1975, and
+  the box is searched too; a candidate box whose disc 3 has the same track count is scored as that disc (below
+  the album standing alone).
+- **Digest** (`GET /api/digest`, `barch music digest`; `digest: false` off): the week in one Telegram message
+  on Sundays at 18:00.
+
 ## Tests
 
 `python3 -m unittest discover -s server/music/tests` (run by `scripts/check.sh`);

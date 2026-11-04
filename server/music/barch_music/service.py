@@ -7,6 +7,7 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
     GET  /  (or /review)                 the review page (review.html next to this file): the queue and the
                                          resolve form in a browser, phone included; it asks for the token once
     GET  /api/mb/search?artist=&album=   MusicBrainz releases for the form's search by hand
+    GET  /api/digest[?days=7]            the week in one message (also sent to Telegram on Sundays at 18:00)
     GET  /api/jobs/<id>/compare?release=<mbid|URL>   the download next to that release, track by track
     GET  /api/status                     counts per state, the job running now
     GET  /api/jobs[?state=review]        summaries
@@ -26,18 +27,25 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
     POST /api/lidarr/search              {"ids": [album ids]}: monitor them and search the indexers now
     GET  /api/lidarr/artists[?q=name]    the artists Lidarr tracks; /api/lidarr/albums?artist=<name|id> their albums
                                          (with "canon": why it counts as official, "" when not; canon.py)
-    GET  /api/lidarr/metadata-profiles   the metadata profiles (allowed types and statuses)
+    GET  /api/lidarr/metadata-profiles   the metadata profiles (allowed types and statuses); /api/lidarr/release-profiles
+                                         the release profiles (the hourly check keeps one ignoring box sets, discographies...)
     POST /api/lidarr/metadata-profile    {"name", "primary", "secondary", "statuses", "apply_to": "all" | [artist ids]}
     GET  /api/lidarr/import-lists        POST /api/lidarr/import-list {"type": "LastFmUser", "name", "fields", "monitor"}
     GET  /api/lidarr/commands            Lidarr's running and recent commands (a RefreshArtist in flight undoes monitor changes)
     POST /api/lidarr/command-cancel      {"id": command id}: stop it
     POST /api/lidarr/enforce             the library's rule on every artist now (done every hour by itself): the
                                          "BArch" metadata profile, new albums monitored, albums without a file monitored once
+    GET  /api/lidarr/stalled[?hours=48]  downloads that have not moved (the hourly check blocklists them and searches another)
     GET  /api/lidarr/queue               what Lidarr grabbed and still waits for; POST /api/lidarr/queue-remove {"ids", "blocklist", "from_client"}
     POST /api/lidarr/artists             {"ids": "all" | [artist ids], "monitored": bool, "monitor_new_items": "all|none|new"}
+    GET  /api/library/sweep              the library tied to MusicBrainz (library.py): counts, the album judged now, the
+                                         ones waiting for a decision; POST {"action": "pause"|"resume"}
+    GET  /api/library/compare?folder=&release=   a library album next to a release, track by track
+    POST /api/library/tag {"folder", "release"} · skip {"folder"} · retry {"folder"}
     POST /api/library/adopt              {"folder": "Artist/Album", "release"}: a hand-made album merged into itself with that
                                          release (MusicBrainz ids and the library's rules on its files; a copy goes through the inbox)
-    POST /api/lidarr/add-artists         {"artists": [{"mbid", "folder"}]}: artists of /music tracked at their own folder
+    POST /api/lidarr/add-artists         {"artists": [{"mbid", "folder"}]}: artists of /music tracked at their own folder (one Lidarr
+                                         does not know yet waits in GET /api/lidarr/pending, tried again every hour)
     GET  /api/library/artists            the artist folders of /music with their album count (the Covers page's list)
     GET  /api/library/albums?artist=X    the album folders of one artist, and whether each has a cover.jpg
     POST /api/library/retitle            {"folder": "Artist/Album", "album": "New Title"}: ALBUM on every track and the folder renamed
@@ -155,9 +163,11 @@ def make_handler(p: Pipeline, token: str):
                         "group": (r.get("release-group") or {}).get("primary-type", ""),
                         "url": f"https://musicbrainz.org/release/{r['id']}"} for r in rels]
                 return self._send(200, {"ok": True, "releases": out})
+            if parts == ["api", "digest"]:
+                return self._send(200, {"ok": True, "text": p.digest(int((q.get("days") or ["7"])[0]))})
             if parts == ["api", "status"]:
                 jobs = p.store.all()
-                return self._send(200, {"ok": True, "running": p.current, "missing": missing_tools(),
+                return self._send(200, {"ok": True, "running": p.current, "doing": p.doing, "missing": missing_tools(),
                                         "counts": {s: sum(1 for j in jobs if j["state"] == s) for s in STATES}})
             if parts == ["api", "jobs"]:
                 st = (q.get("state") or [""])[0]
@@ -183,12 +193,19 @@ def make_handler(p: Pipeline, token: str):
                 return self._send(200, {"ok": True, "job": j}) if j else self._send(404, {"ok": False, "error": "no such job"})
             if parts == ["api", "covers"]:
                 return self._send(200, {"ok": True, **p.covers.summary()})
+            if parts == ["api", "library", "sweep"]:
+                return self._send(200, {"ok": True, **p.library.summary()})
+            if parts == ["api", "library", "compare"]:
+                try:
+                    return self._send(200, {"ok": True, **p.library.compare((q.get("folder") or [""])[0], (q.get("release") or [""])[0])})
+                except Exception as e:  # noqa: BLE001
+                    return self._send(400, {"ok": False, "error": str(e)})
             if parts == ["api", "library", "artists"]:
                 return self._send(200, {"ok": True, "artists": p.library_artists()})
             if parts == ["api", "library", "albums"]:
                 folders = p.covers.albums((q.get("artist") or [""])[0]) if (q.get("artist") or [""])[0] else []
                 return self._send(200, {"ok": True, "albums": [{"folder": f, "cover": (p.music / f / "cover.jpg").exists()} for f in folders]})
-            if parts[:2] == ["api", "lidarr"] and len(parts) == 3 and parts[2] in ("artists", "albums", "metadata-profiles", "import-lists", "queue", "commands"):
+            if parts[:2] == ["api", "lidarr"] and len(parts) == 3 and parts[2] in ("artists", "albums", "metadata-profiles", "import-lists", "queue", "commands", "release-profiles", "stalled", "pending"):
                 try:
                     if parts[2] == "artists":
                         return self._send(200, {"ok": True, "artists": p.lidarr.artists((q.get("q") or [""])[0])})
@@ -205,6 +222,13 @@ def make_handler(p: Pipeline, token: str):
                         return self._send(200, {"ok": True, "profiles": p.lidarr.metadata_profiles()})
                     if parts[2] == "queue":
                         return self._send(200, {"ok": True, "queue": p.lidarr.queue()})
+                    if parts[2] == "pending":         # artists waiting for Lidarr's metadata server
+                        return self._send(200, {"ok": True, "pending": p.pending_artists()})
+                    if parts[2] == "stalled":         # what the hourly check would replace (nothing is removed here)
+                        h = float((q.get("hours") or [p.cfg.get("lidarr", {}).get("stalled_hours", 48)])[0])
+                        return self._send(200, {"ok": True, "hours": h, "stalled": p.lidarr.stalled(p.qbit, h)})
+                    if parts[2] == "release-profiles":
+                        return self._send(200, {"ok": True, "profiles": p.lidarr.h.call("GET", "/api/v1/releaseprofile") or []})
                     if parts[2] == "commands":
                         return self._send(200, {"ok": True, "commands": p.lidarr.commands()})
                     return self._send(200, {"ok": True, "lists": p.lidarr.import_lists()})
@@ -304,6 +328,22 @@ def make_handler(p: Pipeline, token: str):
                     ids = [int(i) for i in body.get("ids", [])]
                     return self._send(200, {"ok": True, "result": p.lidarr.remove_queue(ids, bool(body.get("blocklist", True)),
                                                                                          bool(body.get("from_client", True)))})
+                if parts[:2] == ["api", "library"] and len(parts) == 3 and parts[2] in ("tag", "skip", "retry", "sweep"):
+                    # tag {"folder", "release"} · skip/retry {"folder"} · sweep {"action": "pause"|"resume"}
+                    try:
+                        if parts[2] == "sweep":
+                            p.library.paused = body.get("action") == "pause"
+                            if not p.library.paused:
+                                p.wake.set()
+                            r = "library sweep " + ("paused" if p.library.paused else "running")
+                        elif parts[2] == "tag":
+                            r = p.library.tag(str(body.get("folder", "")), str(body.get("release", "")))
+                        else:
+                            r = getattr(p.library, parts[2])(str(body.get("folder", "")))
+                            p.wake.set()
+                    except Exception as e:  # noqa: BLE001
+                        return self._send(400, {"ok": False, "error": str(e)})
+                    return self._send(200, {"ok": True, "result": r})
                 if parts == ["api", "library", "adopt"]:
                     # {"folder": "Artist/Album", "release": mbid or URL}: the album merged into itself with that release
                     try:
@@ -314,16 +354,7 @@ def make_handler(p: Pipeline, token: str):
                                             "result": f"{body.get('folder')}: queued as {', '.join(j['id'] for j in jobs)}"})
                 if parts == ["api", "lidarr", "add-artists"]:
                     # {"artists": [{"mbid", "folder"}]}: artists the library has, tracked at their own folder
-                    out, mbids = [], {str(a.get("mbid")) for a in body.get("artists") or []}
-                    for a in body.get("artists") or []:
-                        try:
-                            out.append(p.lidarr.add_artist(str(a["mbid"]), str(a["folder"]), monitor=False))
-                        except Exception as e:  # noqa: BLE001
-                            out.append(f"{a.get('folder')}: {e}")
-                    # one editor call for all (each call queues a refresh): the artists monitored
-                    ids = [x["id"] for x in p.lidarr.artists() if x["mbid"] in mbids and not x["monitored"]]
-                    if ids:
-                        out.append(p.lidarr.set_artists(ids, monitored=True))
+                    out = p.add_artists(list(body.get("artists") or []))
                     return self._send(200, {"ok": True, "result": "\n".join(out)})
                 if parts == ["api", "lidarr", "artists"]:
                     # {"ids": "all" | [artist ids], "monitored": bool (optional), "monitor_new_items": "all" | "none" | "new"}

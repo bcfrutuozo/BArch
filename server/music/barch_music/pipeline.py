@@ -22,6 +22,7 @@ from mutagen.flac import FLAC
 from . import album as albummod
 from . import audio, cover, matcher, mb, merge, style, tagger
 from .canon import Canon
+from .library import Library
 from .libcovers import LibraryCovers
 from .integrations import Lidarr, Plex, QBit, Telegram
 
@@ -147,8 +148,11 @@ class Pipeline:
         self.wake = threading.Event()
         self.current = ""
         self.last_enforce = 0.0
+        self.doing = ""                     # what the loop does between jobs (the API's status)
+        self.stalled_before: set[int] = set()   # queue items stalled at the previous hourly check
         self.covers = LibraryCovers(self.music, self.store.root / "covers", self.plex)
         self.canon = Canon(self.store.root)
+        self.library = Library(self.music, self.store.root, self.lidarr)
 
     # ------------------------------------------------------------ intake
     def log(self, job: dict, msg: str) -> None:
@@ -209,7 +213,19 @@ class Pipeline:
         while True:
             job = self.next_job()
             if not job:
+                self.doing = "Lidarr check"
                 self.enforce_lidarr()
+                self.weekly_digest()
+                # idle: one album of the library tied to MusicBrainz, then the queue is looked at again
+                if self.cfg.get("library_sweep", True):
+                    self.doing = "library sweep"
+                    try:
+                        if self.library.step():
+                            continue
+                    except Exception as e:  # noqa: BLE001
+                        self.library.last_error = f"{type(e).__name__}: {e}"
+                        print(f"[library] {e}", flush=True)
+                self.doing = "idle"
                 self.wake.wait(timeout=60)
                 self.wake.clear()
                 continue
@@ -256,9 +272,137 @@ class Pipeline:
                                     budget=40 if force else 300)
         except Exception as e:  # noqa: BLE001
             r = f"Lidarr: profile check failed: {e}"
-        if not r.endswith("nothing to change") and not r.endswith("nothing changed"):
+        if not r.endswith(("nothing to change", "nothing changed", "nothing else changed")) or "release profile" in r:
             print(f"[pipeline] {r}", flush=True)
-        return r
+        s = "; ".join(x for x in (self.clean_stalled(), self.retry_pending_artists()) if x)
+        return r + ("; " + s if s else "")
+
+    # ------------------------------------------------------------ the week, in one message
+    def digest(self, days: int = 7) -> str:
+        """What happened in the last `days`: albums in, albums waiting and why, Lidarr's queue, the
+        library sweep, artists waiting for Lidarr. Sent to Telegram on Sundays at 18:00 (`digest: false`
+        in config.json turns that off); `barch music digest` shows it any time."""
+        since = time.time() - days * 86400
+        jobs = self.store.all()
+        recent = [j for j in jobs if float(j.get("updated") or j.get("created") or 0) >= since]
+        done = [j for j in recent if j["state"] == "done"]
+        merged = [j for j in done if (j.get("result") or {}).get("merged")]
+        review = [j for j in jobs if j["state"] == "review"]
+        failed = [j for j in recent if j["state"] == "failed"]
+        lines = [f"🎵 Música, últimos {days} dias"]
+        lines.append(f"• {len(done)} álbum(ns) entraram ({len(merged)} completando um que já existia)")
+        for j in done[:12]:
+            lines.append("   – " + ((j.get("result") or {}).get("folder") or j.get("name", "")))
+        if len(done) > 12:
+            lines.append(f"   … e mais {len(done) - 12}")
+        if review:
+            lines.append(f"• {len(review)} esperando você na Review:")
+            for j in review[:8]:
+                lines.append(f"   – {j.get('name', '')[:60]}: {((j.get('problems') or ['?'])[0])[:90]}")
+        if failed:
+            lines.append(f"• {len(failed)} falharam: " + ", ".join(j.get("name", "")[:40] for j in failed[:5]))
+        try:
+            q = self.lidarr.queue()
+            st = self.lidarr.stalled(self.qbit, float(self.cfg.get("lidarr", {}).get("stalled_hours", 48)))
+            lines.append(f"• Lidarr baixando {len(q)} release(s)" + (f", {len(st)} parado(s) (serão trocados)" if st else ""))
+        except Exception as e:  # noqa: BLE001
+            lines.append(f"• Lidarr: {e}")
+        lib = self.library.summary()
+        c = lib["counts"]
+        judged = sum(c.values())
+        lines.append(f"• Biblioteca: {c.get('tagged', 0) + c.get('had', 0)} de {lib['albums']} álbuns com ids do MusicBrainz"
+                     f" ({judged} vistos), {len(lib['decide'])} para decidir na aba Library")
+        pend = self.pending_artists()
+        if pend:
+            lines.append("• Esperando o Lidarr conhecer: " + ", ".join(x["folder"] for x in pend))
+        return "\n".join(lines)
+
+    def weekly_digest(self) -> None:
+        if not self.cfg.get("digest", True):
+            return
+        now = time.localtime()
+        f = self.store.root / "digest-sent"
+        try:
+            last = float(f.read_text())
+        except (OSError, ValueError):
+            last = 0.0
+        if now.tm_wday == 6 and now.tm_hour >= 18 and time.time() - last > 5 * 86400:
+            f.write_text(str(time.time()))
+            self.tg.send(self.digest())
+
+    # artists of /music Lidarr's metadata server does not know yet (one just added to MusicBrainz takes
+    # days to reach it): kept in lidarr-pending.json and tried again every hour until Lidarr takes them
+    def pending_file(self) -> Path:
+        return self.store.root / "lidarr-pending.json"
+
+    def pending_artists(self) -> list[dict]:
+        try:
+            return json.loads(self.pending_file().read_text())
+        except (OSError, ValueError):
+            return []
+
+    def add_artists(self, artists: list[dict]) -> list[str]:
+        """lidarr.add_artist for each {mbid, folder}; the ones Lidarr's metadata server does not know yet
+        wait in the pending list. Then one editor call monitors them all and one rescan of their folders
+        replaces the whole-library rescans Lidarr queued for each."""
+        out, mbids = [], {str(a.get("mbid")) for a in artists}
+        pending = {x["mbid"]: x for x in self.pending_artists()}
+        for a in artists:
+            try:
+                out.append(self.lidarr.add_artist(str(a["mbid"]), str(a["folder"]), monitor=False))
+                pending.pop(str(a["mbid"]), None)
+            except ValueError as e:
+                if "metadata server does not know" in str(e):
+                    pending.setdefault(str(a["mbid"]), {"mbid": str(a["mbid"]), "folder": str(a["folder"]), "since": time.time()})
+                    out.append(f"{a.get('folder')}: Lidarr's metadata server does not know it yet; tried again every hour")
+                else:
+                    out.append(f"{a.get('folder')}: {e}")
+            except Exception as e:  # noqa: BLE001
+                out.append(f"{a.get('folder')}: {e}")
+        self.pending_file().write_text(json.dumps(list(pending.values())))
+        added = [x for x in self.lidarr.artists() if x["mbid"] in mbids]
+        ids = [x["id"] for x in added if not x["monitored"]]
+        if ids:
+            out.append(self.lidarr.set_artists(ids, monitored=True))
+        if added:
+            out.append(self.lidarr.targeted_rescans([x["id"] for x in added]))
+        return [o for o in out if o]
+
+    def retry_pending_artists(self) -> str:
+        pending = self.pending_artists()
+        if not pending:
+            return ""
+        before = {x["mbid"] for x in pending}
+        self.add_artists(pending)
+        now = {x["mbid"] for x in self.pending_artists()}
+        done = [x["folder"] for x in pending if x["mbid"] in before - now]
+        if done:
+            self.tg.send("🎵 Lidarr agora acompanha: " + ", ".join(done))
+            return f"{len(done)} pending artist(s) added to Lidarr: {', '.join(done)}"
+        return ""
+
+    def clean_stalled(self) -> str:
+        """Downloads Lidarr grabbed that have not moved for `lidarr.stalled_hours` (48; 0 turns it off), at
+        two hourly checks in a row: out of the queue and the client, the release blocklisted, and Lidarr
+        searches another one."""
+        hours = float(self.cfg.get("lidarr", {}).get("stalled_hours", 48))
+        if not hours:
+            return ""
+        try:
+            found = self.lidarr.stalled(self.qbit, hours)
+            # only what was already stalled at the previous check (an hour ago): a torrent that just
+            # found a seeder, or a restart of the pipeline, never costs a download
+            dead = [d for d in found if d["id"] in self.stalled_before]
+            self.stalled_before = {d["id"] for d in found}
+            if not dead:
+                return ""
+            self.lidarr.remove_queue([d["id"] for d in dead], blocklist=True, from_client=True, redownload=True)
+        except Exception as e:  # noqa: BLE001
+            return f"stalled downloads: {e}"
+        names = ", ".join(f"{d['title']} ({d['state']}, {d['progress']}%, {d['quiet_h']} h)" for d in dead[:10])
+        print(f"[pipeline] stalled downloads replaced: {names}", flush=True)
+        self.tg.send(f"⏳ Música: {len(dead)} download(s) parado(s) trocado(s) por outro release: {names}")
+        return f"{len(dead)} stalled download(s) blocklisted, another release searched"
 
     def process(self, job: dict) -> None:
         from .service import missing_tools
@@ -302,14 +446,23 @@ class Pipeline:
         if not best:
             return self.to_review(job, [reason])
         job["match"] = best.summary()
-        alb = albummod.build(best, tracks, self.music, job.get("overrides"))
+        for attempt in (1, 2):
+            alb = albummod.build(best, tracks, self.music, job.get("overrides"))
+            target = find_existing(self.music, alb.folder)
+            if target != self.music / alb.folder:
+                alb.notes.append(f"the library has this album as {target.relative_to(self.music)}: that folder is used")
+                alb.folder = str(target.relative_to(self.music))
+            existing = target.is_dir() and any(target.glob("*.flac")) and not job.get("replace")
+            other = other_album_in(target, alb.group_mbid) if existing else ""
+            # another album with the same title is already there (the eight "Greatest Hits" of Deep Purple):
+            # this one gets its own folder and ALBUM with its year, as --album "Greatest Hits (2008)" does
+            if other and attempt == 1 and alb.date[:4] and not (job.get("overrides") or {}).get("album"):
+                job.setdefault("overrides", {})["album"] = f"{alb.album} ({alb.date[:4]})"
+                self.log(job, f"{alb.folder} holds another album with the same title (release group {other}): "
+                              f"this one becomes {job['overrides']['album']!r}")
+                continue
+            break
         job["notes"] += alb.notes
-        target = find_existing(self.music, alb.folder)
-        if target != self.music / alb.folder:
-            job["notes"].append(f"the library has this album as {target.relative_to(self.music)}: that folder is used")
-            alb.folder = str(target.relative_to(self.music))
-        existing = target.is_dir() and any(target.glob("*.flac")) and not job.get("replace")
-        other = other_album_in(target, alb.group_mbid) if existing else ""
         if other:
             return self.to_review(job, [f"{alb.folder} is in the library but it is another album with the same name "
                                         f"(MusicBrainz release group {other}, this download is {alb.group_mbid}): give this one "

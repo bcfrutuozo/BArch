@@ -60,6 +60,9 @@ class QBit:
                 out.append(t)
         return out
 
+    def info(self, hashes: list[str]) -> list[dict]:
+        return self._api("GET", "/torrents/info", params={"hashes": "|".join(hashes)}) or [] if hashes else []
+
     def torrent(self, h: str) -> dict | None:
         r = self._api("GET", "/torrents/info", params={"hashes": h}) or []
         return r[0] if r else None
@@ -218,14 +221,15 @@ class Lidarr:
         runs, since it would write the albums back as they were. Returns what changed."""
         if not self.enabled:
             return "Lidarr: no API key configured"
+        rules = self.release_rules()                    # never touched by a refresh: always kept as it should be
         if any(c.get("name") == "RefreshArtist" and c.get("status") in ("started", "queued") for c in self.commands()):
-            return "Lidarr: a RefreshArtist is running, nothing changed"
+            return "Lidarr: " + (rules + "; " if rules else "") + "a RefreshArtist is running, nothing else changed"
         pid = next((pr["id"] for pr in self.metadata_profiles() if pr["name"].lower() == profile.lower()), None)
         if not pid:
             raise ValueError(f"Lidarr has no metadata profile {profile!r}")
         new_items = "none" if canon else "all"
         artists = self.h.call("GET", "/api/v1/artist") or []
-        out = []
+        out = [rules] if rules else []
         wrong = [a["id"] for a in artists if a.get("metadataProfileId") != pid]
         if wrong:
             self.h.call("PUT", "/api/v1/artist/editor", body={"artistIds": wrong, "metadataProfileId": pid, "monitorNewItems": new_items})
@@ -281,6 +285,62 @@ class Lidarr:
             dropped |= set(drop)           # monitored again by hand, it stays; Wikipedia learning it later monitors it
             seen_file.write_text(json.dumps({"seen": sorted(seen), "dropped": sorted(dropped)}))
         return "Lidarr: " + ("; ".join(out) if out else f"every artist on {profile!r}, nothing to change")
+
+    def rescan_artists(self, folders: list[str]) -> str:
+        """Lidarr reads these artist folders of /music again (their files got MusicBrainz ids), without a
+        full refresh of the artists (which would rewrite their albums' monitoring)."""
+        if not self.enabled or not folders:
+            return ""
+        want = set(folders)
+        paths = [a["path"] for a in self.h.call("GET", "/api/v1/artist") or [] if Path(a.get("path", "")).name in want]
+        if paths:
+            self.h.call("POST", "/api/v1/command", body={"name": "RescanFolders", "folders": paths})
+        return f"Lidarr: {len(paths)} artist folder(s) rescanned"
+
+    # What Lidarr must never grab (the review rejected these, 2026-11-04): a box set split per disc,
+    # a discography, a "complete albums" pack. Lidarr matches each term against the release title,
+    # /regex/i allowed; one release profile holds them, recognized by its first term.
+    BLOCK = ["/\\b(box ?set|boxset|\\d+ ?(cd|disc)s? ?box|box of fire|collector'?s box)\\b/i",
+             "/\\b(discography|discografia|diskografie)\\b/i",
+             "/\\bcomplete (albums|studio albums|studio recordings|album collection|collection)\\b/i",
+             "/\\b(original album classics|original album series|the album collection|triple album collection)\\b/i"]
+
+    def release_rules(self) -> str:
+        """The release profile with BLOCK as ignored terms, created or brought back as it should be."""
+        if not self.enabled:
+            return ""
+        profiles = self.h.call("GET", "/api/v1/releaseprofile") or []
+        mine = next((r for r in profiles if (r.get("ignored") or [None])[0] == self.BLOCK[0]), None)
+        if mine and mine.get("ignored") == self.BLOCK and mine.get("enabled", True):
+            return ""
+        body = {**(mine or {}), "enabled": True, "required": (mine or {}).get("required") or [], "ignored": self.BLOCK,
+                "indexerId": 0, "tags": (mine or {}).get("tags") or []}
+        if mine:
+            self.h.call("PUT", f"/api/v1/releaseprofile/{mine['id']}", body=body)
+            return "release profile updated (box sets, discographies, complete collections ignored)"
+        self.h.call("POST", "/api/v1/releaseprofile", body=body)
+        return "release profile created (box sets, discographies, complete collections ignored)"
+
+    def targeted_rescans(self, artist_ids: list[int]) -> str:
+        """Adding an artist makes Lidarr queue a RescanFolders of the whole root folder for it (about 40 min
+        each over this library, run one at a time): the queued ones of these artists are cancelled and one
+        rescan of just their folders takes their place."""
+        if not self.enabled or not artist_ids:
+            return ""
+        want = set(artist_ids)
+        cancelled = 0
+        for c in self.h.call("GET", "/api/v1/command") or []:
+            body = c.get("body") or {}
+            if c.get("name") == "RescanFolders" and c.get("status") == "queued" and want & set(body.get("artistIds") or []):
+                try:
+                    self.h.call("DELETE", f"/api/v1/command/{c['id']}")
+                    cancelled += 1
+                except Exception:  # noqa: BLE001
+                    pass
+        paths = [a["path"] for a in self.h.call("GET", "/api/v1/artist") or [] if a["id"] in want]
+        if paths:
+            self.h.call("POST", "/api/v1/command", body={"name": "RescanFolders", "folders": paths})
+        return f"Lidarr: {cancelled} whole-library rescan(s) replaced by one of {len(paths)} artist folder(s)"
 
     def add_artist(self, mbid: str, folder: str, profile: str = "BArch", monitor: bool = True) -> str:
         """Track an artist the library already has: the MusicBrainz artist `mbid` at the existing folder
@@ -370,15 +430,37 @@ class Lidarr:
                         "size_gb": round((it.get("size") or 0) / 1e9, 2), "left_gb": round((it.get("sizeleft") or 0) / 1e9, 2)})
         return sorted(out, key=lambda x: (x["artist"], x["album"]))
 
-    def remove_queue(self, ids: list[int], blocklist: bool = True, from_client: bool = True) -> str:
+    def stalled(self, qbit, hours: float = 48) -> list[dict]:
+        """Queue items whose torrent has not moved for `hours`: stalled or still fetching metadata (no
+        seeders), or in error, with no activity since; finished ones are the pipeline's, never listed."""
+        if not self.enabled:
+            return []
+        r = self.h.call("GET", "/api/v1/queue", params={"page": 1, "pageSize": 1000, "includeAlbum": "true"}) or {}
+        recs = [x for x in r.get("records", []) if x.get("downloadId") and (x.get("downloadClient") or "").lower().startswith("qbit")]
+        if not recs:
+            return []
+        info = {t["hash"].lower(): t for t in qbit.info([x["downloadId"].lower() for x in recs])}
+        now, out = time.time(), []
+        for x in recs:
+            t = info.get(x["downloadId"].lower())
+            if not t or t.get("progress", 0) >= 1:
+                continue
+            quiet = now - max(t.get("last_activity") or 0, t.get("added_on") or 0)
+            if t.get("state") in ("stalledDL", "metaDL", "error", "missingFiles") and quiet > hours * 3600:
+                out.append({"id": x["id"], "title": x.get("title", ""), "album": (x.get("album") or {}).get("title", ""),
+                            "state": t.get("state"), "progress": round(t.get("progress", 0) * 100), "quiet_h": round(quiet / 3600)})
+        return out
+
+    def remove_queue(self, ids: list[int], blocklist: bool = True, from_client: bool = True, redownload: bool = False) -> str:
         """Drop these queue items: the download leaves the client with its files and the release goes to
-        Lidarr's blocklist, so the same one is not grabbed again (no automatic re-search either)."""
+        Lidarr's blocklist, so the same one is not grabbed again (with `redownload`, Lidarr looks for
+        another release of the album at once)."""
         if not self.enabled:
             return "Lidarr: no API key configured"
         if not ids:
             return "Lidarr: nothing to remove"
         self.h.call("DELETE", "/api/v1/queue/bulk", params={"removeFromClient": str(from_client).lower(),
-                                                            "blocklist": str(blocklist).lower(), "skipRedownload": "true"},
+                                                            "blocklist": str(blocklist).lower(), "skipRedownload": str(not redownload).lower()},
                     body={"ids": [int(i) for i in ids]})
         return f"Lidarr: {len(ids)} queue item(s) removed" + (" and blocklisted" if blocklist else "") + (", download deleted" if from_client else "")
 

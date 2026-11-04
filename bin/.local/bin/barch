@@ -120,7 +120,7 @@ Desktop (through the bar):
   music fix <id> ["hint"]     Fix with Agent: Claude takes the album over (release, date, genre, cover,
                               the merge), resolves it, waits for the run and goes on until it is in
   music scan                  look for finished torrents and inbox folders now
-  music mb-add <id>           an edition MusicBrainz lacks: the release editor opens in the browser filled in
+  music mb-add <id>|"<A/B>"   an edition MusicBrainz lacks (a job, or a library album the Library tab could not tie): the release editor opens in the browser filled in
                               from the download (tracks, lengths); you check and submit, logged in there
   music retitle <Artist/Album> <title>   fix the ALBUM tag (as given) and the folder of an album in /music
   music rescan <id>           take that job's download in again from scratch, as the albums are found
@@ -144,8 +144,12 @@ Desktop (through the bar):
   music adopt "<Artist/Album>" <release>   a hand-made album of /music, now on MusicBrainz: merged into itself with that
                               release (MusicBrainz ids and the library's rules on its files, audio never replaced)
   music lidarr-add <mbid> <folder>   track an artist /music already has, at its own folder, with the library's profiles
+                              (one Lidarr's metadata server does not know yet waits: lidarr-pending, tried hourly)
   music lidarr-commands       Lidarr's running and recent commands · lidarr-cancel <id> stops one (a RefreshArtist in flight undoes monitor changes)
+  music digest [days]         the week of the pipeline in one message (Telegram gets it on Sundays at 18:00)
+  music lidarr-stalled [h]    downloads with no progress for 48 h (or h): the hourly check blocklists them and searches another
   music lidarr-queue          what Lidarr grabbed and is downloading · lidarr-queue-remove <ids>|all [--keep]: drop them (blocklisted)
+  music lidarr-release-profiles   what Lidarr never grabs (box sets, discographies, complete collections: kept by the hourly check)
   music lidarr-profiles       the metadata profiles · lidarr-profile <name> --primary Album,EP --secondary Live
                               --statuses Official [--apply all|<artist ids>]: create/update one (and assign it)
   music lidarr-lists          the import lists · lidarr-list <Type> <name> field=value.. [--monitor none|specificAlbum|entireArtist]
@@ -548,10 +552,18 @@ music_claude_run() {
 # is written from here). Then `barch music resolve <id> --release <the new mbid>`.
 music_mb_add() {
   local id=${1:-}
-  [[ -n $id ]] || usage_error "music mb-add <id>"
-  music_api GET "/api/jobs/$id"
+  [[ -n $id ]] || usage_error "music mb-add <id>|\"<Artist/Album>\""
   local job out
-  job=$(jq -c .job <<<"$OUT")
+  if [[ $id == */* ]]; then
+    # an album of the library the sweep could not tie to MusicBrainz (the Library tab): its files' tracks
+    music_api GET /api/library/sweep
+    job=$(jq -c --arg f "$id" '.decide[] | select(.folder == $f) | {id: ($f | gsub("[^A-Za-z0-9]+"; "-")), name: $f, tracks,
+      hints: {artist: ($f | split("/")[0]), album: ($f | split("/")[1] | sub(" \\((19|20)[0-9]{2}\\)$"; ""))}, proposal: {}}' <<<"$OUT")
+    [[ -n $job ]] || die 1 "$id is not among the library albums waiting for a decision"
+  else
+    music_api GET "/api/jobs/$id"
+    job=$(jq -c .job <<<"$OUT")
+  fi
   [[ $(jq -r '.tracks | length' <<<"$job") -gt 0 ]] || die 1 "the job has no track list yet (run it once: barch music retry $id)"
   out=$STATE/music-agent/mb-seed-$id.html
   mkdir -p "$(dirname "$out")"
@@ -584,7 +596,11 @@ music_mb_add() {
   ' <<<"$job" >"$out"
   xdg-open "$out" >/dev/null 2>&1 &
   echo "release editor seed opened in the browser: $out"
-  echo "after submitting, take the new release id and run: barch music resolve $id --release <mbid>"
+  if [[ $id == */* ]]; then
+    echo "after submitting, paste the new release in the Library tab and Tag (or: curl the API's /api/library/tag)"
+  else
+    echo "after submitting, take the new release id and run: barch music resolve $id --release <mbid>"
+  fi
 }
 
 # music fix <id> ["hint"]: the Fix with Agent button. Claude gets the whole job (problems, candidates,
@@ -838,6 +854,18 @@ cmd_music() {
       [[ -n ${1:-} ]] || usage_error "music lidarr-albums <artist name or id>"
       music_api GET "/api/lidarr/albums?artist=$(jq -rn --arg v "$1" '$v | @uri')"
       show "$OUT" '.albums[] | "\(.id)\t\(.date)  \(.title)  [\(.type)\(if (.secondary|length) > 0 then ", " + (.secondary|join(", ")) else "" end)]  \(.files)/\(.tracks)\(if .monitored then "  monitored" else "" end)\(if .canon == null then "" elif .canon == "" then "  · unofficial" else "  · " + .canon end)"' ;;
+    digest)
+      music_api GET "/api/digest${1:+?days=$1}"
+      show "$OUT" '.text' ;;
+    lidarr-pending)
+      music_api GET /api/lidarr/pending
+      show "$OUT" '.pending[] | "\(.folder)\t\(.mbid)  waiting since \(.since | strftime("%Y-%m-%d"))"' ;;
+    lidarr-stalled)
+      music_api GET "/api/lidarr/stalled${1:+?hours=$1}"
+      show "$OUT" '"stalled for more than \(.hours) h (the hourly check replaces them):", (.stalled[] | "\(.id)\t\(.title)  \(.state) \(.progress)%  quiet \(.quiet_h) h")' ;;
+    lidarr-release-profiles)
+      music_api GET /api/lidarr/release-profiles
+      show "$OUT" '.profiles[] | "\(.id)\t\(if .enabled then "on " else "off" end)  ignored: \(.ignored | join("  ·  "))\(if (.required|length) > 0 then "  required: " + (.required | join(", ")) else "" end)"' ;;
     lidarr-profiles)
       music_api GET /api/lidarr/metadata-profiles
       show "$OUT" '.profiles[] | "\(.id)\t\(.name): \(.primary|join(", ")) | \(.secondary|join(", ")) | \(.statuses|join(", "))"' ;;

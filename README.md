@@ -220,6 +220,9 @@ The main pieces:
   about what is wrong goes to **Ask Claude** (`barch music covers ask`, prompt in
   `quickshell/music/cover-ask.md`): it looks at the images, adapts one with ImageMagick or searches
   the web for another, and adds it as the proposal (Replace is still yours).
+  **Library**: the library tied to MusicBrainz (see Music): how far the sweep is, Pause, and the albums
+  it could not settle, each with its candidates; Use one to see it next to the album's files track by
+  track, Tag writes its ids, Add to MusicBrainz opens the release editor filled in from the files, Skip.
   **Lidarr & scan**: scan now, FLAC only, monitor / search album ids.
 - **Audio Mixer** (`quickshell/mixer/`, "Audio Mixer" in the launcher, `barch mixer`): PipeWire through
   `Quickshell.Services.Pipewire`. **Devices**: outputs and inputs with volume, mute, a peak
@@ -485,7 +488,19 @@ regional EPs and budget compilations of a big artist Official): an EP, live albu
 Wikidata or the artist's Wikipedia (English and the artist's own language) knows it, so Deep Purple goes from 297
 missing albums to 70; an artist without Wikipedia is not filtered (`server/music/canon.py`, `barch music
 lidarr-albums <artist>` shows each verdict). An album already in the library is completed, and
-another album with the same title (the eight "Greatest Hits" of Deep Purple) gets its own folder from the review.
+another album with the same title (the eight "Greatest Hits" of Deep Purple) gets its own folder and ALBUM with its
+year by itself (`Greatest Hits (2008)`). One disc of a box set split per disc ("1975 - Toys In The Attic (CD3 - Box Of
+Fire)") is matched as the album it is, or as that disc of the box when the album does not stand alone.
+
+What it keeps tidy by itself (2026-11-04): **the library tied to MusicBrainz**: while no download waits, it goes over
+every album of `/music` and matches it with the lengths of its own files; a sure match gets `MUSICBRAINZ_ALBUMID` and
+`MUSICBRAINZ_TRACKID` on its files (nothing else, an undo log kept) and Lidarr rescans that artist, so the hand-made
+library stops being unmapped files; the rest waits in the Music app's Library tab. **What Lidarr grabs**: a release
+profile it keeps ignores box sets, discographies and "complete albums" packs (`barch music lidarr-release-profiles`);
+a download with no progress for 48 h at two hourly checks in a row is blocklisted and another release searched
+(`lidarr-stalled` shows them); an artist Lidarr's metadata server does not know yet (one just added to MusicBrainz)
+waits and is added within the hour once it does (`lidarr-pending`). **The week** in one Telegram message on Sundays
+at 18:00 (`barch music digest`): albums in, the review and why, Lidarr's queue, the sweep, artists waiting.
 
 ## NAS
 

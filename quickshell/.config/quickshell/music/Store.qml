@@ -89,6 +89,7 @@ Singleton {
     function refresh() {
         api("GET", "/api/status", null, d => status = d, true)
         refreshCovers()
+        refreshLibrary()
         api("GET", "/api/jobs", null, d => {
             jobs = (d.jobs || []).slice().sort((a, b) => (b.updated || 0) - (a.updated || 0))
             if (!selected) { const r = jobs.filter(j => j.state === "review")[0]; if (r) select(r.id) }
@@ -225,6 +226,13 @@ Singleton {
             refresh()
         })
     }
+
+    // ---------- the library tied to MusicBrainz (library.py): progress and the albums to decide ----------
+    property var library: ({ counts: {}, albums: 0, current: "", paused: false, decide: [] })
+    readonly property int libraryToDecide: (library.decide || []).length
+    function refreshLibrary() { api("GET", "/api/library/sweep", null, d => { if (JSON.stringify(d) !== JSON.stringify(library)) library = d }, true) }
+    function libraryAct(action, body) { api("POST", "/api/library/" + action, body, d => { say(d.result); refreshLibrary() }) }
+    function libraryMbAdd(folder) { run([home + "/.local/bin/barch", "music", "mb-add", folder], (out, err, code) => say((out || err).trim().split("\n")[0], code !== 0)) }
 
     // ---------- MusicBrainz (by hand) ----------
     function mbSearch(artist, album) {
