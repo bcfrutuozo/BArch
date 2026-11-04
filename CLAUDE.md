@@ -94,6 +94,9 @@ reusing the widget's own functions.
   `tests/` passing and a real pair checked (`python3 -m barch_video mux` in the container writes a
   `.barch.mkv` next to the reference, nothing replaced). Never delete movie files with Radarr's
   `moviefile/bulk` (6.4 leaves them on disk); one by one, and check the disk.
+- **Books** (`server/books/`): no Readarr. Shelfmark (requests) -> qBittorrent/slskd -> Calibre-Web-Automated's
+  ingest folder (ebooks, `/mnt/user/media/books`) or Audiobookshelf (`/mnt/user/media/audiobooks`). The Unraid
+  templates in `templates/` are the configuration; keys go in the Unraid form, never in them.
 - **NAS kernel module** (`server/unraid/`): the `i2c-nct6793` build script for OpenRGB on the NAS
   (README "NAS"). It runs on the NAS, never here; the package is per Unraid kernel.
 - **Theme:** `quickshell/.config/quickshell/theme/palettes.json` holds the palettes (ten tones

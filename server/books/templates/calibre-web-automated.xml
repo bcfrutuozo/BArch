@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!-- BArch books (server/books): the ebook library. Copied to /boot/config/plugins/dockerMan/templates-user/my-calibre-web-automated.xml -->
+<Container version="2">
+  <Name>calibre-web-automated</Name>
+  <Repository>crocodilestick/calibre-web-automated:v4.0.8</Repository>
+  <Registry>https://hub.docker.com/r/crocodilestick/calibre-web-automated</Registry>
+  <Network>frutuozoproxy</Network>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Project>https://github.com/crocodilestick/Calibre-Web-Automated</Project>
+  <Overview>The ebook library (Calibre format): ingest folder, conversion to EPUB, metadata and covers, Kobo/KOReader sync, send to Kindle, OPDS. Shelfmark delivers into the ingest folder.</Overview>
+  <Category>MediaServer:Books</Category>
+  <WebUI>http://[IP]:[PORT:8083]/</WebUI>
+  <Icon>https://cdn.jsdelivr.net/gh/selfhst/icons/png/calibre-web.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <Config Name="WebUI" Target="8083" Default="8083" Mode="tcp" Description="Web UI and OPDS (/opds)" Type="Port" Display="always" Required="true" Mask="false">8083</Config>
+  <Config Name="Config" Target="/config" Default="/mnt/user/appdata/calibre-web-automated" Mode="rw" Description="Settings and users (app.db, which Shelfmark reads for its logins)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/calibre-web-automated</Config>
+  <Config Name="Library" Target="/calibre-library" Default="/mnt/user/media/books" Mode="rw" Description="The Calibre library (created on first start when empty)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/books</Config>
+  <Config Name="Ingest" Target="/cwa-book-ingest" Default="/mnt/user/downloads/torrents/books-ingest" Mode="rw" Description="Everything put here is imported and then DELETED" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/downloads/torrents/books-ingest</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="" Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="" Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
+  <Config Name="TZ" Target="TZ" Default="America/Sao_Paulo" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">America/Sao_Paulo</Config>
+  <Config Name="Watch mode" Target="CWA_WATCH_MODE" Default="poll" Mode="" Description="poll: inotify is not reliable on Unraid's /mnt/user (shfs)" Type="Variable" Display="advanced" Required="false" Mask="false">poll</Config>
+  <Config Name="Hardcover token" Target="HARDCOVER_TOKEN" Default="" Mode="" Description="hardcover.app/account/api: Hardcover as a metadata provider (optional, the same token as Shelfmark's)" Type="Variable" Display="always" Required="false" Mask="true"></Config>
+</Container>

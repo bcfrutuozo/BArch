@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<!-- BArch books (server/books): search and request. Copied to /boot/config/plugins/dockerMan/templates-user/my-shelfmark.xml
+     The variables are first-start defaults: Shelfmark's Settings page overrides them. -->
+<Container version="2">
+  <Name>shelfmark</Name>
+  <Repository>ghcr.io/calibrain/shelfmark:1.6.1</Repository>
+  <Registry>https://github.com/calibrain/shelfmark/pkgs/container/shelfmark</Registry>
+  <Network>frutuozoproxy</Network>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Project>https://github.com/calibrain/shelfmark</Project>
+  <Overview>Search a book or audiobook (Hardcover/Open Library metadata), pick a release from Prowlarr, Soulseek or Usenet, and it lands in Calibre-Web-Automated (ebooks) or Audiobookshelf (audiobooks). Logins are Calibre-Web-Automated's.</Overview>
+  <Category>Downloaders:Books</Category>
+  <WebUI>http://[IP]:[PORT:8084]/</WebUI>
+  <Icon>https://raw.githubusercontent.com/calibrain/shelfmark/main/src/frontend/public/logo.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <Config Name="WebUI" Target="8084" Default="8084" Mode="tcp" Description="" Type="Port" Display="always" Required="false" Mask="false">8084</Config>
+  <Config Name="Config" Target="/config" Default="/mnt/user/appdata/shelfmark" Mode="rw" Description="Settings, database, cover cache" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/shelfmark</Config>
+  <Config Name="Ingest" Target="/books" Default="/mnt/user/downloads/torrents/books-ingest" Mode="rw" Description="Calibre-Web-Automated's ingest folder (ebooks)" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/downloads/torrents/books-ingest</Config>
+  <Config Name="Audiobooks" Target="/audiobooks" Default="/mnt/user/media/audiobooks" Mode="rw" Description="Audiobookshelf's library" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/media/audiobooks</Config>
+  <Config Name="Downloads" Target="/data" Default="/mnt/user/downloads/torrents" Mode="rw" Description="The same /data qBittorrent sees (and slskd's folder inside it)" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/downloads/torrents</Config>
+  <Config Name="Calibre library" Target="/calibre-library" Default="/mnt/user/media/books" Mode="ro" Description="Read only: marks the books already owned" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/media/books</Config>
+  <Config Name="Calibre-Web users" Target="/auth/app.db" Default="/mnt/user/appdata/calibre-web-automated/app.db" Mode="ro" Description="Logins come from Calibre-Web-Automated (start it once first)" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/calibre-web-automated/app.db</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+  <Config Name="TZ" Target="TZ" Default="America/Sao_Paulo" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">America/Sao_Paulo</Config>
+  <Config Name="AUTH_METHOD" Target="AUTH_METHOD" Default="cwa" Mode="" Description="Calibre-Web database" Type="Variable" Display="advanced" Required="false" Mask="false">cwa</Config>
+  <Config Name="SEARCH_MODE" Target="SEARCH_MODE" Default="universal" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">universal</Config>
+  <Config Name="BOOK_LANGUAGE" Target="BOOK_LANGUAGE" Default="pt,en" Mode="" Description="Default language filter (each user can change it)" Type="Variable" Display="always" Required="false" Mask="false">pt,en</Config>
+  <Config Name="METADATA_PROVIDER" Target="METADATA_PROVIDER" Default="hardcover" Mode="" Description="hardcover needs HARDCOVER_API_KEY; openlibrary needs none" Type="Variable" Display="advanced" Required="false" Mask="false">hardcover</Config>
+  <Config Name="HARDCOVER_ENABLED" Target="HARDCOVER_ENABLED" Default="true" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="HARDCOVER_API_KEY" Target="HARDCOVER_API_KEY" Default="" Mode="" Description="hardcover.app/account/api (hc_pat_..., scopes in Shelfmark's README)" Type="Variable" Display="always" Required="false" Mask="true"></Config>
+  <Config Name="PROWLARR_ENABLED" Target="PROWLARR_ENABLED" Default="true" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="PROWLARR_URL" Target="PROWLARR_URL" Default="http://prowlarr:9696" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">http://prowlarr:9696</Config>
+  <Config Name="PROWLARR_API_KEY" Target="PROWLARR_API_KEY" Default="" Mode="" Description="Prowlarr &gt; Settings &gt; General (install.sh fills it in)" Type="Variable" Display="always" Required="false" Mask="true"></Config>
+  <Config Name="PROWLARR_INDEXER_TIMEOUT" Target="PROWLARR_INDEXER_TIMEOUT" Default="90" Mode="" Description="FlareSolverr indexers need time" Type="Variable" Display="advanced" Required="false" Mask="false">90</Config>
+  <Config Name="PROWLARR_TORRENT_CLIENT" Target="PROWLARR_TORRENT_CLIENT" Default="qbittorrent" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">qbittorrent</Config>
+  <Config Name="PROWLARR_TORRENT_ACTION" Target="PROWLARR_TORRENT_ACTION" Default="keep" Mode="" Description="keep: the music pipeline's seed check removes it at ratio 3 / 90 days" Type="Variable" Display="advanced" Required="false" Mask="false">keep</Config>
+  <Config Name="QBITTORRENT_URL" Target="QBITTORRENT_URL" Default="http://qbittorrent:8080" Mode="" Description="No login: frutuozoproxy (172.18.0.0/16) is whitelisted" Type="Variable" Display="advanced" Required="false" Mask="false">http://qbittorrent:8080</Config>
+  <Config Name="QBITTORRENT_CATEGORY" Target="QBITTORRENT_CATEGORY" Default="books" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">books</Config>
+  <Config Name="QBITTORRENT_CATEGORY_AUDIOBOOK" Target="QBITTORRENT_CATEGORY_AUDIOBOOK" Default="audiobooks" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">audiobooks</Config>
+  <Config Name="QBITTORRENT_SEPARATE_DOWNLOAD_DIRS" Target="QBITTORRENT_SEPARATE_DOWNLOAD_DIRS" Default="true" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="QBITTORRENT_DOWNLOAD_DIR_BOOK" Target="QBITTORRENT_DOWNLOAD_DIR_BOOK" Default="/data/completed/books" Mode="" Description="As qBittorrent sees it" Type="Variable" Display="advanced" Required="false" Mask="false">/data/completed/books</Config>
+  <Config Name="QBITTORRENT_DOWNLOAD_DIR_AUDIOBOOK" Target="QBITTORRENT_DOWNLOAD_DIR_AUDIOBOOK" Default="/data/completed/audiobooks" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">/data/completed/audiobooks</Config>
+  <Config Name="SLSKD_ENABLED" Target="SLSKD_ENABLED" Default="true" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="SLSKD_URL" Target="SLSKD_URL" Default="http://100.100.0.10:5030" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">http://100.100.0.10:5030</Config>
+  <Config Name="SLSKD_API_KEY" Target="SLSKD_API_KEY" Default="" Mode="" Description="slskd web.authentication.api_keys, role readwrite (or soularr's)" Type="Variable" Display="always" Required="false" Mask="true"></Config>
+  <Config Name="SLSKD_DOWNLOAD_PATH" Target="SLSKD_DOWNLOAD_PATH" Default="/data/slskd/completed" Mode="" Description="slskd's finished downloads as Shelfmark sees them" Type="Variable" Display="advanced" Required="false" Mask="false">/data/slskd/completed</Config>
+  <Config Name="INGEST_DIR" Target="INGEST_DIR" Default="/books" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">/books</Config>
+  <Config Name="FILE_ORGANIZATION" Target="FILE_ORGANIZATION" Default="rename" Mode="" Description="rename only: the ingest folder is flat, CWA files the book" Type="Variable" Display="advanced" Required="false" Mask="false">rename</Config>
+  <Config Name="DESTINATION_AUDIOBOOK" Target="DESTINATION_AUDIOBOOK" Default="/audiobooks" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">/audiobooks</Config>
+  <Config Name="FILE_ORGANIZATION_AUDIOBOOK" Target="FILE_ORGANIZATION_AUDIOBOOK" Default="organize" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">organize</Config>
+  <Config Name="TEMPLATE_AUDIOBOOK_ORGANIZE" Target="TEMPLATE_AUDIOBOOK_ORGANIZE" Default="{Author}/{Title}/{Title}" Mode="" Description="Author/Title, as Audiobookshelf scans it" Type="Variable" Display="advanced" Required="false" Mask="false">{Author}/{Title}/{Title}</Config>
+  <Config Name="LIBRARY_CHECK_CALIBRE_ENABLED" Target="LIBRARY_CHECK_CALIBRE_ENABLED" Default="true" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="CALIBRE_WEB_URL" Target="CALIBRE_WEB_URL" Default="https://library.example.com" Mode="" Description="The header's library button" Type="Variable" Display="advanced" Required="false" Mask="false">https://library.example.com</Config>
+  <Config Name="AUDIOBOOK_LIBRARY_URL" Target="AUDIOBOOK_LIBRARY_URL" Default="http://100.100.0.10:13378" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">http://100.100.0.10:13378</Config>
+  <Config Name="LIBRARY_CHECK_AUDIOBOOKSHELF_ENABLED" Target="LIBRARY_CHECK_AUDIOBOOKSHELF_ENABLED" Default="true" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="AUDIOBOOKSHELF_URL" Target="AUDIOBOOKSHELF_URL" Default="http://audiobookshelf:13378" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">http://audiobookshelf:13378</Config>
+  <Config Name="AUDIOBOOKSHELF_TOKEN" Target="AUDIOBOOKSHELF_TOKEN" Default="" Mode="" Description="Audiobookshelf &gt; Settings &gt; Users &gt; you &gt; API Token" Type="Variable" Display="always" Required="false" Mask="true"></Config>
+</Container>
