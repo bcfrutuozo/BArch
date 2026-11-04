@@ -65,6 +65,14 @@ if [ -d server/music ]; then
   ((fail)) || ok "compiles, tests pass"
 fi
 
+step "Video pipeline (server/video)"
+if [ -d server/video ]; then
+  python3 -m compileall -q server/video/barch_video server/video/audit.py >/dev/null || problem "video pipeline: python does not compile"
+  python3 -m unittest discover -s server/video/tests -q >/dev/null 2>&1 || problem "video pipeline: unit tests fail (python3 -m unittest discover -s server/video/tests)"
+  find server/video -name __pycache__ -prune -exec rm -rf {} +
+  ((fail)) || ok "compiles, tests pass"
+fi
+
 if command -v hyprctl >/dev/null && hyprctl version >/dev/null 2>&1; then
   step "Hyprland"
   errs=$(hyprctl configerrors 2>/dev/null)

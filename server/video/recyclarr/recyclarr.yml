@@ -3,18 +3,17 @@
 # BArch video rules, synced into Radarr and Sonarr by Recyclarr (container on the NAS, daily).
 # What it enforces (README of server/video):
 #   - 2160p only, HEVC only: a release that names AVC/x264, AV1, VC-1, MPEG-2 or VP9 scores -10000
-#   - PT-BR audio required: "BArch: PT-BR audio" is +10000 and min_format_score is 8000; the most a
-#     release can score from the guide's formats alone is about 6900 (TrueHD Atmos 5000 + tier 1800 +
-#     extras), so nothing without PT-BR passes, and PT-BR plus any -10000 format does not pass either
 #   - HDR wanted, SDR and DV without an HDR10 fallback refused, the guide's unwanted formats refused
+#     (-10000 against a minimum of 0: the guide's formats add up to ~7400 at most, so they stay refused)
+#   - PT-BR audio preferred, not required: "BArch: PT-BR audio" +2000 (no more, or a -10000 release
+#     with it and the best audio could reach 0). The video pipeline (barch_video) adds the dub to any
+#     file that lacks it; a release that already has it just saves that step
 #   - upgrades on, so a file below the bar is replaced when something better shows up
-# The original (English) audio and the PT-BR subtitles are not visible in a release title: the audit
-# (`barch video audit`) checks the real tracks after import, Bazarr fetches the subtitles.
 #
 # Left out on purpose: the guide's "Bad Dual Groups" (alfaHD, GUEIRA, SiGLA, C76, XiQUEXiQUE...) are
-# exactly the Brazilian dual-audio groups; their quality is checked by the audit instead.
-# The profiles are user-defined (no guide trash_id) so the guide's "Original" language rule, which
-# refuses a release parsed as PT-BR only ("Dublado"), never comes back; their language is set to Any.
+# exactly the Brazilian dual-audio groups.
+# The profiles are user-defined (no guide trash_id) so the guide's "Original" language rule never comes
+# back; Radarr's profile language is set to Any by hand (a release parsed as "Dublado" only is fine).
 
 radarr:
   movies:
@@ -33,7 +32,7 @@ radarr:
           allowed: true
           until_quality: Bluray-2160p
           until_score: 20000
-        min_format_score: 8000
+        min_format_score: 0
         quality_sort: top
         qualities:
           - name: Bluray-2160p
@@ -41,8 +40,11 @@ radarr:
             qualities: [WEBDL-2160p, WEBRip-2160p]
 
     custom_formats:
+      - trash_ids: [eb41082b76e883d189d5980f7dc5ed01] # BArch: PT-BR audio
+        assign_scores_to:
+          - name: BArch 4K
+            score: 2000
       - trash_ids:
-          - eb41082b76e883d189d5980f7dc5ed01 # BArch: PT-BR audio (+10000)
           - d295ca6f4c437dd552f31851e6613600 # BArch: not HEVC (-10000)
           - e7718d7a3ce595f289bfee26adc178f5 # Repack/Proper
           - ae43b294509409a6a13919dedd4764c4 # Repack2
@@ -94,7 +96,7 @@ sonarr:
           allowed: true
           until_quality: Bluray-2160p
           until_score: 20000
-        min_format_score: 8000
+        min_format_score: 0
         quality_sort: top
         qualities:
           - name: Bluray-2160p
@@ -102,8 +104,11 @@ sonarr:
             qualities: [WEBDL-2160p, WEBRip-2160p]
 
     custom_formats:
+      - trash_ids: [a4d4531970fc57484773d336e70fd366] # BArch: PT-BR audio
+        assign_scores_to:
+          - name: BArch 4K
+            score: 2000
       - trash_ids:
-          - a4d4531970fc57484773d336e70fd366 # BArch: PT-BR audio (+10000)
           - 3a19f7e88eddbf316a882427a11b8e38 # BArch: not HEVC (-10000)
           - ec8fa7296b64e8cd390a1600981f3923 # Repack/Proper
           - eb3d5cc0a2be0db205fb823640db6a3c # Repack2

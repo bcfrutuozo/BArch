@@ -42,7 +42,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `backup/` | — | `barch backup`: what restic saves to the NAS (`include.txt`, `exclude.txt`), see Backup |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
 | `agent/` | — | Scheduled agent tasks (`tasks/`), the reactive rules (`rules.json`) and their daemon (`events.py`), the failure ignore list and the upstream watch list; used by `barch` |
-| `server/` | NAS | `music/`: the music pipeline (beets container), downloads to `/music` in the library's style with a review queue (`barch music`, see Music); `unraid/`: the SMBus driver OpenRGB needs there, built per Unraid kernel (see NAS); `video/`: what Radarr and Sonarr accept (2160p HEVC with PT-BR audio), synced by Recyclarr (its README) |
+| `server/` | NAS | `music/`: the music pipeline (beets container), downloads to `/music` in the library's style with a review queue (`barch music`, see Music); `unraid/`: the SMBus driver OpenRGB needs there, built per Unraid kernel (see NAS); `video/`: what Radarr and Sonarr accept (2160p HEVC HDR, Recyclarr) and the pipeline that muxes the PT-BR dub from another release into each 4K file, subtitles shifted along (`barch video`, its README) |
 | `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, sixteen scenes in the colors of each palette), Limine theme (`limine-theme.py`) |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
 | `packages/` | — | Explicitly installed packages (`pacman.txt`, `aur.txt`, `aur-ignore.txt`) |
@@ -336,10 +336,12 @@ barch music retitle "<Artist/Album>" "<title>"   # the ALBUM tag (as given) and 
 barch music mb-add <id>               # an edition MusicBrainz lacks: its release editor opens in the browser filled in from the download
 barch music lidarr-artists|lidarr-albums <artist>|lidarr-search <ids>|lidarr-profile <name> ...|lidarr-list <Type> <name> field=value..
                                    # what Lidarr tracks, search albums, metadata profiles (studio albums only), import lists
-barch music seeds [days] [--live]|check   # seeding until ratio 2 / 30 days, and what the removed ones seeded, per tracker
+barch music seeds [days] [--live]|check   # seeding until ratio 3 / 90 days (music and video), and what the removed ones seeded, per tracker
 barch music lidarr-queue|lidarr-queue-remove <ids>|all|lidarr-commands|lidarr-cancel <id>   # what Lidarr is downloading and running
 barch music lidarr-enforce         # the library's rule on every artist now: BArch profile, every album without a file monitored (hourly by itself)
 barch music lidarr-artist-set all|<ids> --new-albums all|new|none [--monitored on|off]   # what happens to an album that shows up later
+barch video status|list [state]|show <id>   # the PT-BR pipeline on the NAS (server/video): dub muxed into each 4K file
+barch video retry|skip|unskip <id> · use <id> <guid> · scan · digest · audit · install
 barch replay share [file] [--from 12 --to 40]
                                    # newest replay (or FILE) → <name>-share.mp4 for WhatsApp status:
                                    # H.264 ≤1080p30, HDR tone mapped to SDR, at most 60 s
@@ -477,8 +479,9 @@ artwork before a scan of the sleeve (a store's image counts only with the same a
 and when it is visibly the same picture as the scan or the Cover Art Archive's; a scan that still
 wins has its frame trimmed), file names with the
 library's replacements. Then Lidarr rescans and stops looking for the album, Plex scans, the
-torrent keeps seeding until ratio 2 after at least 72 h, or 30 days after it finished (`seed` in its
-`config.json`; the oldest go first while the downloads disk has less than 100 GB free), and only
+torrent keeps seeding until ratio 3 after at least 72 h, or 90 days after it finished (`seed` in its
+`config.json`; the oldest go first while the downloads disk has less than 100 GB free; the same check
+takes the finished torrents of Radarr, Sonarr and the video pipeline's PT-BR donors), and only
 then is deleted, once what it seeded (uploaded, ratio, seed time, tracker) is in a seed history
 (`barch music seeds [days] [--live]`: what is seeding and how far from its goal, the history per
 tracker; the stalled downloads it replaces are recorded too; `barch music seeds check` runs the hourly check now). An album that is already there is completed (the missing tracks only) and

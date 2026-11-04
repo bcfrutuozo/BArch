@@ -133,6 +133,15 @@ Desktop (through the bar):
   music covers ask <Artist/Album> "what is wrong"   Claude looks at the candidates, adapts one or finds
                               another and proposes it (Bruno still decides with apply)
   music restart               restart the pipeline in the container (new code after install)
+  video status|list [state]   the video pipeline on the NAS (server/video): the PT-BR dub muxed into
+                              each 4K file Radarr grabs (states: search, waiting, downloading,
+                              aligning, review, done, skipped)
+  video show <id>             one movie: the dub candidates, the alignment, what happened
+  video retry|skip|unskip <id>   search again from scratch / leave alone / take back
+  video use <id> <guid>       try this candidate next (from video show)
+  video scan|digest [days]|restart   run now / the week / restart after install
+  video audit [--json]        the library against the rule (HEVC, 2160p, HDR, bitrate, audio, subtitles)
+  video install               copy Recyclarr's rules and the pipeline to the NAS (server/video/install.sh)
   music lidarr-flac-only      every Lidarr quality profile: FLAC and FLAC 24bit only
   music lidarr-monitor <ids> on|off   monitor or not these Lidarr album ids
   music lidarr-search <ids>   monitor these Lidarr albums and search the indexers now
@@ -932,6 +941,62 @@ cmd_music() {
       show "$OUT" '.result' ;;
     install) exec "$REPO/server/music/install.sh" ;;
     *) usage_error "music status|browse [page]|covers ...|restart|list [state]|show <id>|resolve <id> ...|retry|reject|undo <id>|scan|lidarr-...|install" ;;
+  esac
+}
+
+# video: the pipeline runs in its own container on the NAS (server/video); this only talks to its
+# API with the URL and token install.sh left in ~/.config/barch/video.json (.pipeline)
+video_api() {   # video_api GET|POST <path> [json body]
+  local conf="$HOME/.config/barch/video.json" url token
+  if [[ ! -r $conf ]] || ! jq -e .pipeline.token "$conf" >/dev/null 2>&1; then
+    die 3 "no pipeline in $conf: run barch video install first"
+  fi
+  url=$(jq -r .pipeline.url "$conf"); token=$(jq -r .pipeline.token "$conf")
+  OUT=$(curl -sS --max-time "${VIDEO_API_TIMEOUT:-60}" -X "$1" -H "X-Barch-Token: $token" -H "Content-Type: application/json" \
+    ${3:+--data "$3"} "$url$2" 2>&1) || die 3 "video pipeline not reachable at $url ($OUT)"
+  jq -e . >/dev/null 2>&1 <<<"$OUT" || die 3 "video pipeline answered: ${OUT:0:200}"
+  [[ $(jq -r '.ok' <<<"$OUT") == true ]] || { [[ $JSON == 1 ]] && jq . <<<"$OUT"; die 1 "$(jq -r '.error // "failed"' <<<"$OUT")"; }
+}
+
+cmd_video() {
+  local sub=${1:-status}
+  (($#)) && shift
+  need curl; need jq
+  case $sub in
+    status)
+      video_api GET /api/status
+      show "$OUT" '"video pipeline: " + ((.counts | to_entries | map(select(.value > 0) | "\(.value) \(.key)") | join(", ")) | if . == "" then "no movies yet" else . end) + (if .doing != "" then " · \(.doing)" else "" end) + (if ((.missing // []) | length) > 0 then "\nMISSING in the container: " + (.missing | join(", ")) + " (custom-cont-init.d not run?)" else "" end)' ;;
+    list)
+      video_api GET "/api/jobs${1:+?state=$1}"
+      show "$OUT" '.jobs[] | "\(.id)\t\(.state)\t\(.title) (\(.year))  [\(.audio // [] | join(","))]\(if .donor != "" then "  ← \(.donor)\(if .progress then " \(.progress * 100 | floor) %" else "" end)" else "" end)\(if .reason != "" and .reason != null then "\n      " + .reason else "" end)"' ;;
+    show)
+      [[ -n ${1:-} ]] || usage_error "video show <id>"
+      video_api GET "/api/jobs/$1"
+      show "$OUT" '.job | "\(.id)  \(.state)  \(.title) (\(.year)), original \(.original)\nfile: \(.file)\naudio: \(.audio // [] | join(", "))"
+        + (if .reason then "\nreason: \(.reason)" else "" end)
+        + (if .alignment then "\nalignment: \(if .alignment.ok then "offset \(.alignment.offset_ms) ms, speed \(.alignment.speed), \(.alignment.agreeing)/\(.alignment.windows) windows (\(.alignment.compared) vs original)" else .alignment.reason end)" else "" end)
+        + (if (.candidates|length) > 0 then "\ncandidates:\n" + (.candidates | sort_by(-.score) | map("  [\(.status)] \(.score)  \(.title)  \(.size / 1073741824 * 10 | floor / 10) GB  \(.seeders) seeders  \(.indexer)\(if .reason != "" then "\n        " + .reason else "" end)\n        guid: \(.guid)") | join("\n")) else "" end)
+        + "\nhistory:\n" + (.history[-12:] | map("  \(.t | strftime("%d/%m %H:%M"))  \(.msg)") | join("\n"))' ;;
+    retry|skip|unskip)
+      [[ -n ${1:-} ]] || usage_error "video $sub <id>"
+      video_api POST "/api/jobs/$1" "$(jq -cn --arg a "$sub" '{action: $a}')"
+      show "$OUT" '"\(.job.title): \(.job.state)"' ;;
+    use)
+      [[ -n ${1:-} && -n ${2:-} ]] || usage_error "video use <id> <guid>"
+      video_api POST "/api/jobs/$1" "$(jq -cn --arg g "$2" '{action: "use", guid: $g}')"
+      show "$OUT" '"\(.job.title): this candidate next"' ;;
+    scan)
+      video_api POST /api/scan '{}'
+      show "$OUT" '"video pipeline: running now"' ;;
+    digest)
+      video_api GET "/api/digest?days=${1:-7}"
+      show "$OUT" '.text' ;;
+    restart)
+      video_api POST /api/restart '{}'
+      show "$OUT" '"video pipeline: restarting"' ;;
+    audit) exec python3 -I "$REPO/server/video/audit.py" "$@" ;;
+    install) exec "$REPO/server/video/install.sh" ;;
+    *) usage_error "video status|list [state]|show|retry|skip|unskip|use|scan|digest|restart|audit|install" ;;
   esac
 }
 
@@ -1927,6 +1992,7 @@ case $cmd in
   anon) cmd_anon "$@" ;;
   vpn) cmd_vpn "$@" ;;
   music) cmd_music "$@" ;;
+  video) cmd_video "$@" ;;
   health) cmd_health "$@" ;;
   rules) cmd_rules "$@" ;;
   events) cmd_events "$@" ;;

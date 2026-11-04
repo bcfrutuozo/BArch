@@ -7,7 +7,8 @@
   "poll_s": 120,
   "port": 8338,
   "delete_torrent": true,
-  "seed": {"ratio": 2.0, "min_hours": 72, "max_days": 30, "min_free_gb": 100, "path": "/data"},
+  "seed": {"ratio": 3.0, "min_hours": 72, "max_days": 90, "min_free_gb": 100, "path": "/data",
+           "categories": ["radarr", "sonarr", "tv-sonarr", "barch-dub"]},
   "qbittorrent": {"url": "http://qbittorrent:8080"},
   "lidarr": {"url": "http://lidarr:8686"},
   "plex": {"url": "http://100.100.0.10:32400", "path_prefix": "/data/music"}

@@ -175,8 +175,10 @@ class Pipeline:
                 continue
             if "por" in langs:
                 if j.get("state") != "done":
-                    log(j, "the file has PT-BR audio" + (" (came with it)" if j.get("state") not in ("aligning",) else ""))
+                    log(j, "the file has PT-BR audio")
                 j["state"], j["reason"] = "done", ""
+            elif j.get("state") == "downloading":
+                log(j, "Radarr replaced the file; the dub being downloaded will be aligned with the new one")
             else:
                 log(j, f"new file without PT-BR audio ({', '.join(langs) or 'no audio'}): looking for a dub")
                 j["state"], j["reason"] = "search", ""
@@ -445,12 +447,8 @@ class Pipeline:
         j = self.store.load(jid)
         if not j:
             raise KeyError(jid)
-        if action == "retry":       # everything tried is forgotten, search again now
-            for c in j.get("candidates", []):
-                if c["status"] in ("failed", "new"):
-                    c["status"] = "new" if c["status"] == "new" else "failed"
-            j["candidates"] = [c for c in j.get("candidates", []) if c["status"] != "failed"]
-            j["failures"], j["state"], j["reason"] = 0, "search", ""
+        if action == "retry":       # a fresh start: every candidate forgotten, searched again now
+            j["candidates"], j["failures"], j["state"], j["reason"], j["donor"] = [], 0, "search", "", ""
             j.pop("titles", None)
             log(j, "retry by hand")
         elif action == "skip":

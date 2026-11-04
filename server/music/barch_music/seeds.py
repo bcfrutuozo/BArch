@@ -118,7 +118,8 @@ class SeedLog:
         return out
 
 
-SEED_DEFAULTS = {"ratio": 2.0, "min_hours": 72, "max_days": 30, "min_free_gb": 100, "path": "/data"}
+SEED_DEFAULTS = {"ratio": 3.0, "min_hours": 72, "max_days": 90, "min_free_gb": 100, "path": "/data",
+                 "categories": ["radarr", "sonarr", "tv-sonarr", "barch-dub"]}
 
 
 class SeedKeeper:
@@ -128,6 +129,10 @@ class SeedKeeper:
     seeding, or `max_days` after it finished whatever its ratio. While the downloads disk has less than
     `min_free_gb` free, the ones past `min_hours` go first (oldest first), then the others. Lidarr does
     not follow a finished torrent, so it stays in its category without being imported again.
+    The finished torrents of `categories` (Radarr's and Sonarr's, the video pipeline's PT-BR donors) are
+    adopted by the same check: Radarr and Sonarr import in minutes and the donor is muxed in hours, long
+    before `min_hours`, and they only remove a torrent qBittorrent stopped (it never stops one here: no
+    share limits), so this is the one place a finished torrent leaves the client, through the history.
     `seed.ratio: 0` in config.json deletes at once, as before."""
 
     TAG = "pipeline:seeding"
@@ -155,7 +160,25 @@ class SeedKeeper:
         d = self._load()
         d[h.lower()] = {"reason": reason, "album": album, "since": int(time.time())}
         self._save(d)
-        self.qbit.tag(h, add=self.TAG)
+        self.qbit.tag(h, add=self.TAG, remove="pipeline:review")
+
+    def kept(self) -> set[str]:
+        return set(self._load())
+
+    def adopt_categories(self) -> list[str]:
+        """Finished torrents of the other apps' categories, not seeding for the policy yet."""
+        cats = [c for c in self.cfg.get("categories") or [] if c]
+        if not cats:
+            return []
+        kept, out = self.kept(), []
+        for c in cats:
+            for t in self.qbit.completed([c]):
+                h = t["hash"].lower()
+                if h not in kept and float(t.get("progress") or 0) >= 1:
+                    self.keep(h, c, t.get("name", ""))
+                    kept.add(h)
+                    out.append(f"{t.get('name', h)} ({c})")
+        return out
 
     def remove(self, h: str, reason: str, album: str) -> dict | None:
         row = self.log.record(self.qbit, h, reason, album)

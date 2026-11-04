@@ -254,8 +254,24 @@ class Pipeline:
                 self.current = ""
 
     def seed_check(self, force: bool = False) -> list[str]:
-        """Every hour (or now): the torrents seeding for the pipeline that reached their goal go (seeds.py)."""
+        """Every hour (or now): the torrents seeding for the pipeline that reached their goal go (seeds.py).
+        A torrent still in qBittorrent whose albums are all finished (done, or rejected without delete) and
+        that is not seeding for the policy yet is handed to it first, so nothing stays in the client forever."""
         try:
+            if self.seeding.enabled and (force or time.time() - self.seeding.last >= 3600):
+                kept, groups = self.seeding.kept(), {}
+                for j in self.store.all():
+                    if j.get("kind") == "torrent" and j.get("hash") and not j.get("superseded"):
+                        groups.setdefault(j["hash"].lower(), []).append(j)
+                for h, g in groups.items():
+                    if h in kept or any(j["state"] not in ("done", "rejected") for j in g) or len(g) < g[0].get("siblings", 1):
+                        continue
+                    if self.qbit.torrent(h):
+                        reason = "imported" if all(j["state"] == "done" for j in g) else "rejected"
+                        self.seeding.keep(h, reason, g[0].get("torrent") or g[0].get("name", ""))
+                        print(f"[seeds] {g[0].get('torrent')}: finished, now seeding for the policy ({reason})", flush=True)
+                for name in self.seeding.adopt_categories():
+                    print(f"[seeds] {name}: finished, now seeding for the policy", flush=True)
             gone = self.seeding.check(force)
         except Exception as e:  # noqa: BLE001
             print(f"[seeds] check failed: {e}", flush=True)
