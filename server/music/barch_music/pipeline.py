@@ -472,6 +472,28 @@ class Pipeline:
                     out.append({"name": d.name, "albums": n})
         return out
 
+    def adopt(self, folder: str, release: str) -> list[dict]:
+        """An album of /music made by hand, now on MusicBrainz (an edition added with mb-add, a local artist):
+        a copy of /music/<folder> goes into the inbox as a job tied to `release`, so the run merges it into
+        the same folder: the library's rules and the MusicBrainz ids on the files, the audio never replaced,
+        an undo log as for any merge. The copy is the job's source (the inbox folder is deleted after the
+        run), never the library folder itself."""
+        src = (self.music / folder).resolve()
+        if self.music.resolve() not in src.parents or not src.is_dir() or not any(src.rglob("*.flac")):
+            raise ValueError(f"{folder}: not an album folder of the library")
+        m = re.search(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", release)
+        if not m:
+            raise ValueError("no MusicBrainz release id")
+        dst = self.inbox / f"{src.parent.name} - {src.name} (library {time.strftime('%Y%m%d-%H%M%S')})"
+        shutil.copytree(src, dst)
+        jobs = self.from_inbox(dst)
+        for j in jobs:
+            j["chosen"] = m.group(0)
+            self.log(j, f"the library's {folder} taken in again with MusicBrainz release {m.group(0)}")
+            self.store.save(j)
+        self.wake.set()
+        return jobs
+
     def retitle_album(self, folder: str, album: str) -> dict:
         """ALBUM on every track of /music/<folder> set to `album` (as given, no restyling) and the folder
         renamed to the library's name for it; Plex rescans the artist, Lidarr the album's artist."""

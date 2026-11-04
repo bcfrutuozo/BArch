@@ -176,6 +176,9 @@ owns it; Unraid's own share permissions, so the SMB user can update it) and `chm
 `/custom-services.d` (read only), port 8338, network `frutuozoproxy`. Secrets (Lidarr API key, Plex
 token, Telegram bot, optional AcoustID key) go in `appdata/beets/pipeline/secrets.json`.
 `barch music lidarr-flac-only` sets every Lidarr quality profile to FLAC / FLAC 24bit.
+`barch music adopt "<Artist/Album>" <release>` takes an album of `/music` made by hand, once MusicBrainz has it (after
+`mb-add`, or a local artist added there), through the pipeline again as a merge into its own folder: the MusicBrainz ids
+and the library's rules on its files, the audio never replaced, an undo log (a copy goes through the inbox).
 `barch music lidarr-add <mbid> <folder>` tracks an artist `/music` already has at its own folder (BArch profile,
 the usual quality profile and root folder, artist monitored, nothing searched on adding: the hourly check does it).
 `barch music lidarr-artists [q]` and `lidarr-albums <artist>` show what Lidarr tracks (album ids for
