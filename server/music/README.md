@@ -137,6 +137,13 @@ barch music retry|reject <id>
 barch music reject <id> --delete     # and the torrent (or inbox folder) goes once every album of it is done or rejected
 ```
 
+An edition MusicBrainz lacks (a track list that exists nowhere there) is added by hand, with Bruno's
+MusicBrainz account: `barch music mb-add <id>` turns the job's download (artist, album, year, every
+track with its title and the length measured from the files; `tracks` in the job) into a release
+editor seed, a form that opens musicbrainz.org/release/add in the browser already filled in; he checks
+and submits there (nothing is written from here, no credentials anywhere), then
+`barch music resolve <id> --release <the new mbid>`.
+
 A box set that only reissues albums the library has (Aerosmith's *Box of Fire*: twelve albums plus a
 bonus disc) is one job per disc folder; Bruno does not want it (every album once), so its jobs are
 rejected with `--delete`. A rejected download never changes Lidarr's monitoring of an album that
