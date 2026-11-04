@@ -35,6 +35,8 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
                                          "BArch" metadata profile, new albums monitored, albums without a file monitored once
     GET  /api/lidarr/queue               what Lidarr grabbed and still waits for; POST /api/lidarr/queue-remove {"ids", "blocklist", "from_client"}
     POST /api/lidarr/artists             {"ids": "all" | [artist ids], "monitored": bool, "monitor_new_items": "all|none|new"}
+    POST /api/library/adopt              {"folder": "Artist/Album", "release"}: a hand-made album merged into itself with that
+                                         release (MusicBrainz ids and the library's rules on its files; a copy goes through the inbox)
     POST /api/lidarr/add-artists         {"artists": [{"mbid", "folder"}]}: artists of /music tracked at their own folder
     GET  /api/library/artists            the artist folders of /music with their album count (the Covers page's list)
     GET  /api/library/albums?artist=X    the album folders of one artist, and whether each has a cover.jpg
@@ -302,6 +304,14 @@ def make_handler(p: Pipeline, token: str):
                     ids = [int(i) for i in body.get("ids", [])]
                     return self._send(200, {"ok": True, "result": p.lidarr.remove_queue(ids, bool(body.get("blocklist", True)),
                                                                                          bool(body.get("from_client", True)))})
+                if parts == ["api", "library", "adopt"]:
+                    # {"folder": "Artist/Album", "release": mbid or URL}: the album merged into itself with that release
+                    try:
+                        jobs = p.adopt(str(body.get("folder", "")), str(body.get("release", "")))
+                    except (ValueError, OSError) as e:
+                        return self._send(400, {"ok": False, "error": str(e)})
+                    return self._send(200, {"ok": True, "jobs": [summary(j) for j in jobs],
+                                            "result": f"{body.get('folder')}: queued as {', '.join(j['id'] for j in jobs)}"})
                 if parts == ["api", "lidarr", "add-artists"]:
                     # {"artists": [{"mbid", "folder"}]}: artists the library has, tracked at their own folder
                     out, mbids = [], {str(a.get("mbid")) for a in body.get("artists") or []}
