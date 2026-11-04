@@ -24,7 +24,7 @@ from . import audio, cover, matcher, mb, merge, style, tagger
 from .canon import Canon
 from .library import Library
 from .libcovers import LibraryCovers
-from .seeds import SeedLog
+from .seeds import SeedKeeper, SeedLog
 from .integrations import Lidarr, Plex, QBit, Telegram
 
 STATES = ("queued", "working", "review", "done", "failed", "rejected")
@@ -155,6 +155,7 @@ class Pipeline:
         self.canon = Canon(self.store.root)
         self.library = Library(self.music, self.store.root, self.lidarr)
         self.seeds = SeedLog(self.store.root)
+        self.seeding = SeedKeeper(self.store.root, cfg, self.qbit, self.seeds)
 
     # ------------------------------------------------------------ intake
     def log(self, job: dict, msg: str) -> None:
@@ -217,6 +218,8 @@ class Pipeline:
             if not job:
                 self.doing = "Lidarr check"
                 self.enforce_lidarr()
+                self.doing = "seed check"
+                self.seed_check()
                 self.weekly_digest()
                 # idle: one album of the library tied to MusicBrainz, then the queue is looked at again
                 if self.cfg.get("library_sweep", True):
@@ -249,6 +252,17 @@ class Pipeline:
                 self.fail(self.store.load(job["id"]) or job, e)
             finally:
                 self.current = ""
+
+    def seed_check(self, force: bool = False) -> list[str]:
+        """Every hour (or now): the torrents seeding for the pipeline that reached their goal go (seeds.py)."""
+        try:
+            gone = self.seeding.check(force)
+        except Exception as e:  # noqa: BLE001
+            print(f"[seeds] check failed: {e}", flush=True)
+            return [f"seed check failed: {e}"]
+        if gone:
+            print("[seeds] deleted: " + "; ".join(gone), flush=True)
+        return gone
 
     def fail(self, job: dict, e: Exception) -> None:
         job["state"] = "failed"
@@ -314,6 +328,14 @@ class Pipeline:
         judged = sum(c.values())
         lines.append(f"• Biblioteca: {c.get('tagged', 0) + c.get('had', 0)} de {lib['albums']} álbuns com ids do MusicBrainz"
                      f" ({judged} vistos), {len(lib['decide'])} para decidir na aba Library")
+        try:
+            seeding = self.seeding.status()
+            if seeding:
+                up = sum(r["uploaded"] for r in seeding) / 1e9
+                lines.append(f"• Semeando {len(seeding)} torrent(s) até ratio {self.seeding.cfg['ratio']}: {up:.1f} GB enviados,"
+                             f" {sum(1 for r in seeding if r['ratio'] >= 1)} já acima de 1")
+        except Exception:  # noqa: BLE001
+            pass
         st = self.seeds.totals(self.seeds.rows(days))
         if st["torrents"]:
             lines.append(f"• Seed dos {st['torrents']} torrent(s) removidos: {st['uploaded'] / 1e9:.1f} GB enviados de"
@@ -614,11 +636,16 @@ class Pipeline:
             return
         if job.get("kind") == "torrent" and self.cfg.get("delete_torrent", True):
             reason = "imported" if all(j["state"] == "done" for j in group) else "rejected"
-            row = self.seeds.record(self.qbit, job["hash"], reason, job.get("name", ""))
-            self.qbit.delete(job["hash"], files=True)
-            self.log(job, "torrent and its files deleted from qBittorrent" + (
-                f" (seeded {row['uploaded'] / 1e9:.2f} GB, ratio {row['ratio']}, {row['seeding_time'] // 3600} h; seed-history.jsonl)"
-                if row else " (its seed numbers could not be read)"))
+            if self.seeding.enabled:
+                self.seeding.keep(job["hash"], reason, job.get("torrent") or job.get("name", ""))
+                c = self.seeding.cfg
+                self.log(job, f"torrent kept seeding (deleted at ratio {c['ratio']} after {c['min_hours']} h,"
+                              f" or {c['max_days']} days after it finished)")
+            else:
+                row = self.seeding.remove(job["hash"], reason, job.get("torrent") or job.get("name", ""))
+                self.log(job, "torrent and its files deleted from qBittorrent" + (
+                    f" (seeded {row['uploaded'] / 1e9:.2f} GB, ratio {row['ratio']}, {row['seeding_time'] // 3600} h; seed-history.jsonl)"
+                    if row else " (its seed numbers could not be read)"))
         elif job.get("kind") == "inbox":
             shutil.rmtree(job["inbox"], ignore_errors=True)
             self.log(job, "inbox folder removed")

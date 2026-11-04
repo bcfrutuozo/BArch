@@ -101,8 +101,9 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
    folders: `:` `?` `/`→`_`, `"`→`-`, no trailing dot.
 8. **After**: Lidarr rescans the artist and the album is unmonitored (no new download for it),
    Plex scans the folder, and once every album of the torrent is in, the torrent and its files are
-   deleted from qBittorrent (inbox folders are removed). Before that its seed numbers go to the
-   seed history (below).
+   kept seeding (tag `pipeline:seeding`, listed in `<jobs>/seeding.json`) and deleted from
+   qBittorrent by the hourly seed check once it reached its goal (below); inbox folders are removed
+   at once.
 
 A network error on the way (MusicBrainz answering 503, Wikidata down) is not the album's fault:
 the job goes back to the queue and waits 2, 4, 8, 16 and 32 minutes between tries, with the error
@@ -249,6 +250,12 @@ sweep, one album per turn, so a new download never waits for either.
   the album standing alone).
 - **Digest** (`GET /api/digest`, `barch music digest`; `digest: false` off): the week in one Telegram message
   on Sundays at 18:00, with what the torrents removed that week seeded.
+- **Seeding** (`seeds.py` `SeedKeeper`, `seed` in config.json): a torrent whose albums are all done (or rejected
+  with delete) stays in qBittorrent, in its category (Lidarr does not follow finished torrents, so nothing is
+  imported twice), until it has `ratio` (2.0) after at least `min_hours` (72) of seeding, or `max_days` (30) after
+  it finished whatever its ratio; while `path` (`/data`) has less than `min_free_gb` (100) free, the ones past
+  `min_hours` go first, oldest first, then the rest. `ratio: 0` deletes at once as before. Checked every hour;
+  `POST /api/seeds/check` (`barch music seeds check`) now.
 - **Seed history** (`seeds.py`, `GET /api/seeds[?days=N&live=1]`, `barch music seeds [days] [--live]`): qBittorrent
   forgets a torrent once deleted, so every torrent the pipeline removes (imported, rejected with delete, or
   stalled and replaced) is read first and appended to `<jobs>/seed-history.jsonl`: size, downloaded, uploaded,

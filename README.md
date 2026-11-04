@@ -336,7 +336,7 @@ barch music retitle "<Artist/Album>" "<title>"   # the ALBUM tag (as given) and 
 barch music mb-add <id>               # an edition MusicBrainz lacks: its release editor opens in the browser filled in from the download
 barch music lidarr-artists|lidarr-albums <artist>|lidarr-search <ids>|lidarr-profile <name> ...|lidarr-list <Type> <name> field=value..
                                    # what Lidarr tracks, search albums, metadata profiles (studio albums only), import lists
-barch music seeds [days] [--live]  # what the removed torrents seeded: uploaded, ratio, seed time, per tracker
+barch music seeds [days] [--live]|check   # seeding until ratio 2 / 30 days, and what the removed ones seeded, per tracker
 barch music lidarr-queue|lidarr-queue-remove <ids>|all|lidarr-commands|lidarr-cancel <id>   # what Lidarr is downloading and running
 barch music lidarr-enforce         # the library's rule on every artist now: BArch profile, every album without a file monitored (hourly by itself)
 barch music lidarr-artist-set all|<ids> --new-albums all|new|none [--monitored on|off]   # what happens to an album that shows up later
@@ -477,8 +477,11 @@ artwork before a scan of the sleeve (a store's image counts only with the same a
 and when it is visibly the same picture as the scan or the Cover Art Archive's; a scan that still
 wins has its frame trimmed), file names with the
 library's replacements. Then Lidarr rescans and stops looking for the album, Plex scans, the
-torrent is deleted, once what it seeded (uploaded, ratio, seed time, tracker) is in a seed history
-(`barch music seeds [days] [--live]`, totals per tracker; the stalled downloads it replaces too). An album that is already there is completed (the missing tracks only) and
+torrent keeps seeding until ratio 2 after at least 72 h, or 30 days after it finished (`seed` in its
+`config.json`; the oldest go first while the downloads disk has less than 100 GB free), and only
+then is deleted, once what it seeded (uploaded, ratio, seed time, tracker) is in a seed history
+(`barch music seeds [days] [--live]`: what is seeding and how far from its goal, the history per
+tracker; the stalled downloads it replaces are recorded too; `barch music seeds check` runs the hourly check now). An album that is already there is completed (the missing tracks only) and
 fixed by the library's rules, never replaced, with an undo log; a track of Bruno's that looks wrong
 is only swapped with his ok. Anything it cannot do completely (no match, a year-only date, no
 cover) waits in a review queue with the reason and the candidates:
