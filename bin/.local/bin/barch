@@ -141,6 +141,7 @@ Desktop (through the bar):
   music lidarr-artist-set all|<ids> [--monitored on|off] [--new-albums all|none|new]
                               artist settings: whether an album that shows up later gets monitored (and downloaded)
   music lidarr-enforce        every artist on the BArch profile, every official album without a file monitored (the pipeline does it hourly)
+  music lidarr-add <mbid> <folder>   track an artist /music already has, at its own folder, with the library's profiles
   music lidarr-commands       Lidarr's running and recent commands · lidarr-cancel <id> stops one (a RefreshArtist in flight undoes monitor changes)
   music lidarr-queue          what Lidarr grabbed and is downloading · lidarr-queue-remove <ids>|all [--keep]: drop them (blocklisted)
   music lidarr-profiles       the metadata profiles · lidarr-profile <name> --primary Album,EP --secondary Live
@@ -802,6 +803,10 @@ cmd_music() {
       show "$OUT" '.commands[] | "\(.id)\t\(.name) \(.status)  \(.started[0:19])  artist \(.artist_id // "-")  albums \(.albums)  (\(.trigger))"' ;;
     lidarr-enforce)
       music_api POST /api/lidarr/enforce '{}'
+      show "$OUT" '.result' ;;
+    lidarr-add)
+      [[ -n ${1:-} && -n ${2:-} ]] || usage_error "music lidarr-add <MusicBrainz artist id> <artist folder in /music>"
+      music_api POST /api/lidarr/add-artists "$(jq -cn --arg m "$1" --arg f "$2" '{artists: [{mbid: $m, folder: $f}]}')"
       show "$OUT" '.result' ;;
     lidarr-cancel)
       [[ -n ${1:-} ]] || usage_error "music lidarr-cancel <command id>"
