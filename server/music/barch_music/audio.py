@@ -204,6 +204,24 @@ def _to_flac(src: Path, dst: Path, skip: int = 0, until: int = 0) -> None:
         tmp.unlink(missing_ok=True)
 
 
+def extract(a: Path, out: Path) -> None:
+    """One archive into out with 7z; a RAR 7z cannot open (the Alpine 7zip package has no RAR codec,
+    so RAR5 fails with "Cannot open the file as archive") goes to unrar or bsdtar (libarchive reads RAR5)."""
+    try:
+        run(["7z", "x", "-y", "-bd", f"-o{out}", str(a)], timeout=7200)
+        return
+    except AudioError as e:
+        if a.suffix.lower() != ".rar":
+            raise
+        first = e
+    if shutil.which("unrar"):
+        run(["unrar", "x", "-o+", "-y", str(a), str(out) + "/"], timeout=7200)
+    elif shutil.which("bsdtar"):
+        run(["bsdtar", "-xf", str(a), "-C", str(out)], timeout=7200)
+    else:
+        raise AudioError(f"{first}; no unrar or bsdtar to try instead (libarchive-tools in the container)")
+
+
 def extract_archives(folder: Path, work: Path) -> list[str]:
     """Every zip/rar/7z under folder into work/_extracted/<name>; returns their names."""
     done = []
@@ -212,9 +230,17 @@ def extract_archives(folder: Path, work: Path) -> list[str]:
             continue                                  # later volumes of a multi-part rar
         out = work / "_extracted" / a.stem
         out.mkdir(parents=True, exist_ok=True)
-        run(["7z", "x", "-y", "-bd", f"-o{out}", str(a)], timeout=7200)
+        extract(a, out)
         done.append(a.name)
     return done
+
+
+def _relative(f: Path, roots: list[Path], source: Path) -> Path:
+    """f inside the download or the folder its archives were extracted to, relative to that (for the disc number)."""
+    for r in roots + [source.parent]:
+        if r.is_dir() and f.is_relative_to(r):
+            return f.relative_to(r)
+    return Path(f.name)
 
 
 def collect(source: Path, work: Path) -> tuple[list[Track], list[str]]:
@@ -226,6 +252,13 @@ def collect(source: Path, work: Path) -> tuple[list[Track], list[str]]:
         if arch:
             notes.append("extracted: " + ", ".join(arch))
             roots.append(work / "_extracted")
+    elif source.is_file() and source.suffix.lower() in ARCHIVES:
+        # the whole download is one archive (a torrent of a single .rar): it is the album
+        out = work / "_extracted" / source.stem
+        out.mkdir(parents=True, exist_ok=True)
+        extract(source, out)
+        notes.append("extracted: " + source.name)
+        roots = [work / "_extracted"]
     files = []
     for r in roots:
         files += [p for p in (r.rglob("*") if r.is_dir() else [r]) if p.is_file()]
@@ -311,7 +344,7 @@ def collect(source: Path, work: Path) -> tuple[list[Track], list[str]]:
     if not images or not tracks:
         groups: dict[int, list[Path]] = {}
         for f in loose:
-            groups.setdefault(_disc_from_path(f.relative_to(source if source.is_dir() else source.parent)) or 1, []).append(f)
+            groups.setdefault(_disc_from_path(_relative(f, roots, source)) or 1, []).append(f)
         id3 = 0
         for disc, fs in sorted(groups.items()):
             fs.sort(key=lambda p: _sort_key(p))
