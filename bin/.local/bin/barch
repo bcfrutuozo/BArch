@@ -147,8 +147,9 @@ Desktop (through the bar):
                               (one Lidarr's metadata server does not know yet waits: lidarr-pending, tried hourly)
   music lidarr-commands       Lidarr's running and recent commands · lidarr-cancel <id> stops one (a RefreshArtist in flight undoes monitor changes)
   music digest [days]         the week of the pipeline in one message (Telegram gets it on Sundays at 18:00)
-  music seeds [days] [--live]  seed history of the torrents the pipeline removed (uploaded, ratio, seed time,
-                              per tracker); --live adds the ones still in qBittorrent
+  music seeds [days] [--live]  the torrents kept seeding until their goal (ratio 2 after 72 h, or 30 days) and the
+                              seed history of the ones removed (per tracker); --live adds every torrent in qBittorrent
+  music seeds check           the hourly seed check now (deletes what reached its ratio or its time)
   music lidarr-stalled [h]    downloads with no progress for 48 h (or h): the hourly check blocklists them and searches another
   music lidarr-queue          what Lidarr grabbed and is downloading · lidarr-queue-remove <ids>|all [--keep]: drop them (blocklisted)
   music lidarr-release-profiles   what Lidarr never grabs (box sets, discographies, complete collections: kept by the hourly check)
@@ -857,6 +858,11 @@ cmd_music() {
       music_api GET "/api/lidarr/albums?artist=$(jq -rn --arg v "$1" '$v | @uri')"
       show "$OUT" '.albums[] | "\(.id)\t\(.date)  \(.title)  [\(.type)\(if (.secondary|length) > 0 then ", " + (.secondary|join(", ")) else "" end)]  \(.files)/\(.tracks)\(if .monitored then "  monitored" else "" end)\(if .canon == null then "" elif .canon == "" then "  · unofficial" else "  · " + .canon end)"' ;;
     seeds)
+      if [[ ${1:-} == check ]]; then
+        music_api POST /api/seeds/check '{}'
+        show "$OUT" '.result'
+        return
+      fi
       local days="" live=""
       for a in "$@"; do
         case $a in --live) live=1 ;; *) days=$a ;; esac
@@ -865,6 +871,9 @@ cmd_music() {
       show "$OUT" 'def gb: (. / 1e9 * 100 | round / 100 | tostring) + " GB";
         def hrs: (. / 3600 | floor | tostring) + " h";
         def line: "\(.torrents) torrents  up \(.uploaded|gb)  down \(.downloaded|gb)  ratio \(.ratio)  seed avg \(.avg_seeding_time|hrs)  below 1: \(.below_1)";
+        "policy: delete at ratio \(.policy.ratio) after \(.policy.min_hours) h, or \(.policy.max_days) days after finishing; keep \(.policy.min_free_gb) GB free",
+        "seeding for the pipeline: \(.seeding // [] | length)",
+        (.seeding // [] | .[:20][] | "  ratio \(.ratio)/\(.goal)  up \(.uploaded|gb)  \(.seeding_time|hrs)  \(if .days_left != null then "\(.days_left) d left" else "" end)  \(.trackers|join(","))  \(.name)"),
         "removed from qBittorrent\(if .days > 0 then " (last \(.days) days)" else "" end): " + (.total|line),
         (.trackers[] | "  \(.tracker): " + line),
         (if (.recent|length) > 0 then "latest:" else empty end),

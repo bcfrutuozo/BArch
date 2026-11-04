@@ -10,7 +10,9 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
     GET  /api/digest[?days=7]            the week in one message (also sent to Telegram on Sundays at 18:00)
     GET  /api/jobs/<id>/compare?release=<mbid|URL>   the download next to that release, track by track
     GET  /api/seeds[?days=N&live=1]      the seed history (seeds.py): what each torrent removed from qBittorrent gave
-                                         back, in total, per tracker and the latest; live=1 adds the torrents still there
+                                         back, in total, per tracker and the latest; live=1 adds the torrents still there;
+                                         "seeding": the ones kept seeding by the policy (config "seed") and how far each is
+    POST /api/seeds/check                the hourly seed check now: deletes what reached its ratio or its time
     GET  /api/status                     counts per state, the job running now
     GET  /api/jobs[?state=review]        summaries
     GET  /api/jobs/<id>                  everything: problems, candidates, the proposed tags
@@ -174,7 +176,12 @@ def make_handler(p: Pipeline, token: str):
                         live = p.qbit.all()
                     except Exception as e:  # noqa: BLE001
                         return self._send(502, {"ok": False, "error": f"qBittorrent: {e}"})
-                return self._send(200, {"ok": True, **p.seeds.summary(float((q.get("days") or ["0"])[0]), live)})
+                out = p.seeds.summary(float((q.get("days") or ["0"])[0]), live)
+                try:
+                    out["seeding"] = p.seeding.status()
+                except Exception as e:  # noqa: BLE001
+                    out["seeding_error"] = str(e)
+                return self._send(200, {"ok": True, "policy": p.seeding.cfg, **out})
             if parts == ["api", "status"]:
                 jobs = p.store.all()
                 return self._send(200, {"ok": True, "running": p.current, "doing": p.doing, "missing": missing_tools(),
@@ -319,6 +326,9 @@ def make_handler(p: Pipeline, token: str):
                     return self._send(200, {"ok": True, "result": "; ".join(r["done"]), **r})
                 if parts == ["api", "scan"]:
                     return self._send(200, {"ok": True, "new": p.scan()})
+                if parts == ["api", "seeds", "check"]:
+                    gone = p.seed_check(force=True)
+                    return self._send(200, {"ok": True, "deleted": gone, "result": "; ".join(gone) or "nothing reached its goal"})
                 if parts == ["api", "lidarr", "flac-only"]:
                     return self._send(200, {"ok": True, "result": p.lidarr.flac_only_profile()})
                 if parts == ["api", "lidarr", "monitor"]:
