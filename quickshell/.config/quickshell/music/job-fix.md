@@ -65,6 +65,14 @@ going until it is in the library or until the only decision left is truly his.
   so the album needs fewer rounds. Stop after four rounds, or as soon as the remaining problem
   is one of Bruno's decisions.
 
+## An edition MusicBrainz does not have
+
+When the download is a real edition that MusicBrainz lacks (the track list exists nowhere, in no
+order; not a bootleg), do not force a wrong release: leave the job in the queue and say in the
+summary that Bruno can add it with `barch music mb-add <job id>`, which opens the MusicBrainz
+release editor in his browser filled in from the download, and resolve with the new release id
+afterwards. The same songs in another order is `--keep-order`, not a new release.
+
 ## How the tools are allowed
 
 Only the commands named above run, each on its own: a line that pipes or chains into anything

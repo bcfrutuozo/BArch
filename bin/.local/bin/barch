@@ -120,6 +120,8 @@ Desktop (through the bar):
   music fix <id> ["hint"]     Fix with Agent: Claude takes the album over (release, date, genre, cover,
                               the merge), resolves it, waits for the run and goes on until it is in
   music scan                  look for finished torrents and inbox folders now
+  music mb-add <id>           an edition MusicBrainz lacks: the release editor opens in the browser filled in
+                              from the download (tracks, lengths); you check and submit, logged in there
   music retitle <Artist/Album> <title>   fix the ALBUM tag (as given) and the folder of an album in /music
   music rescan <id>           take that job's download in again from scratch, as the albums are found
                               now (a torrent split per disc folder by an older version); old jobs superseded
@@ -536,6 +538,51 @@ music_claude_run() {
     die 1 "Claude did not finish (exit $rc): see $run/claude.log"
 }
 
+# music mb-add <id>: an edition MusicBrainz lacks. The job's download (artist, album, year, every track
+# with its title and length) becomes a "release editor seed": a form that opens the MusicBrainz
+# release editor in the browser already filled in; Bruno, logged in there, checks and submits (nothing
+# is written from here). Then `barch music resolve <id> --release <the new mbid>`.
+music_mb_add() {
+  local id=${1:-}
+  [[ -n $id ]] || usage_error "music mb-add <id>"
+  music_api GET "/api/jobs/$id"
+  local job out
+  job=$(jq -c .job <<<"$OUT")
+  [[ $(jq -r '.tracks | length' <<<"$job") -gt 0 ]] || die 1 "the job has no track list yet (run it once: barch music retry $id)"
+  out=$STATE/music-agent/mb-seed-$id.html
+  mkdir -p "$(dirname "$out")"
+  jq -r '
+    def esc: tostring | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub("\""; "&quot;");
+    def field(k; v): "<input type=\"hidden\" name=\"" + (k | esc) + "\" value=\"" + (v | esc) + "\">";
+    (.proposal.album // .hints.album // .name) as $album |
+    (.proposal.artist_folder // .hints.artist // "") as $artist |
+    (.proposal.date // "") as $date |
+    ((.hints.year // "") | tostring) as $year |
+    "<!doctype html><meta charset=utf-8><title>MusicBrainz: add " + ($album | esc) + "</title>",
+    "<body onload=\"document.forms[0].submit()\" style=\"font-family:sans-serif;padding:2em\">",
+    "<p>Opening the MusicBrainz release editor with <b>" + ($artist | esc) + " – " + ($album | esc) + "</b> filled in. Log in if asked, check every field, then submit.</p>",
+    "<form method=post action=\"https://musicbrainz.org/release/add\">",
+    field("name"; $album),
+    field("artist_credit.names.0.name"; $artist),
+    field("artist_credit.names.0.artist.name"; $artist),
+    field("status"; "official"),
+    (if ($date | test("^\\d{4}-\\d{2}-\\d{2}$")) then
+        field("events.0.date.year"; $date[0:4]), field("events.0.date.month"; $date[5:7]), field("events.0.date.day"; $date[8:10])
+     elif ($year | test("^\\d{4}$")) then field("events.0.date.year"; $year) else empty end),
+    ((.tracks | group_by(.disc)) | to_entries[] | .key as $m | .value as $ts |
+        field("mediums.\($m).format"; "CD"),
+        ($ts | sort_by(.index) | to_entries[] |
+            field("mediums.\($m).track.\(.key).number"; (.value.index | tostring)),
+            field("mediums.\($m).track.\(.key).name"; .value.title),
+            field("mediums.\($m).track.\(.key).length"; ((.value.seconds * 1000) | floor | tostring)))),
+    field("edit_note"; "Added from a download with the BArch music pipeline (track lengths from the files); job " + .id + " · " + (.name // "")),
+    "<button>Open the release editor</button></form>"
+  ' <<<"$job" >"$out"
+  xdg-open "$out" >/dev/null 2>&1 &
+  echo "release editor seed opened in the browser: $out"
+  echo "after submitting, take the new release id and run: barch music resolve $id --release <mbid>"
+}
+
 # music fix <id> ["hint"]: the Fix with Agent button. Claude gets the whole job (problems, candidates,
 # proposal, merge plan, what was tried), researches, decides with `barch music resolve` / `barch music
 # cover`, waits for the run and goes on with the next problem until the album is in (job-fix.md).
@@ -654,6 +701,7 @@ cmd_music() {
       [[ -n ${1:-} && -n ${2:-} ]] || usage_error "music retitle <Artist/Album> <new title>"
       music_api POST /api/library/retitle "$(jq -cn --arg f "$1" --arg a "$2" '{folder: $f, album: $a}')"
       show "$OUT" '.result' ;;
+    mb-add) music_mb_add "$@" ;;
     rescan)                                          # the download taken in again from scratch (its old jobs superseded)
       [[ -n ${1:-} ]] || usage_error "music rescan <id>"
       music_api POST "/api/jobs/$1/rescan" '{}'

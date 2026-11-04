@@ -283,6 +283,9 @@ class Pipeline:
         job["notes"] += notes
         job["audio"] = {"tracks": len(tracks), "discs": len({t.disc for t in tracks}),
                         "format": sorted({f"{t.bits or 16}/{t.rate // 1000 if t.rate % 1000 == 0 else t.rate / 1000}" for t in tracks})}
+        # what the download holds, track by track (the review, the agent and the MusicBrainz seed use it)
+        job["tracks"] = [{"disc": t.disc, "index": t.index, "seconds": round(t.seconds, 1),
+                          "title": t.hints.get("title", ""), "artist": t.hints.get("artist", "")} for t in tracks]
         hints = matcher.hints_from(job.get("name") or src.name, tracks)
         job["hints"] = hints
         self.log(job, f"{len(tracks)} tracks; looking up {hints.get('artist')} - {hints.get('album')}")
