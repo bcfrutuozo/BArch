@@ -1,0 +1,28 @@
+{
+  "trash_id": "eb41082b76e883d189d5980f7dc5ed01",
+  "trash_scores": {
+    "default": 10000
+  },
+  "name": "BArch: PT-BR audio",
+  "includeCustomFormatWhenRenaming": false,
+  "specifications": [
+    {
+      "name": "Portuguese (Brazil)",
+      "implementation": "LanguageSpecification",
+      "negate": false,
+      "required": false,
+      "fields": {
+        "value": 30
+      }
+    },
+    {
+      "name": "Brazilian dual/dub tags",
+      "implementation": "ReleaseTitleSpecification",
+      "negate": false,
+      "required": false,
+      "fields": {
+        "value": "\\b(dual([ ._-]?[aá]udio)?|dublado|nacional|pt[ ._-]?br|brazilian|portugu[eê]s)\\b"
+      }
+    }
+  ]
+}

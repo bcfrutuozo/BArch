@@ -9,6 +9,8 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
     GET  /api/mb/search?artist=&album=   MusicBrainz releases for the form's search by hand
     GET  /api/digest[?days=7]            the week in one message (also sent to Telegram on Sundays at 18:00)
     GET  /api/jobs/<id>/compare?release=<mbid|URL>   the download next to that release, track by track
+    GET  /api/seeds[?days=N&live=1]      the seed history (seeds.py): what each torrent removed from qBittorrent gave
+                                         back, in total, per tracker and the latest; live=1 adds the torrents still there
     GET  /api/status                     counts per state, the job running now
     GET  /api/jobs[?state=review]        summaries
     GET  /api/jobs/<id>                  everything: problems, candidates, the proposed tags
@@ -165,6 +167,14 @@ def make_handler(p: Pipeline, token: str):
                 return self._send(200, {"ok": True, "releases": out})
             if parts == ["api", "digest"]:
                 return self._send(200, {"ok": True, "text": p.digest(int((q.get("days") or ["7"])[0]))})
+            if parts == ["api", "seeds"]:
+                live = None
+                if (q.get("live") or [""])[0] in ("1", "true"):
+                    try:
+                        live = p.qbit.all()
+                    except Exception as e:  # noqa: BLE001
+                        return self._send(502, {"ok": False, "error": f"qBittorrent: {e}"})
+                return self._send(200, {"ok": True, **p.seeds.summary(float((q.get("days") or ["0"])[0]), live)})
             if parts == ["api", "status"]:
                 jobs = p.store.all()
                 return self._send(200, {"ok": True, "running": p.current, "doing": p.doing, "missing": missing_tools(),

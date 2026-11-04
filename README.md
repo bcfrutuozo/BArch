@@ -42,7 +42,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `backup/` | — | `barch backup`: what restic saves to the NAS (`include.txt`, `exclude.txt`), see Backup |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
 | `agent/` | — | Scheduled agent tasks (`tasks/`), the reactive rules (`rules.json`) and their daemon (`events.py`), the failure ignore list and the upstream watch list; used by `barch` |
-| `server/` | NAS | `music/`: the music pipeline (beets container), downloads to `/music` in the library's style with a review queue (`barch music`, see Music); `unraid/`: the SMBus driver OpenRGB needs there, built per Unraid kernel (see NAS) |
+| `server/` | NAS | `music/`: the music pipeline (beets container), downloads to `/music` in the library's style with a review queue (`barch music`, see Music); `unraid/`: the SMBus driver OpenRGB needs there, built per Unraid kernel (see NAS); `video/`: what Radarr and Sonarr accept (2160p HEVC with PT-BR audio), synced by Recyclarr (its README) |
 | `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, sixteen scenes in the colors of each palette), Limine theme (`limine-theme.py`) |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
 | `packages/` | — | Explicitly installed packages (`pacman.txt`, `aur.txt`, `aur-ignore.txt`) |
@@ -336,6 +336,7 @@ barch music retitle "<Artist/Album>" "<title>"   # the ALBUM tag (as given) and 
 barch music mb-add <id>               # an edition MusicBrainz lacks: its release editor opens in the browser filled in from the download
 barch music lidarr-artists|lidarr-albums <artist>|lidarr-search <ids>|lidarr-profile <name> ...|lidarr-list <Type> <name> field=value..
                                    # what Lidarr tracks, search albums, metadata profiles (studio albums only), import lists
+barch music seeds [days] [--live]  # what the removed torrents seeded: uploaded, ratio, seed time, per tracker
 barch music lidarr-queue|lidarr-queue-remove <ids>|all|lidarr-commands|lidarr-cancel <id>   # what Lidarr is downloading and running
 barch music lidarr-enforce         # the library's rule on every artist now: BArch profile, every album without a file monitored (hourly by itself)
 barch music lidarr-artist-set all|<ids> --new-albums all|new|none [--monitored on|off]   # what happens to an album that shows up later
@@ -476,7 +477,8 @@ artwork before a scan of the sleeve (a store's image counts only with the same a
 and when it is visibly the same picture as the scan or the Cover Art Archive's; a scan that still
 wins has its frame trimmed), file names with the
 library's replacements. Then Lidarr rescans and stops looking for the album, Plex scans, the
-torrent is deleted. An album that is already there is completed (the missing tracks only) and
+torrent is deleted, once what it seeded (uploaded, ratio, seed time, tracker) is in a seed history
+(`barch music seeds [days] [--live]`, totals per tracker; the stalled downloads it replaces too). An album that is already there is completed (the missing tracks only) and
 fixed by the library's rules, never replaced, with an undo log; a track of Bruno's that looks wrong
 is only swapped with his ok. Anything it cannot do completely (no match, a year-only date, no
 cover) waits in a review queue with the reason and the candidates:

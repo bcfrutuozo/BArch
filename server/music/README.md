@@ -101,7 +101,8 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
    folders: `:` `?` `/`→`_`, `"`→`-`, no trailing dot.
 8. **After**: Lidarr rescans the artist and the album is unmonitored (no new download for it),
    Plex scans the folder, and once every album of the torrent is in, the torrent and its files are
-   deleted from qBittorrent (inbox folders are removed).
+   deleted from qBittorrent (inbox folders are removed). Before that its seed numbers go to the
+   seed history (below).
 
 A network error on the way (MusicBrainz answering 503, Wikidata down) is not the album's fault:
 the job goes back to the queue and waits 2, 4, 8, 16 and 32 minutes between tries, with the error
@@ -247,7 +248,13 @@ sweep, one album per turn, so a new download never waits for either.
   the box is searched too; a candidate box whose disc 3 has the same track count is scored as that disc (below
   the album standing alone).
 - **Digest** (`GET /api/digest`, `barch music digest`; `digest: false` off): the week in one Telegram message
-  on Sundays at 18:00.
+  on Sundays at 18:00, with what the torrents removed that week seeded.
+- **Seed history** (`seeds.py`, `GET /api/seeds[?days=N&live=1]`, `barch music seeds [days] [--live]`): qBittorrent
+  forgets a torrent once deleted, so every torrent the pipeline removes (imported, rejected with delete, or
+  stalled and replaced) is read first and appended to `<jobs>/seed-history.jsonl`: size, downloaded, uploaded,
+  ratio, seeding and active time, added/finished, the swarm, private or not, the tracker hosts (never the
+  announce URL: a private tracker's carries the passkey) and the reason. Shown in total, per tracker and the
+  latest; `--live` adds the torrents still in the client. Nothing from before 2026-11-04 exists.
 
 ## Tests
 

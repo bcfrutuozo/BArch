@@ -1,0 +1,19 @@
+{
+  "trash_id": "d295ca6f4c437dd552f31851e6613600",
+  "trash_scores": {
+    "default": -10000
+  },
+  "name": "BArch: not HEVC",
+  "includeCustomFormatWhenRenaming": false,
+  "specifications": [
+    {
+      "name": "AVC / AV1 / VC-1 / MPEG-2 / VP9 in the title",
+      "implementation": "ReleaseTitleSpecification",
+      "negate": false,
+      "required": true,
+      "fields": {
+        "value": "\\b([xh][ ._-]?264|AVC|AV1|VC[ ._-]?1|MPEG[ ._-]?2|VP9)\\b"
+      }
+    }
+  ]
+}

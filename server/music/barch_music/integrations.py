@@ -68,6 +68,15 @@ class QBit:
         r = self._api("GET", "/torrents/info", params={"hashes": h}) or []
         return r[0] if r else None
 
+    def all(self) -> list[dict]:
+        return self._api("GET", "/torrents/info") or []
+
+    def trackers(self, h: str) -> list[dict]:
+        return self._api("GET", "/torrents/trackers", params={"hash": h}) or []
+
+    def properties(self, h: str) -> dict:
+        return self._api("GET", "/torrents/properties", params={"hash": h}) or {}
+
     def tag(self, h: str, add: str = "", remove: str = ""):
         if remove:
             self._api("POST", "/torrents/removeTags", form={"hashes": h, "tags": remove})
@@ -471,7 +480,7 @@ class Lidarr:
                 continue
             quiet = now - max(t.get("last_activity") or 0, t.get("added_on") or 0)
             if t.get("state") in ("stalledDL", "metaDL", "error", "missingFiles") and quiet > hours * 3600:
-                out.append({"id": x["id"], "title": x.get("title", ""), "album": (x.get("album") or {}).get("title", ""),
+                out.append({"id": x["id"], "hash": t["hash"].lower(), "title": x.get("title", ""), "album": (x.get("album") or {}).get("title", ""),
                             "state": t.get("state"), "progress": round(t.get("progress", 0) * 100), "quiet_h": round(quiet / 3600)})
         return out
 
