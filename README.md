@@ -42,7 +42,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `backup/` | — | `barch backup`: what restic saves to the NAS (`include.txt`, `exclude.txt`), see Backup |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
 | `agent/` | — | Scheduled agent tasks (`tasks/`), the reactive rules (`rules.json`) and their daemon (`events.py`), the failure ignore list and the upstream watch list; used by `barch` |
-| `server/` | NAS | `music/`: the music pipeline (beets container), downloads to `/music` in the library's style with a review queue (`barch music`, see Music); `unraid/`: the SMBus driver OpenRGB needs there, built per Unraid kernel (see NAS); `video/`: what Radarr and Sonarr accept (2160p HEVC HDR, Recyclarr) and the pipeline that muxes the PT-BR dub from another release into each 4K file, subtitles shifted along (`barch video`, its README) |
+| `server/` | NAS | `music/`: the music pipeline (its own container, `barch-music`), downloads to `/music` in the library's style with a review queue (`barch music`, see Music); `unraid/`: the SMBus driver OpenRGB needs there, built per Unraid kernel (see NAS); `video/`: what Radarr and Sonarr accept (2160p HEVC HDR, Recyclarr) and the pipeline that muxes the PT-BR dub from another release into each 4K file, subtitles shifted along (`barch video`, its README) |
 | `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, sixteen scenes in the colors of each palette), Limine theme (`limine-theme.py`) |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
 | `packages/` | — | Explicitly installed packages (`pacman.txt`, `aur.txt`, `aur-ignore.txt`) |
@@ -467,7 +467,7 @@ the import logs (IDs of everything written) are in `~/.local/state/barch/finance
 
 ## Music
 
-`server/music` (details in its README) runs inside the beets container on the NAS and turns every
+`server/music` (details in its README) runs in its own container on the NAS (`barch-music`) and turns every
 finished Lidarr download (and any folder dropped in `/data/music-inbox`) into an album of
 `/music` exactly like the hand-made ones: lossless only, CUE images split per track, the
 MusicBrainz release found by track count and lengths, only the library's tags (artist: the album's on

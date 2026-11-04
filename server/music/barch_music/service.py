@@ -1,4 +1,4 @@
-"""The music pipeline as a service inside the beets container (s6: custom-services.d).
+"""The music pipeline as a service in the barch-music container (s6: custom-services.d).
 
     python3 -m barch_music serve [--config /config/pipeline/config.json]
     python3 -m barch_music once <folder>      process one folder now, as an inbox job (testing)

@@ -3,6 +3,4 @@
 # The music pipeline (server/music in the BArch repo), supervised by s6: restarts if it dies.
 # Code in /config/pipeline/app, settings in /config/pipeline/config.json + secrets.json.
 export PYTHONPATH=/config/pipeline/app PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
-PY=/lsiopy/bin/python3
-[ -x "$PY" ] || PY=python3
-exec s6-setuidgid abc "$PY" -m barch_music serve --config /config/pipeline/config.json
+exec s6-setuidgid abc python3 -m barch_music serve --config /config/pipeline/config.json

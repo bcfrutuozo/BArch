@@ -1,10 +1,12 @@
 #!/usr/bin/with-contenv bash
 # shellcheck shell=bash
-# What the music pipeline needs inside the linuxserver beets image (Alpine), at every start:
-# flac (split, test), ffmpeg/ffprobe (other lossless formats, covers), 7zip (zip/rar/7z),
-# libarchive-tools (bsdtar: the RAR5 archives Alpine's 7zip cannot open, it has no RAR codec),
-# chromaprint (fpcalc, for AcoustID). Python and mutagen already come with the image.
+# What the music pipeline needs inside the linuxserver Alpine base image (container barch-music), at
+# every start: python3 with mutagen (tags), flac (split, test), ffmpeg/ffprobe (other lossless formats,
+# covers), 7zip (zip/rar/7z), libarchive-tools (bsdtar: the RAR5 archives Alpine's 7zip cannot open,
+# it has no RAR codec), chromaprint (fpcalc, for AcoustID).
 need=()
+command -v python3 >/dev/null || need+=(python3)
+python3 -c 'import mutagen' 2>/dev/null || need+=(py3-mutagen)
 command -v flac >/dev/null || need+=(flac)
 command -v ffmpeg >/dev/null || need+=(ffmpeg)
 command -v 7z >/dev/null || need+=(7zip)

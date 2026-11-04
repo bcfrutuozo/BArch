@@ -1,8 +1,8 @@
 # Music pipeline
 
 From a finished download to `/music`, in the library's own style, or to a review queue with
-the exact reason. It runs as an s6 service inside the linuxserver **beets** container on the
-NAS (the beets importer itself is not used), so nothing depends on Unraid's User Scripts.
+the exact reason. It runs as an s6 service in its own container on the NAS, **barch-music** (the
+linuxserver Alpine base image plus the tools it needs), so nothing depends on Unraid's User Scripts.
 
 ```
 qBittorrent (category lidarr or music) ─┐                       ┌─> /music/Artist/Album/D.TT - Title.flac + cover.jpg
@@ -169,14 +169,18 @@ decision of Bruno's, named in the answer. Jobs live in `/data/music-pipeline/<id
 barch music install                  # = server/music/install.sh: code, config, s6 scripts, token
 ```
 
-then, once, on Unraid: the root commands it prints for the s6 scripts (`beets-init` must be owned by
-root and `/config` returns to the container user at every start, so when they change they are
-staged in the `temporary` share and installed from there),
-`chown -R 99:100 /mnt/user/appdata/beets/pipeline && chmod -R u=rwX,g=rwX,o=rwX` on it (the container
-owns it; Unraid's own share permissions, so the SMB user can update it) and `chmod 600` on `secrets.json`; in the beets template
-`/mnt/user/downloads/torrents -> /data`, the two `beets-init` folders -> `/custom-cont-init.d` and
-`/custom-services.d` (read only), port 8338, network `frutuozoproxy`. Secrets (Lidarr API key, Plex
-token, Telegram bot, optional AcoustID key) go in `appdata/beets/pipeline/secrets.json`.
+then, once, on Unraid: the container `barch-music` as `install.sh` prints it (the linuxserver Alpine
+base image, as `barch-video`: `appdata/barch-music -> /config`, the two `barch-music-init` folders ->
+`/custom-cont-init.d` and `/custom-services.d` read only, `/mnt/user/downloads/torrents -> /data`,
+`/mnt/user/media/music -> /music`, port 8338, network `frutuozoproxy`), the root commands it prints for
+the s6 scripts (`barch-music-init` must be owned by root and `/config` belongs to the container user,
+so when they change they are staged in the `temporary` share and installed from there),
+`chown -R 99:100 /mnt/user/appdata/barch-music && chmod -R u=rwX,g=rwX,o=rwX` on `pipeline` (Unraid's own
+share permissions, so the SMB user can update it) and `chmod 600` on `secrets.json`. Secrets (Lidarr API
+key, Plex token, Telegram bot, optional AcoustID key) go in `appdata/barch-music/pipeline/secrets.json`.
+Until 2026-11-04 it ran as an s6 service inside the linuxserver beets container (only for its Python and
+mutagen: the beets importer and library were never used); `install.sh` moves the config over and prints
+how to move the secrets and retire beets.
 `barch music lidarr-flac-only` sets every Lidarr quality profile to FLAC / FLAC 24bit.
 `barch music adopt "<Artist/Album>" <release>` takes an album of `/music` made by hand, once MusicBrainz has it (after
 `mb-add`, or a local artist added there), through the pipeline again as a merge into its own folder: the MusicBrainz ids

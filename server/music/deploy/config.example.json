@@ -1,5 +1,5 @@
 {
-  "_doc": "Music pipeline settings (copied to appdata/beets/pipeline/config.json once; edit it there). Tokens and passwords go in secrets.json next to it, never here.",
+  "_doc": "Music pipeline settings (copied to appdata/barch-music/pipeline/config.json once; edit it there). Tokens and passwords go in secrets.json next to it, never here.",
   "music": "/music",
   "jobs": "/data/music-pipeline",
   "inbox": "/data/music-inbox",
