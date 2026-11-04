@@ -282,6 +282,39 @@ class Lidarr:
             seen_file.write_text(json.dumps({"seen": sorted(seen), "dropped": sorted(dropped)}))
         return "Lidarr: " + ("; ".join(out) if out else f"every artist on {profile!r}, nothing to change")
 
+    def add_artist(self, mbid: str, folder: str, profile: str = "BArch", monitor: bool = True) -> str:
+        """Track an artist the library already has: the MusicBrainz artist `mbid` at the existing folder
+        `folder` of the root folder the other artists use (so the files there map), with the most used
+        quality profile and the metadata profile `profile`. Nothing is monitored or searched on adding
+        ("monitor new items: none"): the hourly enforce monitors and searches its official missing albums."""
+        if not self.enabled:
+            return "Lidarr: no API key configured"
+        artists = self.h.call("GET", "/api/v1/artist") or []
+        if any(a.get("foreignArtistId") == mbid for a in artists):
+            return f"Lidarr: {folder} is tracked already"
+        roots = [r["path"] for r in (self.h.call("GET", "/api/v1/rootfolder") or [])]
+        if not roots:
+            raise ValueError("Lidarr has no root folder")
+        used = [a.get("rootFolderPath") or str(Path(a.get("path", "")).parent) for a in artists]
+        root = max(roots, key=lambda r: sum(1 for u in used if u.rstrip("/") == r.rstrip("/")))
+        qp = [a.get("qualityProfileId") for a in artists if a.get("qualityProfileId")]
+        quality = max(set(qp), key=qp.count) if qp else (self.h.call("GET", "/api/v1/qualityprofile") or [{}])[0].get("id")
+        pid = next((pr["id"] for pr in self.metadata_profiles() if pr["name"].lower() == profile.lower()), None)
+        if not pid:
+            raise ValueError(f"Lidarr has no metadata profile {profile!r}")
+        found = self.h.call("GET", "/api/v1/artist/lookup", params={"term": f"lidarr:{mbid}"}) or []
+        art = next((a for a in found if a.get("foreignArtistId") == mbid), None)
+        if not art:
+            raise ValueError(f"Lidarr's metadata server does not know the artist {mbid}")
+        art.update({"qualityProfileId": quality, "metadataProfileId": pid, "rootFolderPath": root,
+                    "path": root.rstrip("/") + "/" + folder, "monitored": True, "monitorNewItems": "none",
+                    "addOptions": {"monitor": "none", "searchForMissingAlbums": False}})
+        saved = self.h.call("POST", "/api/v1/artist", body=art) or {}
+        if monitor and saved.get("id") and not saved.get("monitored"):     # a batch does it once at the end
+            # addOptions "none" leaves the artist itself unmonitored, and Lidarr searches no album of it then
+            self.h.call("PUT", "/api/v1/artist/editor", body={"artistIds": [saved["id"]], "monitored": True})
+        return f"Lidarr: {art.get('artistName', folder)} added at {art['path']} (id {saved.get('id', '?')})"
+
     def set_artists(self, ids: list[int] | str, monitored: bool | None = None, monitor_new_items: str = "") -> str:
         """Artist settings in bulk ("all" or Lidarr ids): `monitored`, and what Lidarr does with an album
         that appears in the artist's list later (`monitor_new_items`: all | none | new, where new = only

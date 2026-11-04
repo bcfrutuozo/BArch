@@ -35,6 +35,7 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
                                          "BArch" metadata profile, new albums monitored, albums without a file monitored once
     GET  /api/lidarr/queue               what Lidarr grabbed and still waits for; POST /api/lidarr/queue-remove {"ids", "blocklist", "from_client"}
     POST /api/lidarr/artists             {"ids": "all" | [artist ids], "monitored": bool, "monitor_new_items": "all|none|new"}
+    POST /api/lidarr/add-artists         {"artists": [{"mbid", "folder"}]}: artists of /music tracked at their own folder
     GET  /api/library/artists            the artist folders of /music with their album count (the Covers page's list)
     GET  /api/library/albums?artist=X    the album folders of one artist, and whether each has a cover.jpg
     POST /api/library/retitle            {"folder": "Artist/Album", "album": "New Title"}: ALBUM on every track and the folder renamed
@@ -301,6 +302,19 @@ def make_handler(p: Pipeline, token: str):
                     ids = [int(i) for i in body.get("ids", [])]
                     return self._send(200, {"ok": True, "result": p.lidarr.remove_queue(ids, bool(body.get("blocklist", True)),
                                                                                          bool(body.get("from_client", True)))})
+                if parts == ["api", "lidarr", "add-artists"]:
+                    # {"artists": [{"mbid", "folder"}]}: artists the library has, tracked at their own folder
+                    out, mbids = [], {str(a.get("mbid")) for a in body.get("artists") or []}
+                    for a in body.get("artists") or []:
+                        try:
+                            out.append(p.lidarr.add_artist(str(a["mbid"]), str(a["folder"]), monitor=False))
+                        except Exception as e:  # noqa: BLE001
+                            out.append(f"{a.get('folder')}: {e}")
+                    # one editor call for all (each call queues a refresh): the artists monitored
+                    ids = [x["id"] for x in p.lidarr.artists() if x["mbid"] in mbids and not x["monitored"]]
+                    if ids:
+                        out.append(p.lidarr.set_artists(ids, monitored=True))
+                    return self._send(200, {"ok": True, "result": "\n".join(out)})
                 if parts == ["api", "lidarr", "artists"]:
                     # {"ids": "all" | [artist ids], "monitored": bool (optional), "monitor_new_items": "all" | "none" | "new"}
                     try:
