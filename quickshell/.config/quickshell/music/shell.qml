@@ -20,6 +20,7 @@ ShellRoot {
         { id: "review", label: "Review",  icon: "󰀦" },
         { id: "albums", label: "Albums",  icon: "󰀥" },
         { id: "covers", label: "Covers",  icon: "󰋩" },
+        { id: "library", label: "Library", icon: "󰌱" },
         { id: "lidarr", label: "Lidarr & scan", icon: "󰒓" }
     ]
     function open(p) { if (p && pages.some(x => x.id === p)) page = p; win.visible = true }
@@ -69,7 +70,7 @@ ShellRoot {
                             id: nav
                             required property var modelData
                             readonly property bool current: root.page === modelData.id
-                            readonly property int marks: modelData.id === "review" ? Store.reviewCount : modelData.id === "albums" ? (Store.status.counts.failed || 0) : modelData.id === "covers" ? Store.coversToLook : 0
+                            readonly property int marks: modelData.id === "review" ? Store.reviewCount : modelData.id === "albums" ? (Store.status.counts.failed || 0) : modelData.id === "covers" ? Store.coversToLook : modelData.id === "library" ? Store.libraryToDecide : 0
                             Layout.fillWidth: true
                             implicitHeight: 32
                             radius: Ui.radius
@@ -120,12 +121,13 @@ ShellRoot {
                 Loader {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    sourceComponent: root.page === "albums" ? albumsC : root.page === "covers" ? coversC : root.page === "lidarr" ? lidarrC : reviewC
+                    sourceComponent: root.page === "albums" ? albumsC : root.page === "covers" ? coversC : root.page === "library" ? libraryC : root.page === "lidarr" ? lidarrC : reviewC
                 }
                 Component { id: reviewC; JobsPage { fixedState: "review" } }
                 Component { id: albumsC; JobsPage {} }
                 Component { id: lidarrC; LidarrPage {} }
                 Component { id: coversC; CoversPage {} }
+                Component { id: libraryC; LibraryPage {} }
                 Rectangle {
                     Layout.fillWidth: true
                     implicitHeight: 30

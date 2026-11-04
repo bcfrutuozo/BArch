@@ -95,3 +95,24 @@ class OneDiscForTwo(unittest.TestCase):
         self.assertTrue(full["split"])
         self.assertEqual((full["rows"][6]["disc"], full["rows"][6]["pos"], full["rows"][6]["file"]), (2, 1, "1.07"))
         self.assertEqual(full["rows"][6]["title_sim"], 1.0)
+
+
+class BoxDisc(unittest.TestCase):
+    """A box set split per disc, each its own album: Aerosmith, Box Of Fire (2026-11-04)."""
+    def test_hints(self):
+        h = matcher.hints_from("1975 - Toys In The Attic (CD3 - Box Of Fire)", [])
+        self.assertEqual((h["album"], h["year"], h["box"], h["box_disc"]), ("Toys In The Attic", "1975", "Box Of Fire", 3))
+        h = matcher.hints_from("1994 - Bonus Disc (CD13 - Box Of Fire)", [track(artist="Aerosmith", album="Box Of Fire")])
+        self.assertEqual((h["artist"], h["album"], h["box_disc"]), ("Aerosmith", "Bonus Disc", 13))
+        self.assertNotIn("box", matcher.hints_from("Deep Purple - Made in Japan (Disc 2)", []))
+
+    def test_disc_n_of_the_box(self):
+        rel = {"id": "b", "title": "Box Of Fire", "artist-credit": [{"name": "Aerosmith", "joinphrase": ""}],
+               "media": [{"format": "CD", "tracks": [{"title": f"t{d}{i}", "length": 200000 + i * 1000} for i in range(k)]}
+                         for d, k in enumerate([8, 8, 9, 9], 1)]}
+        tracks = [Track(Path(f"{i}.flac"), 1, i, (200 + (i - 1)) * 44100, 44100, 16, {}) for i in range(1, 10)]
+        c = matcher._candidate(rel)
+        matcher.score(c, tracks, {"artist": "Aerosmith", "album": "Toys In The Attic", "box_disc": 4})
+        self.assertEqual(len(c.media), 1)
+        self.assertGreater(c.score, 0)
+        self.assertIn("disc 4 of 4 of the box", " ".join(c.why))

@@ -49,6 +49,9 @@ class Candidate:
 _DISC_SUFFIX = re.compile(r"[\s,]*[\[(]?\s*(?:cd|disc|disk|vol\.?|volume)\s*\d{1,2}(?:\s*[,;:-][^\])]*)?\s*[\])]?\s*$|\s*\(\d\)\s*$", re.I)
 
 
+_BOX_DISC = re.compile(r"^(?:((?:19|20)\d\d)\s*[-–]\s*)?(.+?)\s*[\[(]\s*(?:CD|Disc|Disk)\s*(\d{1,2})\s*[-–:]\s*(.+?)\s*[\])]\s*$", re.I)
+
+
 def hints_from(folder_name: str, tracks: list[Track]) -> dict:
     """artist, album, year guessed from the folder name and the CUE/old tags ("album" from the
     tags, "album_folder" from the folder name: both are searched)."""
@@ -64,6 +67,14 @@ def hints_from(folder_name: str, tracks: list[Track]) -> dict:
         if t.hints.get("date") and not h["year"]:
             m = re.search(r"\b(19|20)\d\d\b", t.hints["date"])
             h["year"] = m.group(0) if m else ""
+    # one disc of a box set, its own album inside: "1975 - Toys In The Attic (CD3 - Box Of Fire)"
+    box = _BOX_DISC.match(folder_name.strip())
+    if box:
+        h["year"] = h["year"] or (box.group(1) or "")
+        h["album_folder"] = box.group(2).strip()
+        h["album"] = h["album_folder"]                    # the CUE says the box's name: the disc's own title wins
+        h["box"], h["box_disc"] = box.group(4).strip(), int(box.group(3))
+        return h
     name = clean_folder_name(folder_name)
     y = re.search(r"\b(19[5-9]\d|20[0-4]\d)\b", folder_name)
     if y and not h["year"]:
@@ -152,7 +163,11 @@ def score(cand: Candidate, tracks: list[Track], hints: dict) -> None:
     theirs = [len(m.get("tracks") or []) for m in media]
     # a download of only some discs of a box: match the discs we have, by track count
     partial = False
-    if len(ours) < len(theirs) and ours == theirs[:len(ours)]:
+    n = int(hints.get("box_disc") or 0)
+    if len(ours) == 1 and len(theirs) > 1 and 0 < n <= len(theirs) and theirs[n - 1] == ours[0] and not split:
+        media, theirs, partial = [media[n - 1]], [theirs[n - 1]], True
+        cand.why.append(f"disc {n} of {len(audio_media(rel))} of the box (the download is that disc)")
+    elif len(ours) < len(theirs) and ours == theirs[:len(ours)]:
         media = media[:len(ours)]
         theirs = theirs[:len(ours)]
         partial = True
@@ -249,6 +264,8 @@ def find(tracks: list[Track], hints: dict, force: str = "", acoustid_key: str = 
         if hints.get("album_folder") and norm(hints["album_folder"]) != norm(hints.get("album", "")):
             queries += [(hints.get("artist", ""), hints["album_folder"], total), (hints.get("artist", ""), hints["album_folder"], 0)]
         queries.append(("", hints.get("album", ""), total))
+        if hints.get("box"):
+            queries.append((hints.get("artist", ""), hints["box"], 0))     # disc N of the box, when no album stands alone
         for artist, album, n in queries:
             if not album:
                 continue
