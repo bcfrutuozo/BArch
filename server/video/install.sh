@@ -120,6 +120,7 @@ Unraid, once:
     Path  /mnt/user/downloads/torrents                      -> /data     (as qBittorrent sees it)
     Path  /mnt/user/media/movies                            -> /movies   (as Radarr sees it)
     Path  /mnt/user/media/tv                                -> /tv
-  then: chown -R 99:100 /mnt/user/appdata/barch-video && chmod 600 /mnt/user/appdata/barch-video/pipeline/secrets.json
+  then: chown -R 99:100 /mnt/user/appdata/barch-video && chmod -R u=rwX,g=rwX,o=rwX /mnt/user/appdata/barch-video/pipeline
+        chmod 600 /mnt/user/appdata/barch-video/pipeline/secrets.json   (the container reads it; this desktop no longer can)
   log: docker logs -f barch-video | grep -i pipeline
 EOF

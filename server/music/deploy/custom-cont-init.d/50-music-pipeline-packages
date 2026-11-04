@@ -2,12 +2,14 @@
 # shellcheck shell=bash
 # What the music pipeline needs inside the linuxserver beets image (Alpine), at every start:
 # flac (split, test), ffmpeg/ffprobe (other lossless formats, covers), 7zip (zip/rar/7z),
+# libarchive-tools (bsdtar: the RAR5 archives Alpine's 7zip cannot open, it has no RAR codec),
 # chromaprint (fpcalc, for AcoustID). Python and mutagen already come with the image.
 need=()
 command -v flac >/dev/null || need+=(flac)
 command -v ffmpeg >/dev/null || need+=(ffmpeg)
 command -v 7z >/dev/null || need+=(7zip)
 command -v fpcalc >/dev/null || need+=(chromaprint)
+command -v bsdtar >/dev/null || need+=(libarchive-tools)
 if ((${#need[@]})); then
   echo "**** music pipeline: installing ${need[*]} ****"
   apk add --no-cache "${need[@]}" || echo "**** music pipeline: apk failed, the service will report what is missing ****"

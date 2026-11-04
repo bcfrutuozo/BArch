@@ -34,8 +34,9 @@ ENV_RATE = 100      # envelope frames per second (hop of 80 samples)
 WINDOW_S = 120      # donor window length
 SEARCH_S = 120      # wide search radius: the first window, and any window the narrow search cannot place
 NEAR_S = 3          # narrow search radius around the offset found so far
-MIN_CONF = 1.3      # envelope peak over the next best peak (outside +-0.5 s) for a window to count at all;
-                    # the real test is agreement: random placements never fall within TOLERANCE of each other
+MIN_CONF = 1.3      # envelope peak over the next best peak (outside +-0.5 s): a confident window; the real
+                    # test is agreement, random placements never fall within TOLERANCE of each other
+STRONG_CONF = 1.8   # a window this confident at another offset than the rest is a cut, not noise
 TOLERANCE = 0.040   # windows within 40 ms of each other share one offset
 SPEEDS = {"1": 1.0, "pal": 25 / (24000 / 1001), "pal-inverse": (24000 / 1001) / 25,
           "24": 24 / (24000 / 1001), "24-inverse": (24000 / 1001) / 24}
@@ -56,9 +57,10 @@ def lang(stream: dict) -> str:
 
 
 def decode(path: str | Path, index: int, sr: int = SR) -> np.ndarray:
-    """One audio stream (absolute ffprobe index), whole length, mono at `sr`, as float32. A track that
-    starts late (a delay in the container) is padded from 0, so the samples sit on the file's clock."""
-    p = subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-i", str(path), "-map", f"0:{index}",
+    """One audio stream (absolute ffprobe index), whole length, mono at `sr`, as float32, on the file's
+    absolute clock: -copyts keeps the container's timestamps (a file or track that starts at 2.5 s
+    stays there, as mkvmerge sees it) and the resampler pads from 0 up to the first sample."""
+    p = subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-copyts", "-i", str(path), "-map", f"0:{index}",
                         "-af", "aresample=async=1:first_pts=0", "-ac", "1", "-ar", str(sr), "-f", "s16le", "-"],
                        capture_output=True, timeout=7200)
     if p.returncode or not p.stdout:
@@ -183,52 +185,67 @@ def windows(ref_env: np.ndarray, don_env: np.ndarray, speed: float = 1.0, count:
     return out
 
 
-def fit(ws: list[Window]) -> tuple[float, int, int, list[dict]]:
-    """The offset most windows share (the largest cluster within TOLERANCE), how many share it, how many
-    count at all, and the runs of consecutive windows sharing an offset (more than one run = cuts)."""
-    counted = [w for w in ws if w.conf >= MIN_CONF]
-    if not counted:
-        return 0.0, 0, 0, []
+def fit(ws: list[Window]) -> tuple[float, list[Window], list[Window]]:
+    """The offset most windows share (the largest group within TOLERANCE of each other, whatever their
+    confidence: a wrong placement lands there by chance about once in a few thousand), that group, and
+    the confident windows outside it (each one is a part of the film at another offset: a cut)."""
+    if not ws:
+        return 0.0, [], []
     best: list[Window] = []
-    for w in counted:
-        near = [v for v in counted if abs(v.offset - w.offset) <= TOLERANCE]
-        if len(near) > len(best):
+    for w in ws:
+        near = [v for v in ws if abs(v.offset - w.offset) <= TOLERANCE]
+        if len(near) > len(best) or (len(near) == len(best) and sum(v.conf for v in near) > sum(v.conf for v in best)):
             best = near
     off = float(np.median([w.offset for w in best]))
-    runs: list[dict] = []
-    for w in counted:
-        if runs and abs(w.offset - runs[-1]["offset"]) <= TOLERANCE:
-            r = runs[-1]
-            r["to"], r["n"] = w.donor_t, r["n"] + 1
-        else:
-            runs.append({"from": w.donor_t, "to": w.donor_t, "offset": w.offset, "n": 1})
-    return off, len(best), len(counted), runs
+    outside = [w for w in ws if w not in best and w.conf >= STRONG_CONF]
+    return off, best, outside
 
 
-def align_pcm(ref_pcm: np.ndarray, don_pcm: np.ndarray, count: int = 12) -> Alignment:
+def align_pcm(ref_pcm: np.ndarray, don_pcm: np.ndarray, count: int = 12, expect: float | None = None) -> Alignment:
+    """Map the donor onto the reference. `expect` (seconds) checks a known offset instead of finding one
+    (the muxed file against itself: 0)."""
     ref_env, don_env = envelope(ref_pcm), envelope(don_pcm)
     ratio = len(don_pcm) / max(1, len(ref_pcm))
+    need = max(5, int(np.ceil(0.75 * count)))
     best: Alignment | None = None
     for name, speed in SPEEDS.items():
         # a speed is only tried when the lengths allow it (within 2 % once scaled: credits, logos)
+        if expect is not None and name != "1":
+            continue
         if name != "1" and abs(ratio * speed - 1) > 0.02:
             continue
         ws = windows(ref_env, don_env, speed, count)
-        off, agree, counted, runs = fit(ws)
-        a = Alignment(ok=False, offset=off, speed=name, windows=ws, agreeing=agree, counted=counted, segments=runs)
-        if best is None or a.agreeing > best.agreeing:
+        if expect is not None:
+            group = [w for w in ws if abs(w.offset - expect) <= TOLERANCE]
+            off = float(np.median([w.offset for w in group])) if group else expect
+            outside = [w for w in ws if w not in group and w.conf >= STRONG_CONF]
+        else:
+            off, group, outside = fit(ws)
+        firm = sum(1 for w in group if w.conf >= MIN_CONF)
+        a = Alignment(ok=False, offset=off, speed=name, windows=ws, agreeing=len(group), counted=firm)
+        a.segments = [{"from": w.donor_t, "to": w.donor_t, "offset": w.offset, "n": 1} for w in outside]
+        if group:
+            a.segments.insert(0, {"from": min(w.donor_t for w in group), "to": max(w.donor_t for w in group),
+                                  "offset": off, "n": len(group)})
+        if best is None or (a.agreeing, a.counted) > (best.agreeing, best.counted):
             best = a
     assert best is not None
-    need = max(5, int(np.ceil(0.75 * count)))
-    big_runs = [r for r in best.segments if r["n"] >= 2]
-    if best.agreeing >= need and len(big_runs) <= 1:
-        best.ok = True
-    elif len(big_runs) >= 2:
-        best.reason = "the offset changes along the film (another cut): " + ", ".join(
-            f"{r['from'] / 60:.0f}-{r['to'] / 60:.0f} min at {r['offset'] * 1000:+.0f} ms" for r in big_runs)
-    else:
+    outside = best.segments[1:]
+    second = max((sum(1 for v in outside if abs(v["offset"] - w["offset"]) <= TOLERANCE) for w in outside), default=0)
+    cut = "the offset changes along the film (another cut): " + ", ".join(
+        f"{w['from'] / 60:.0f} min at {w['offset'] * 1000:+.0f} ms" for w in outside) + \
+        f" while {best.agreeing} windows are at {best.offset * 1000:+.0f} ms"
+    if second >= 2:
+        best.reason = cut
+    elif best.agreeing < need:
         best.reason = (f"no common offset: {best.agreeing}/{count} windows agree (need {need}); "
                        f"another master or another film")
+    elif best.counted < max(3, need // 2):
+        best.reason = f"the windows agree but too few clearly ({best.counted} confident): mostly silence?"
+    elif outside:
+        best.reason = cut
+    else:
+        best.ok = True
     return best
 
 
@@ -372,7 +389,5 @@ def verify(muxed: str | Path, orig_pos: int = 0, por_pos: int = 1, count: int = 
     audio = [s for s in probe(muxed)["streams"] if s["codec_type"] == "audio"]
     if max(orig_pos, por_pos) >= len(audio):
         return Alignment(ok=False, reason="the muxed file lacks the original or the Portuguese track")
-    a = align(muxed, audio[orig_pos]["index"], muxed, audio[por_pos]["index"], count)
-    if a.ok and (abs(a.offset) > 0.040 or a.speed != "1"):
-        a.ok, a.reason = False, f"the Portuguese track ended up {a.offset * 1000:+.0f} ms off ({a.speed})"
-    return a
+    return align_pcm(decode(muxed, audio[orig_pos]["index"]), decode(muxed, audio[por_pos]["index"]),
+                     count, expect=0.0)

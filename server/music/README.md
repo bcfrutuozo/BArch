@@ -21,7 +21,7 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
    download in again from scratch when an older version split it wrong (the old jobs are
    superseded; one that delivered something should be undone first).
 2. **Collect** (`audio.py`), in a work folder: the download is never touched, so it keeps seeding.
-   zip/rar/7z are extracted; a CUE that describes an image (FLAC, APE, WV, WAV) is split per track
+   zip/rar/7z are extracted (also a download that is one archive by itself; a RAR the image's 7zip cannot open, it has no RAR codec, goes to unrar or bsdtar); a CUE that describes an image (FLAC, APE, WV, WAV) is split per track
    with the `flac` tool, sample exact and keeping 16/24 bit, and the split must add up to the image
    sample for sample (an image described by two CUEs, `X.flac.cue` and `X.wav.cue`, is split once);
    a CUE whose image did not come is only a hint; other lossless formats become
