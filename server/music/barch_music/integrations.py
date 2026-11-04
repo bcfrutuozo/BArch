@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import http.cookiejar
 import json
+import time
 from pathlib import Path
 import urllib.parse
 import urllib.request
@@ -138,7 +139,7 @@ class Lidarr:
         out = []
         for al in self.h.call("GET", "/api/v1/album", params={"artistId": artist, "includeAllArtistAlbums": "true"}) or []:
             st = al.get("statistics") or {}
-            out.append({"id": al["id"], "title": al.get("title", ""), "type": al.get("albumType", ""),
+            out.append({"id": al["id"], "artist_id": al.get("artistId"), "title": al.get("title", ""), "type": al.get("albumType", ""),
                         "secondary": al.get("secondaryTypes") or [], "date": (al.get("releaseDate") or "")[:10],
                         "monitored": al.get("monitored", False), "tracks": st.get("totalTrackCount", 0),
                         "files": st.get("trackFileCount", 0), "mbid": al.get("foreignAlbumId", "")})
@@ -203,12 +204,18 @@ class Lidarr:
         self.h.call("PUT", "/api/v1/album/monitor", body={"albumIds": [alb["id"]], "monitored": False})
         return f"Lidarr: {alb.get('title')!r} unmonitored" + (f" ({why})" if why else "")
 
-    def enforce(self, profile: str, seen_file: Path | None = None) -> str:
+    def enforce(self, profile: str, seen_file: Path | None = None, canon=None, budget: float = 300) -> str:
         """The library's rule on every artist, now and for the ones added later: the metadata profile
-        `profile` (every distinct album: studio, EP, live, compilation), new albums monitored as they
-        appear, and every album listed without a single file monitored (once: an album Bruno unmonitors
-        afterwards stays so; `seen_file` remembers the ids). Skipped while a RefreshArtist runs, since
-        it would write the albums back as they were. Returns what changed."""
+        `profile` (every distinct album: studio, EP, live, compilation) and every album listed without a
+        single file monitored and searched (once: an album Bruno unmonitors afterwards stays so).
+
+        With `canon` (canon.Canon) only the canonical albums: an EP, live album or compilation Wikipedia
+        does not know is never monitored, and one monitored before is unmonitored (once too: monitored
+        again by hand, it stays). Lidarr's own "monitor new items" is then off, since this check is what
+        monitors a new album, within the hour. Artists are judged within `budget` seconds per run (the
+        oldest verdicts first, a week of cache); the albums of an artist not judged yet wait for it.
+        `seen_file` remembers the album ids monitored and unmonitored here. Skipped while a RefreshArtist
+        runs, since it would write the albums back as they were. Returns what changed."""
         if not self.enabled:
             return "Lidarr: no API key configured"
         if any(c.get("name") == "RefreshArtist" and c.get("status") in ("started", "queued") for c in self.commands()):
@@ -216,30 +223,63 @@ class Lidarr:
         pid = next((pr["id"] for pr in self.metadata_profiles() if pr["name"].lower() == profile.lower()), None)
         if not pid:
             raise ValueError(f"Lidarr has no metadata profile {profile!r}")
+        new_items = "none" if canon else "all"
         artists = self.h.call("GET", "/api/v1/artist") or []
-        wrong = [a["id"] for a in artists if a.get("metadataProfileId") != pid or a.get("monitorNewItems") != "all"]
         out = []
+        wrong = [a["id"] for a in artists if a.get("metadataProfileId") != pid]
         if wrong:
-            self.h.call("PUT", "/api/v1/artist/editor", body={"artistIds": wrong, "metadataProfileId": pid, "monitorNewItems": "all"})
+            self.h.call("PUT", "/api/v1/artist/editor", body={"artistIds": wrong, "metadataProfileId": pid, "monitorNewItems": new_items})
             for i in wrong:
                 self.h.call("POST", "/api/v1/command", body={"name": "RefreshArtist", "artistId": i})
-            out.append(f"{len(wrong)} artist(s) put on the {profile!r} profile (refreshing: their albums get listed, monitored and searched)")
-        seen: set[int] = set()
+            out.append(f"{len(wrong)} artist(s) put on the {profile!r} profile (refreshing: their albums get listed)")
+        loose = [a["id"] for a in artists if a["id"] not in wrong and a.get("monitorNewItems") != new_items]
+        if loose:
+            self.h.call("PUT", "/api/v1/artist/editor", body={"artistIds": loose, "monitorNewItems": new_items})
+            out.append(f"{len(loose)} artist(s) set to monitor new albums: {new_items}")
+        state = {"seen": [], "dropped": []}
         if seen_file and seen_file.exists():
             try:
-                seen = set(json.loads(seen_file.read_text()))
+                raw = json.loads(seen_file.read_text())
+                state = {"seen": raw, "dropped": []} if isinstance(raw, list) else {**state, **raw}
             except (OSError, ValueError):
-                seen = set()
+                pass
+        seen, dropped = set(state["seen"]), set(state["dropped"])
+        mbid_of = {a["id"]: a.get("foreignArtistId", "") for a in artists}
+        if canon:
+            t0, judged = time.time(), 0
+            for m in sorted(set(mbid_of.values()) - {""}, key=lambda m: (canon.cache.get(m) or {}).get("t", 0)):
+                if canon.fresh(m) or time.time() - t0 > budget:
+                    continue
+                try:
+                    canon.refresh(m)
+                    judged += 1
+                except Exception as e:  # noqa: BLE001
+                    print(f"[canon] {m}: {e}", flush=True)
+            if judged:
+                out.append(f"{judged} artist(s) judged against Wikipedia")
         albums = self.h.call("GET", "/api/v1/album") or []
-        new = [al["id"] for al in albums if not al.get("monitored") and (al.get("statistics") or {}).get("trackFileCount", 0) == 0
-               and al["id"] not in seen and al.get("anyReleaseOk", True)]
-        if new:
-            self.h.call("PUT", "/api/v1/album/monitor", body={"albumIds": new, "monitored": True})
-            self.h.call("POST", "/api/v1/command", body={"name": "AlbumSearch", "albumIds": new})
-            out.append(f"{len(new)} album(s) without a file monitored and searched")
+        add, drop = [], []
+        for al in albums:
+            if (al.get("statistics") or {}).get("trackFileCount", 0) > 0:
+                continue
+            v = canon.verdict(mbid_of.get(al.get("artistId"), ""), al.get("foreignAlbumId", "")) if canon else "any"
+            if v is None:
+                continue                                   # its artist is not judged yet
+            if v and not al.get("monitored") and al["id"] not in seen and al.get("anyReleaseOk", True):
+                add.append(al["id"])
+            elif not v and al.get("monitored") and al["id"] not in dropped:
+                drop.append(al["id"])
+        if drop:
+            self.h.call("PUT", "/api/v1/album/monitor", body={"albumIds": drop, "monitored": False})
+            out.append(f"{len(drop)} album(s) Wikipedia does not know unmonitored (unofficial EPs, live albums, compilations)")
+        if add:
+            self.h.call("PUT", "/api/v1/album/monitor", body={"albumIds": add, "monitored": True})
+            self.h.call("POST", "/api/v1/command", body={"name": "AlbumSearch", "albumIds": add})
+            out.append(f"{len(add)} album(s) without a file monitored and searched")
         if seen_file:
-            seen |= {al["id"] for al in albums}
-            seen_file.write_text(json.dumps(sorted(seen)))
+            seen = (seen | set(add) | {al["id"] for al in albums if al.get("monitored")}) - set(drop)
+            dropped |= set(drop)           # monitored again by hand, it stays; Wikipedia learning it later monitors it
+            seen_file.write_text(json.dumps({"seen": sorted(seen), "dropped": sorted(dropped)}))
         return "Lidarr: " + ("; ".join(out) if out else f"every artist on {profile!r}, nothing to change")
 
     def set_artists(self, ids: list[int] | str, monitored: bool | None = None, monitor_new_items: str = "") -> str:

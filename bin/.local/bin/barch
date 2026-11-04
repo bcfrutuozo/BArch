@@ -136,10 +136,11 @@ Desktop (through the bar):
   music lidarr-flac-only      every Lidarr quality profile: FLAC and FLAC 24bit only
   music lidarr-monitor <ids> on|off   monitor or not these Lidarr album ids
   music lidarr-search <ids>   monitor these Lidarr albums and search the indexers now
-  music lidarr-artists [q]    the artists Lidarr tracks · lidarr-albums <artist|id>: their albums with type and id
+  music lidarr-artists [q]    the artists Lidarr tracks · lidarr-albums <artist|id>: their albums with type, id and
+                              why each counts as official (studio, wikidata, wikipedia) or "unofficial"
   music lidarr-artist-set all|<ids> [--monitored on|off] [--new-albums all|none|new]
                               artist settings: whether an album that shows up later gets monitored (and downloaded)
-  music lidarr-enforce        every artist on the BArch profile, every album without a file monitored (the pipeline does it hourly)
+  music lidarr-enforce        every artist on the BArch profile, every official album without a file monitored (the pipeline does it hourly)
   music lidarr-commands       Lidarr's running and recent commands · lidarr-cancel <id> stops one (a RefreshArtist in flight undoes monitor changes)
   music lidarr-queue          what Lidarr grabbed and is downloading · lidarr-queue-remove <ids>|all [--keep]: drop them (blocklisted)
   music lidarr-profiles       the metadata profiles · lidarr-profile <name> --primary Album,EP --secondary Live
@@ -825,7 +826,7 @@ cmd_music() {
     lidarr-albums)
       [[ -n ${1:-} ]] || usage_error "music lidarr-albums <artist name or id>"
       music_api GET "/api/lidarr/albums?artist=$(jq -rn --arg v "$1" '$v | @uri')"
-      show "$OUT" '.albums[] | "\(.id)\t\(.date)  \(.title)  [\(.type)\(if (.secondary|length) > 0 then ", " + (.secondary|join(", ")) else "" end)]  \(.files)/\(.tracks)\(if .monitored then "  monitored" else "" end)"' ;;
+      show "$OUT" '.albums[] | "\(.id)\t\(.date)  \(.title)  [\(.type)\(if (.secondary|length) > 0 then ", " + (.secondary|join(", ")) else "" end)]  \(.files)/\(.tracks)\(if .monitored then "  monitored" else "" end)\(if .canon == null then "" elif .canon == "" then "  · unofficial" else "  · " + .canon end)"' ;;
     lidarr-profiles)
       music_api GET /api/lidarr/metadata-profiles
       show "$OUT" '.profiles[] | "\(.id)\t\(.name): \(.primary|join(", ")) | \(.secondary|join(", ")) | \(.statuses|join(", "))"' ;;

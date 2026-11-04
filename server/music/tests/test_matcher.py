@@ -44,3 +44,40 @@ class Hints(unittest.TestCase):
         for name, want in cases.items():
             h = matcher.hints_from(name, [])
             self.assertEqual((h["artist"], h["album"], h["year"]), want, name)
+
+
+class OneDiscForTwo(unittest.TestCase):
+    """Purpendicular, "2LP" as one CUE of 13 tracks; MusicBrainz MOVLP 361 is 2x12" Vinyl, 6 + 7 (2026-11-04)."""
+    MB = [[("Vavoom: Ted the Mechanic", 258), ("Loosen My Strings", 360), ("Soon Forgotten", 288),
+           ("Sometimes I Feel Like Screaming", 452), ("Cascades: I'm Not Your Lover", 284), ("The Aviator", 321)],
+          [("Rosa's Cantina", 312), ("A Castle Full of Rascals", 312), ("A Touch Away", 276), ("Hey Cisco", 354),
+           ("Somebody Stole My Guitar", 249), ("The Purpendicular Waltz", 284), ("Don't Hold Your Breath", 280)]]
+    OURS = [256, 357, 287, 449, 283, 320, 309, 308, 276, 354, 249, 283.4, 280.6]
+
+    def release(self):
+        return {"id": "r", "title": "Purpendicular", "artist-credit": [{"name": "Deep Purple", "joinphrase": ""}],
+                "media": [{"format": '12" Vinyl', "tracks": [{"title": t, "length": l * 1000, "position": i}
+                                                             for i, (t, l) in enumerate(d, 1)]} for d in self.MB]}
+
+    def tracks(self, lengths):
+        flat = [t for d in self.MB for t, _ in d]
+        return [Track(Path(f"{i}.flac"), 1, i, int(s * 44100), 44100, 16, {"title": flat[i - 1]})
+                for i, s in enumerate(lengths, 1)]
+
+    def test_split_follows_musicbrainz(self):
+        c = matcher._candidate(self.release())
+        matcher.score(c, self.tracks(self.OURS), {"artist": "DEEP PURPLE", "album": "Purpendicular"})
+        self.assertTrue(c.ok, c.why)
+        discs, split = matcher.discs_for(self.tracks(self.OURS), c.media)
+        self.assertTrue(split)
+        self.assertEqual([len(v) for v in discs.values()], [6, 7])
+        self.assertEqual(discs[2][0].hints["title"], "Rosa's Cantina")
+
+    def test_split_still_needs_the_lengths(self):
+        c = matcher._candidate(self.release())
+        matcher.score(c, self.tracks(list(reversed(self.OURS))), {"artist": "DEEP PURPLE", "album": "Purpendicular"})
+        self.assertFalse(c.ok)
+
+    def test_other_total_is_not_split(self):
+        _, split = matcher.discs_for(self.tracks(self.OURS[:12]), self.release()["media"])
+        self.assertFalse(split)

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from . import mb, style
 from .audio import Track
-from .matcher import Candidate, audio_media
+from .matcher import Candidate, audio_media, discs_for
 
 # the only tags a track keeps (the library's set, plus the two MusicBrainz ids Bruno approved)
 KEEP = ["ARTIST", "ALBUMARTIST", "ALBUM", "TITLE", "TRACKNUMBER", "TRACKTOTAL", "DISCNUMBER", "DISCTOTAL", "DATE",
@@ -207,9 +207,10 @@ def build(cand: Candidate, tracks: list[Track], music: Path, overrides: dict | N
         else:
             a.notes.append(f"{len(extra)} tracks not on the first edition are marked Bonus")
     media = cand.media or audio_media(rel)
-    discs: dict[int, list[Track]] = {}
-    for t in tracks:
-        discs.setdefault(t.disc, []).append(t)
+    discs, split = discs_for(tracks, media)
+    if split:
+        a.notes.append(f"the download is one disc; tagged as MusicBrainz's {len(media)} "
+                       f"({' + '.join(str(len(m.get('tracks') or [])) for m in media)} tracks)")
     for dn, (disc, m) in enumerate(zip(sorted(discs), media), 1):
         ts = sorted(discs[disc], key=lambda x: x.index)
         mts = [cand.reorder[(disc, t.index)] for t in ts] if cand.reorder else m.get("tracks", [])

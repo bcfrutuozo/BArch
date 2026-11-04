@@ -38,6 +38,10 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
    songs in another order (an LP) is recognized when every track matches one track by title and
    length; it waits for `--keep-order`, then keeps the download's numbering with each song's own
    MusicBrainz title and id (over an album already in the library: --replace or reject, never a merge).
+   A download that is one disc where the release has several with the same number of tracks in all
+   (a "2LP" ripped as one CUE of 13 tracks, MusicBrainz 6 + 7: *Purpendicular*, MOVLP 361) is matched
+   with its tracks spread over MusicBrainz's discs in order, and tagged that way (1.01–1.06,
+   2.01–2.07, DISCTOTAL 2), still only when every length fits.
 4. **Tags** (`album.py`, `style.py`), only the library's set: ARTIST, ALBUM, TITLE, TRACKNUMBER,
    TRACKTOTAL, DISCNUMBER, DISCTOTAL, DATE, GENRE, MUSICBRAINZ_ALBUMID, MUSICBRAINZ_TRACKID
    (ALBUMARTIST only on Various Artists albums, as the library has them).
@@ -186,12 +190,27 @@ when it started, undoing a monitor change made meanwhile).
 **The rule, enforced by the pipeline** (`Lidarr.enforce`, every hour while idle, or `barch music lidarr-enforce`):
 Bruno wants every distinct album of every artist (studio, EP, live, compilation; official releases only; no singles,
 no bootlegs) and never the same album twice. So every artist is put on the `BArch` metadata profile (`lidarr.profile`
-in config.json; "" turns the check off), with "monitor new items: all", and every album Lidarr lists without a single
-file is monitored and searched once (`lidarr-seen.json` in the jobs folder remembers the ids, so an album unmonitored
-by hand or by a reject stays that way). A newly added artist gets the same treatment within the hour. Rejecting a job
-in the review unmonitors its album in Lidarr, otherwise the RSS sync would grab another release of it. The profile change
-makes Lidarr recreate the artist's albums and search them all at once (Deep Purple: 316 albums, 2026-11-03): expected.
-`lidarr-artist-set all --new-albums none|new|all` changes the monitoring of new albums by hand (the hourly check puts it back to all).
+in config.json; "" turns the check off), and every **official** album Lidarr lists without a single file is monitored
+and searched once (`lidarr-seen.json` in the jobs folder remembers the ids, so an album unmonitored by hand or by a
+reject stays that way). A newly added artist gets the same treatment within the hour. Rejecting a job in the review
+unmonitors its album in Lidarr, otherwise the RSS sync would grab another release of it.
+
+*Official* is decided by `canon.py`, not by MusicBrainz's release status: MusicBrainz marks as Official hundreds of
+regional EPs, budget compilations and grey-market live records of a big artist (Deep Purple: 616 release groups,
+"Stereo Pop Special‐12", "Battle of Deep Purple & Jimi Hendrix"), and Lidarr's status filter lets all of them in. A
+studio album always counts; an EP, live album or compilation counts when its release group links to Wikidata or
+Wikipedia, or when its title is in the artist's Wikipedia (the article and the discography article, in English, where
+only titles in italics count, and in the language of the artist's country, where a distinctive title anywhere in
+the text counts too: the Japanese discographies are tables). Of several groups with the same title (the "Burn" EPs
+of 1974 next to the album) only one counts. An artist without any Wikipedia article is not judged: all of it counts.
+Measured on 2026-11-04: of the albums missing, Deep Purple 297 → 70, Iron Maiden 41 → 14, T‐SQUARE 24 → 17 (the
+Japanese article finds the archive live albums), Insomnium 7 → 7. An album already monitored that turns out
+unofficial is unmonitored once (monitored again by hand, it stays); an album with files is never touched. The
+verdicts are cached per artist for a week (`canon.json` in the jobs folder) and the hourly run judges artists for
+at most five minutes, so the first pass over the library takes a few hours; an artist not judged yet waits.
+`barch music lidarr-albums <artist>` shows each album's verdict (`studio`, `wikidata`, `wikipedia`, `unofficial`)
+and judges the artist on the spot. Since this check is what monitors a new album, every artist is kept on "monitor new
+items: none" (`lidarr.canon: false` in config.json goes back to "all" and every album the profile lets in).
 
 ## Tests
 

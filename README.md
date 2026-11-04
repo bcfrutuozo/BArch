@@ -477,8 +477,12 @@ cover) waits in a review queue with the reason and the candidates:
 `barch music list`, `barch music show <id>`, `barch music resolve <id> --release …|--date …|--cover …`,
 all of it in the **Music** app (`barch music browse`), or from the phone: the pipeline serves the same
 review queue and resolve form as a page at `http://<nas>:8338/` (asks for the `barch music` token once). On the Lidarr side it enforces the library's rule every
-hour: every artist on the `BArch` metadata profile (every distinct album: studio, EP, live, compilation; official only),
-new albums monitored, every album without a file monitored once; an album already in the library is completed, and
+hour: every artist on the `BArch` metadata profile (every distinct album: studio, EP, live, compilation), and every
+official album without a file monitored once, new ones too. Official is not MusicBrainz's status (it calls hundreds of
+regional EPs and budget compilations of a big artist Official): an EP, live album or compilation counts only when
+Wikidata or the artist's Wikipedia (English and the artist's own language) knows it, so Deep Purple goes from 297
+missing albums to 70; an artist without Wikipedia is not filtered (`server/music/canon.py`, `barch music
+lidarr-albums <artist>` shows each verdict). An album already in the library is completed, and
 another album with the same title (the eight "Greatest Hits" of Deep Purple) gets its own folder from the review.
 
 ## NAS

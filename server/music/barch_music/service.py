@@ -24,6 +24,7 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
     POST /api/lidarr/monitor             {"ids": [album ids], "monitored": bool}
     POST /api/lidarr/search              {"ids": [album ids]}: monitor them and search the indexers now
     GET  /api/lidarr/artists[?q=name]    the artists Lidarr tracks; /api/lidarr/albums?artist=<name|id> their albums
+                                         (with "canon": why it counts as official, "" when not; canon.py)
     GET  /api/lidarr/metadata-profiles   the metadata profiles (allowed types and statuses)
     POST /api/lidarr/metadata-profile    {"name", "primary", "secondary", "statuses", "apply_to": "all" | [artist ids]}
     GET  /api/lidarr/import-lists        POST /api/lidarr/import-list {"type": "LastFmUser", "name", "fields", "monitor"}
@@ -173,7 +174,14 @@ def make_handler(p: Pipeline, token: str):
                     if parts[2] == "artists":
                         return self._send(200, {"ok": True, "artists": p.lidarr.artists((q.get("q") or [""])[0])})
                     if parts[2] == "albums":
-                        return self._send(200, {"ok": True, "albums": p.lidarr.albums((q.get("artist") or [""])[0])})
+                        albums = p.lidarr.albums((q.get("artist") or [""])[0])
+                        if albums:              # with the canon verdict of each (the artist judged now if needed)
+                            m = next((a["mbid"] for a in p.lidarr.artists() if a["id"] == albums[0]["artist_id"]), "")
+                            if m and not p.canon.fresh(m):
+                                p.canon.refresh(m)
+                            for al in albums:
+                                al["canon"] = p.canon.verdict(m, al["mbid"])
+                        return self._send(200, {"ok": True, "albums": albums})
                     if parts[2] == "metadata-profiles":
                         return self._send(200, {"ok": True, "profiles": p.lidarr.metadata_profiles()})
                     if parts[2] == "queue":
