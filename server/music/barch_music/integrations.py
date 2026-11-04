@@ -4,6 +4,7 @@ from __future__ import annotations
 import http.cookiejar
 import json
 import time
+import unicodedata
 from pathlib import Path
 import urllib.parse
 import urllib.request
@@ -86,15 +87,29 @@ class Lidarr:
         r = self.h.call("GET", "/api/v1/album", params={"foreignAlbumId": group_mbid}) or []
         return r[0] if r else None
 
+    def rescan_ids(self, artist_ids: list[int]) -> int:
+        """One RescanFolders of just these artists' folders. Lidarr's "Rescan Artist Folder after Refresh"
+        is Never here (2026-11-04): with Always every RefreshArtist queued a rescan of the whole root
+        folder for that artist (about 40 min each over this library, run one at a time), so a refresh
+        no longer reads files and whoever needs the files read asks for this."""
+        if not self.enabled or not artist_ids:
+            return 0
+        want = set(artist_ids)
+        paths = [a["path"] for a in self.h.call("GET", "/api/v1/artist") or [] if a.get("id") in want and a.get("path")]
+        if paths:
+            self.h.call("POST", "/api/v1/command", body={"name": "RescanFolders", "folders": paths})
+        return len(paths)
+
     def refresh(self, group_mbid: str) -> str:
-        """Rescan the artist so Lidarr sees the new files and stops looking for the album;
-        unmonitor the album if it still counts as missing (so no new download is grabbed)."""
+        """Rescan the artist's folder so Lidarr sees the new files and stops looking for the album
+        (a rescan, not a RefreshArtist: the files changed, the metadata did not); unmonitor the album
+        if it still counts as missing (so no new download is grabbed)."""
         if not self.enabled:
             return "Lidarr: no API key configured"
         alb = self.album_by_group(group_mbid)
         if not alb:
             return "Lidarr: album not tracked (nothing to update)"
-        self.h.call("POST", "/api/v1/command", body={"name": "RefreshArtist", "artistId": alb["artistId"]})
+        self.rescan_ids([alb["artistId"]])
         alb2 = self.album_by_group(group_mbid) or alb
         if alb2.get("monitored"):
             self.h.call("PUT", "/api/v1/album/monitor", body={"albumIds": [alb2["id"]], "monitored": False})
@@ -115,13 +130,20 @@ class Lidarr:
         r = self.h.call("POST", "/api/v1/command", body={"name": "AlbumSearch", "albumIds": ids})
         return f"Lidarr: searching {len(ids)} album(s) (command {(r or {}).get('id', '?')})"
 
+    @staticmethod
+    def name_key(s: str) -> str:
+        """A name as typed: NFKC, case folded, every Unicode dash a plain "-" (MusicBrainz writes
+        "T‐SQUARE" with U+2010, nobody types that)."""
+        s = unicodedata.normalize("NFKC", s).casefold()
+        return "".join("-" if unicodedata.category(c) == "Pd" else c for c in s)
+
     def artists(self, q: str = "") -> list[dict]:
-        """Every artist Lidarr tracks (name filter, case-insensitive), compact."""
+        """Every artist Lidarr tracks (name filter: case and dash insensitive), compact."""
         if not self.enabled:
             return []
-        out = []
+        out, key = [], self.name_key(q)
         for a in self.h.call("GET", "/api/v1/artist") or []:
-            if q and q.lower() not in a.get("artistName", "").lower():
+            if q and key not in self.name_key(a.get("artistName", "")):
                 continue
             st = a.get("statistics") or {}
             out.append({"id": a["id"], "name": a.get("artistName", ""), "mbid": a.get("foreignArtistId", ""),
@@ -135,7 +157,7 @@ class Lidarr:
         if not self.enabled:
             return []
         if not artist.isdigit():
-            found = [a for a in self.artists(artist) if a["name"].lower() == artist.lower()] or self.artists(artist)
+            found = [a for a in self.artists(artist) if self.name_key(a["name"]) == self.name_key(artist)] or self.artists(artist)
             if len(found) != 1:
                 raise ValueError(f"{len(found)} artists match {artist!r}: " + ", ".join(a["name"] for a in found[:10]))
             artist = str(found[0]["id"])
@@ -192,6 +214,7 @@ class Lidarr:
             self.h.call("PUT", "/api/v1/artist/editor", body={"artistIds": ids, "metadataProfileId": pid})
             for i in ids:
                 self.h.call("POST", "/api/v1/command", body={"name": "RefreshArtist", "artistId": i})
+            self.rescan_ids(ids)   # the albums the new profile lists get their files (refresh reads none)
             what += f", applied to {len(ids)} artist(s) (refreshing them)"
         return what
 
@@ -235,6 +258,7 @@ class Lidarr:
             self.h.call("PUT", "/api/v1/artist/editor", body={"artistIds": wrong, "metadataProfileId": pid, "monitorNewItems": new_items})
             for i in wrong:
                 self.h.call("POST", "/api/v1/command", body={"name": "RefreshArtist", "artistId": i})
+            self.rescan_ids(wrong)   # the albums the profile lists get their files (refresh reads none)
             out.append(f"{len(wrong)} artist(s) put on the {profile!r} profile (refreshing: their albums get listed)")
         loose = [a["id"] for a in artists if a["id"] not in wrong and a.get("monitorNewItems") != new_items]
         if loose:

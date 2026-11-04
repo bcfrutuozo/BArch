@@ -1,0 +1,9 @@
+# Ghostty config, read by cmux (cmux-gtk embeds libghostty; "Reload Ghostty Config" in its palette).
+# Same clipboard keys as foot: Ctrl+C / Ctrl+V like any other app.
+
+# Ctrl+C copies when text is selected; with nothing selected it is the usual ^C (interrupt)
+keybind = performable:ctrl+c=copy_to_clipboard
+keybind = ctrl+v=paste_from_clipboard
+# the originals, as in foot: Ctrl+Shift+C always interrupts, Ctrl+Shift+V sends ^V (vim's visual block)
+keybind = ctrl+shift+c=text:\x03
+keybind = ctrl+shift+v=text:\x16
