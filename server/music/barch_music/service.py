@@ -7,6 +7,7 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
     GET  /  (or /review)                 the review page (review.html next to this file): the queue and the
                                          resolve form in a browser, phone included; it asks for the token once
     GET  /api/mb/search?artist=&album=   MusicBrainz releases for the form's search by hand
+    GET  /api/jobs/<id>/compare?release=<mbid|URL>   the download next to that release, track by track
     GET  /api/status                     counts per state, the job running now
     GET  /api/jobs[?state=review]        summaries
     GET  /api/jobs/<id>                  everything: problems, candidates, the proposed tags
@@ -159,6 +160,21 @@ def make_handler(p: Pipeline, token: str):
                 st = (q.get("state") or [""])[0]
                 jobs = [summary(j) for j in p.store.all() if not st or j["state"] == st]
                 return self._send(200, {"ok": True, "jobs": jobs[-300:]})
+            if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "compare":
+                # ?release=<mbid or URL>: the download next to that release, track by track
+                import re as _re
+                from . import mb as _mb, matcher as _matcher
+                j = p.store.load(parts[2])
+                m = _re.search(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", (q.get("release") or [""])[0])
+                if not j or not m:
+                    return self._send(404, {"ok": False, "error": "no such job" if not j else "no MusicBrainz release id"})
+                try:
+                    rel = _mb.release(m.group(0))
+                except Exception as e:  # noqa: BLE001
+                    return self._send(502, {"ok": False, "error": f"MusicBrainz: {e}"})
+                if not rel:
+                    return self._send(404, {"ok": False, "error": "MusicBrainz has no such release"})
+                return self._send(200, {"ok": True, "mbid": m.group(0), **_matcher.compare(j.get("tracks") or [], rel)})
             if len(parts) == 3 and parts[:2] == ["api", "jobs"]:
                 j = p.store.load(parts[2])
                 return self._send(200, {"ok": True, "job": j}) if j else self._send(404, {"ok": False, "error": "no such job"})

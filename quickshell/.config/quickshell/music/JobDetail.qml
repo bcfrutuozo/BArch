@@ -32,6 +32,31 @@ Item {
     onJobChanged: seed()
     Component.onCompleted: seed()
 
+    // the release in the Release field (Use fills it) next to the download, track by track
+    property var cmp: null
+    property string cmpFor: ""
+    property bool cmpBusy: false
+    function releaseId(t) { const m = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/.exec(t || ""); return m ? m[0] : "" }
+    function loadCompare() {
+        const id = releaseId(fRelease.text)
+        if (id === cmpFor) return
+        cmpFor = id; cmp = null
+        if (!id || !jobId) return
+        cmpBusy = true
+        const job = jobId
+        Store.api("GET", "/api/jobs/" + job + "/compare?release=" + id, null, d => {
+            if (detail.jobId !== job || detail.cmpFor !== id) return
+            detail.cmpBusy = false
+            detail.cmp = d
+        })
+    }
+    Timer { id: cmpTimer; interval: 400; onTriggered: detail.loadCompare() }
+    function mmss(s) { if (s === null || s === undefined) return ""; s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") }
+    function diffColor(r) {
+        if (r.seconds === null || r.mb_seconds === null) return Ui.red
+        return r.diff === null ? Ui.overlay : r.diff > 7 ? Ui.red : r.diff > 3 ? Ui.yellow : Ui.green
+    }
+
     // "--replace-tracks 1.07,1.08" in a merge review line or in a problem (a new album whose tracks
     // do not fit MusicBrainz's lengths): the keys it names
     function replaceKeys(line) { const m = /--replace-tracks (\S+)/.exec(line || ""); return m ? m[1].split(",") : [] }
@@ -301,6 +326,69 @@ Item {
                 }
             }
 
+            // ---------- the chosen release next to the download ----------
+            Card {
+                Layout.leftMargin: 14; Layout.rightMargin: 14
+                visible: detail.cmpFor !== ""
+                title: "Compare" + (detail.cmp ? ": " + detail.cmp.artist + " – " + detail.cmp.title + [detail.cmp.date, detail.cmp.country].filter(x => x).map(x => "  ·  " + x).join("") : "")
+                subtitle: detail.cmpBusy ? "asking MusicBrainz…"
+                    : !detail.cmp ? "" : "MusicBrainz " + detail.cmp.media.map(m => m.tracks + " (" + m.format + ")").join(" + ")
+                        + "  vs  your " + detail.cmp.ours.join(" + ") + " track(s)"
+                        + (detail.cmp.split ? "  ·  one disc spread over MusicBrainz's discs, as the pipeline does" : "")
+                        + (detail.cmp.worst !== null ? "  ·  lengths: worst " + detail.cmp.worst + " s, mean " + detail.cmp.mean + " s (the pipeline takes up to 7 s and 3 s)" : "")
+                // header
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: !!detail.cmp
+                    spacing: 8
+                    Label { Layout.preferredWidth: 40; text: "#"; font.bold: true }
+                    Label { Layout.fillWidth: true; Layout.preferredWidth: 1; text: "MusicBrainz"; font.bold: true }
+                    Label { Layout.preferredWidth: 46; text: "length"; horizontalAlignment: Text.AlignRight; font.bold: true }
+                    Label { Layout.preferredWidth: 40; text: "file"; font.bold: true }
+                    Label { Layout.fillWidth: true; Layout.preferredWidth: 1; text: "your download"; font.bold: true }
+                    Label { Layout.preferredWidth: 46; text: "length"; horizontalAlignment: Text.AlignRight; font.bold: true }
+                    Label { Layout.preferredWidth: 50; text: "Δ"; horizontalAlignment: Text.AlignRight; font.bold: true }
+                }
+                Repeater {
+                    model: detail.cmp ? detail.cmp.rows : []
+                    Rectangle {
+                        id: crow
+                        required property var modelData
+                        required property int index
+                        readonly property var r: modelData
+                        readonly property bool off: r.seconds === null || r.mb_seconds === null || (r.diff !== null && r.diff > 7)
+                        readonly property bool titleOff: r.title_sim !== null && r.title_sim < 0.6
+                        readonly property bool newDisc: index > 0 && detail.cmp.rows[index - 1].disc !== r.disc
+                        Layout.fillWidth: true
+                        Layout.topMargin: newDisc ? 6 : 0
+                        implicitHeight: crl.implicitHeight + 6
+                        radius: 4
+                        color: off ? Qt.rgba(Ui.red.r, Ui.red.g, Ui.red.b, 0.12) : index % 2 ? Ui.sunken : "transparent"
+                        RowLayout {
+                            id: crl
+                            anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; leftMargin: 4; rightMargin: 4 }
+                            spacing: 8
+                            Mono { Layout.fillWidth: false; Layout.preferredWidth: 36; text: crow.r.disc + "." + String(crow.r.pos).padStart(2, "0"); color: Ui.subtext; wrapMode: Text.NoWrap }
+                            Line { Layout.preferredWidth: 1; text: crow.r.mb_title || "—"; color: crow.r.mb_title ? Ui.text : Ui.red; elide: Text.ElideRight; wrapMode: Text.NoWrap }
+                            Mono { Layout.fillWidth: false; Layout.preferredWidth: 46; text: detail.mmss(crow.r.mb_seconds); horizontalAlignment: Text.AlignRight; wrapMode: Text.NoWrap }
+                            Mono { Layout.fillWidth: false; Layout.preferredWidth: 40; text: crow.r.file; color: Ui.overlay; wrapMode: Text.NoWrap }
+                            Line {
+                                Layout.preferredWidth: 1
+                                text: crow.r.file ? (crow.r.title || "(no title)") : "—"
+                                color: !crow.r.file ? Ui.red : crow.titleOff ? Ui.yellow : Ui.text
+                                elide: Text.ElideRight; wrapMode: Text.NoWrap
+                            }
+                            Mono { Layout.fillWidth: false; Layout.preferredWidth: 46; text: detail.mmss(crow.r.seconds); horizontalAlignment: Text.AlignRight; wrapMode: Text.NoWrap }
+                            Mono {
+                                Layout.fillWidth: false; Layout.preferredWidth: 50; horizontalAlignment: Text.AlignRight; wrapMode: Text.NoWrap
+                                text: crow.r.diff === null ? (crow.r.seconds === null || crow.r.mb_seconds === null ? "missing" : "?") : (crow.r.diff < 0.5 ? "0" : crow.r.diff.toFixed(1)) + " s"
+                                color: detail.diffColor(crow.r); font.bold: crow.off
+                            }
+                        }
+                    }
+                }
+            }
+
             // ---------- the decision ----------
             Card {
                 Layout.leftMargin: 14; Layout.rightMargin: 14
@@ -311,7 +399,7 @@ Item {
                     columns: 2
                     columnSpacing: 10; rowSpacing: 6
                     Label { text: "Release" }
-                    UiField { id: fRelease; Layout.fillWidth: true; mono: true; placeholderText: detail.job && detail.job.chosen ? detail.job.chosen : "MusicBrainz release id or URL (Use above fills it)" }
+                    UiField { id: fRelease; Layout.fillWidth: true; mono: true; onTextChanged: cmpTimer.restart(); placeholderText: detail.job && detail.job.chosen ? detail.job.chosen : "MusicBrainz release id or URL (Use above fills it)" }
                     Label { text: "Date" }
                     RowLayout {
                         spacing: 10
