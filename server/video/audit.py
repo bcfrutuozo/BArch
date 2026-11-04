@@ -19,13 +19,8 @@ from pathlib import Path
 
 MIN_MBPS = 10.0
 REMOTE, LOCAL = "/movies/", "/mnt/nasfrutuozo/media/movies/"
-# Radarr's language names -> the ISO 639-2 codes a track may carry (B and T forms)
-ISO = {"English": {"eng"}, "Portuguese": {"por"}, "Portuguese (Brazil)": {"por"}, "German": {"ger", "deu"},
-       "French": {"fre", "fra"}, "Spanish": {"spa"}, "Italian": {"ita"}, "Japanese": {"jpn"},
-       "Korean": {"kor"}, "Chinese": {"chi", "zho"}, "Russian": {"rus"}, "Swedish": {"swe"},
-       "Danish": {"dan"}, "Norwegian": {"nor", "nob"}, "Dutch": {"dut", "nld"}, "Hindi": {"hin"},
-       "Polish": {"pol"}, "Turkish": {"tur"}, "Arabic": {"ara"}, "Finnish": {"fin"}, "Greek": {"gre", "ell"},
-       "Hebrew": {"heb"}, "Czech": {"cze", "ces"}, "Thai": {"tha"}, "Icelandic": {"ice", "isl"}}
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from barch_video.langs import ISO  # noqa: E402
 
 
 def radarr(path):

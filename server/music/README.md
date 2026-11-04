@@ -254,7 +254,12 @@ sweep, one album per turn, so a new download never waits for either.
   with delete) stays in qBittorrent, in its category (Lidarr does not follow finished torrents, so nothing is
   imported twice), until it has `ratio` (2.0) after at least `min_hours` (72) of seeding, or `max_days` (30) after
   it finished whatever its ratio; while `path` (`/data`) has less than `min_free_gb` (100) free, the ones past
-  `min_hours` go first, oldest first, then the rest. `ratio: 0` deletes at once as before. Checked every hour;
+  `min_hours` go first, oldest first, then the rest. `ratio: 0` deletes at once as before. Defaults: ratio 3.0,
+  72 h, 90 days. A torrent left in the client with every album finished (rejected without delete included) is
+  handed to it too, and so are the finished torrents of `categories` (Radarr `radarr`, Sonarr `sonarr`/`tv-sonarr`,
+  the video pipeline's `barch-dub` donors, whose `delete_donor` is false for this): qBittorrent 5.2's API cannot
+  set share limits per category, and Radarr/Sonarr only remove torrents qBittorrent stopped, so this check is
+  where every finished torrent leaves the client, recorded in the history. Checked every hour;
   `POST /api/seeds/check` (`barch music seeds check`) now.
 - **Seed history** (`seeds.py`, `GET /api/seeds[?days=N&live=1]`, `barch music seeds [days] [--live]`): qBittorrent
   forgets a torrent once deleted, so every torrent the pipeline removes (imported, rejected with delete, or

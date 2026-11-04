@@ -1,0 +1,16 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+# What the video pipeline needs inside the linuxserver Alpine base image, at every start:
+# python3 with numpy and scipy (the alignment), ffmpeg/ffprobe (decode, PAL re-timing), mkvtoolnix (mux).
+need=()
+command -v python3 >/dev/null || need+=(python3)
+python3 -c 'import numpy' 2>/dev/null || need+=(py3-numpy)
+python3 -c 'import scipy' 2>/dev/null || need+=(py3-scipy)
+command -v ffmpeg >/dev/null || need+=(ffmpeg)
+command -v mkvmerge >/dev/null || need+=(mkvtoolnix)
+if ((${#need[@]})); then
+  echo "**** video pipeline: installing ${need[*]} ****"
+  apk add --no-cache "${need[@]}" || echo "**** video pipeline: apk failed, the service will report what is missing ****"
+fi
+mkdir -p /data/video-pipeline /data/completed/videos/barch-dub
+chown abc:abc /data/video-pipeline /data/completed/videos/barch-dub 2>/dev/null || true

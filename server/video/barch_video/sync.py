@@ -262,6 +262,8 @@ class MuxPlan:
     original: list[str]              # language codes of the original audio (ISO 639-2/B or T)
     alignment: Alignment
     keep_subs: list[str] = field(default_factory=lambda: ["por", "eng"])
+    ref_audio_pos: list[int] | None = None   # which audio tracks of the reference are the original (by order)
+    donor_por_pos: list[int] | None = None   # which audio tracks of the donor are the dub (by order)
     out: str = ""
     log: list[str] = field(default_factory=list)
 
@@ -280,12 +282,15 @@ def mux(plan: MuxPlan, workdir: str | Path | None = None) -> Path:
     tracks = lambda info, kind: [t for t in info["tracks"] if t["type"] == kind]
     tlang = lambda t: norm_lang(t["properties"].get("language", "und"))
 
-    ref_audio = [t for t in tracks(ri, "audio") if tlang(t) in orig]
+    ra_all, da_all = tracks(ri, "audio"), tracks(di, "audio")
+    ref_audio = ([ra_all[k] for k in plan.ref_audio_pos if k < len(ra_all)] if plan.ref_audio_pos is not None
+                 else [t for t in ra_all if tlang(t) in orig])
     if not ref_audio:
         raise ValueError(f"the reference has no audio in {sorted(orig)}")
     ref_subs = [t for t in tracks(ri, "subtitles") if tlang(t) in keep_subs]
     have_subs = {tlang(t) for t in ref_subs}
-    don_audio = [t for t in tracks(di, "audio") if tlang(t) == "por"]
+    don_audio = ([da_all[k] for k in plan.donor_por_pos if k < len(da_all)] if plan.donor_por_pos is not None
+                 else [t for t in da_all if tlang(t) == "por"])
     if not don_audio:
         raise ValueError("the donor has no Portuguese audio track")
     don_subs = [t for t in tracks(di, "subtitles") if tlang(t) in keep_subs and tlang(t) not in have_subs]
@@ -361,16 +366,13 @@ def mux(plan: MuxPlan, workdir: str | Path | None = None) -> Path:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def verify(muxed: str | Path, original: list[str], count: int = 8) -> Alignment:
-    """The muxed file against itself: its Portuguese track must sit on its original track at offset ~0."""
-    info = probe(muxed)
-    audio = [s for s in info["streams"] if s["codec_type"] == "audio"]
-    orig = {norm_lang(x) for x in original}
-    o = next((s for s in audio if norm_lang(lang(s)) in orig), None)
-    p = next((s for s in audio if norm_lang(lang(s)) == "por"), None)
-    if o is None or p is None:
+def verify(muxed: str | Path, orig_pos: int = 0, por_pos: int = 1, count: int = 8) -> Alignment:
+    """The muxed file against itself: its Portuguese track (audio number `por_pos`) must sit on its
+    original track (audio number `orig_pos`) at offset ~0 all along the film."""
+    audio = [s for s in probe(muxed)["streams"] if s["codec_type"] == "audio"]
+    if max(orig_pos, por_pos) >= len(audio):
         return Alignment(ok=False, reason="the muxed file lacks the original or the Portuguese track")
-    a = align(muxed, o["index"], muxed, p["index"], count)
-    if a.ok and abs(a.offset) > 0.040:
-        a.ok, a.reason = False, f"the Portuguese track ended up {a.offset * 1000:+.0f} ms off"
+    a = align(muxed, audio[orig_pos]["index"], muxed, audio[por_pos]["index"], count)
+    if a.ok and (abs(a.offset) > 0.040 or a.speed != "1"):
+        a.ok, a.reason = False, f"the Portuguese track ended up {a.offset * 1000:+.0f} ms off ({a.speed})"
     return a
