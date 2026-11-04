@@ -448,7 +448,7 @@ music_api() {   # music_api GET|POST <path> [json body]
   local conf="$HOME/.config/barch/music.json" url token
   [[ -r $conf ]] || die 3 "no $conf: run barch music install first"
   url=$(jq -r .url "$conf"); token=$(jq -r .token "$conf")
-  OUT=$(curl -sS --max-time 60 -X "$1" -H "X-Barch-Token: $token" -H "Content-Type: application/json" \
+  OUT=$(curl -sS --max-time "${MUSIC_API_TIMEOUT:-60}" -X "$1" -H "X-Barch-Token: $token" -H "Content-Type: application/json" \
     ${3:+--data "$3"} "$url$2" 2>&1) || die 3 "music pipeline not reachable at $url ($OUT)"
   jq -e . >/dev/null 2>&1 <<<"$OUT" || die 3 "music pipeline answered: ${OUT:0:200}"
   [[ $(jq -r '.ok' <<<"$OUT") == true ]] || { [[ $JSON == 1 ]] && jq . <<<"$OUT"; die 1 "$(jq -r '.error // "failed"' <<<"$OUT")"; }
@@ -820,7 +820,7 @@ cmd_music() {
       music_api GET /api/lidarr/commands
       show "$OUT" '.commands[] | "\(.id)\t\(.name) \(.status)  \(.started[0:19])  artist \(.artist_id // "-")  albums \(.albums)  (\(.trigger))"' ;;
     lidarr-enforce)
-      music_api POST /api/lidarr/enforce '{}'
+      MUSIC_API_TIMEOUT=900 music_api POST /api/lidarr/enforce '{}'
       show "$OUT" '.result' ;;
     adopt)
       [[ -n ${1:-} && -n ${2:-} ]] || usage_error "music adopt \"<Artist/Album>\" <MusicBrainz release id or URL>"

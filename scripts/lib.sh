@@ -12,6 +12,7 @@ declare -A PACKAGES=(
   [hypr]=".config/hypr"
   [quickshell]=".config/quickshell"
   [foot]=".config/foot"
+  [ghostty]=".config/ghostty/config.ghostty"
   [nvim]=".config/nvim"
   [mpv]=".config/mpv"
   [uwsm]=".config/uwsm"
