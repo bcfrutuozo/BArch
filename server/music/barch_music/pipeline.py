@@ -21,6 +21,7 @@ from mutagen.flac import FLAC
 
 from . import album as albummod
 from . import audio, cover, matcher, mb, merge, style, tagger
+from .canon import Canon
 from .libcovers import LibraryCovers
 from .integrations import Lidarr, Plex, QBit, Telegram
 
@@ -147,6 +148,7 @@ class Pipeline:
         self.current = ""
         self.last_enforce = 0.0
         self.covers = LibraryCovers(self.music, self.store.root / "covers", self.plex)
+        self.canon = Canon(self.store.root)
 
     # ------------------------------------------------------------ intake
     def log(self, job: dict, msg: str) -> None:
@@ -239,14 +241,19 @@ class Pipeline:
         self.tg.send(f"❌ Música: {job['name']}\n{e}")
 
     def enforce_lidarr(self, force: bool = False) -> str:
-        """Every hour (or now): every artist Lidarr has on the library's metadata profile, every album
-        without a file monitored, new ones too (`lidarr.profile` in config.json, "BArch"; "" turns it off)."""
+        """Every hour (or now): every artist Lidarr has on the library's metadata profile, every canonical
+        album without a file monitored, new ones too (`lidarr.profile` in config.json, "BArch"; "" turns it
+        off; `lidarr.canon` false monitors every album the profile lets in, unofficial ones included).
+        Judging the artists against Wikipedia takes up to five minutes a run here, 40 s when asked over the
+        API (the CLI waits a minute); the rest is done in the next runs."""
         profile = self.cfg.get("lidarr", {}).get("profile", "BArch")
         if not profile or (not force and time.time() - self.last_enforce < 3600):
             return ""
         self.last_enforce = time.time()
         try:
-            r = self.lidarr.enforce(profile, self.store.root / "lidarr-seen.json")
+            r = self.lidarr.enforce(profile, self.store.root / "lidarr-seen.json",
+                                    canon=self.canon if self.cfg.get("lidarr", {}).get("canon", True) else None,
+                                    budget=40 if force else 300)
         except Exception as e:  # noqa: BLE001
             r = f"Lidarr: profile check failed: {e}"
         if not r.endswith("nothing to change") and not r.endswith("nothing changed"):

@@ -122,12 +122,32 @@ def audio_media(rel: dict) -> list[dict]:
     return keep or media
 
 
-def score(cand: Candidate, tracks: list[Track], hints: dict) -> None:
-    rel = cand.release or {}
-    media = audio_media(rel)
+def discs_for(tracks: list[Track], media: list[dict]) -> tuple[dict[int, list[Track]], bool]:
+    """The download's tracks per disc, as they will be matched to these media: (discs, split).
+    One disc in the download where the release has several holding the same number of tracks in all
+    (a "2LP" whose 13 tracks came as one CUE, MusicBrainz 6 + 7): the tracks go to the release's
+    discs in order, split=True, so the album is tagged 1.01-1.06, 2.01-2.07 like MusicBrainz. The lengths
+    still have to fit track by track, as for any other download."""
     discs: dict[int, list[Track]] = {}
     for t in tracks:
         discs.setdefault(t.disc, []).append(t)
+    theirs = [len(m.get("tracks") or []) for m in media]
+    if len(discs) == 1 and len(theirs) > 1 and sum(theirs) == len(tracks):
+        ts = sorted(next(iter(discs.values())), key=lambda x: x.index)
+        out, i = {}, 0
+        for n, k in enumerate(theirs, 1):
+            out[n], i = ts[i:i + k], i + k
+        return out, True
+    return discs, False
+
+
+def score(cand: Candidate, tracks: list[Track], hints: dict) -> None:
+    rel = cand.release or {}
+    media = audio_media(rel)
+    discs, split = discs_for(tracks, media)
+    if split:
+        cand.why.append(f"one disc in the download, {len(media)} on MusicBrainz "
+                        f"({' + '.join(str(len(m.get('tracks') or [])) for m in media)}): the tracks follow MusicBrainz's discs")
     ours = [len(v) for _, v in sorted(discs.items())]
     theirs = [len(m.get("tracks") or []) for m in media]
     # a download of only some discs of a box: match the discs we have, by track count
@@ -144,11 +164,11 @@ def score(cand: Candidate, tracks: list[Track], hints: dict) -> None:
         return
     diffs, title_sims, keyed = [], [], []
     for n, ((dn, ts), m) in enumerate(zip(sorted(discs.items()), media), 1):
-        for t, mt in zip(sorted(ts, key=lambda x: x.index), m["tracks"]):
+        for pos, (t, mt) in enumerate(zip(sorted(ts, key=lambda x: x.index), m["tracks"]), 1):
             length = (mt.get("length") or (mt.get("recording") or {}).get("length") or 0) / 1000
             if length:
                 diffs.append(abs(length - t.seconds))
-                keyed.append((f"{n}.{t.index:02d}", abs(length - t.seconds)))
+                keyed.append((f"{n}.{(pos if split else t.index):02d}", abs(length - t.seconds)))
             if t.hints.get("title"):
                 title_sims.append(_sim(t.hints["title"], mt.get("title", "")))
     # a damaged track in the download (cut short, another take) must not hide the album: up to 5%
