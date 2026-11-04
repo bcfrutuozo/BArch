@@ -104,7 +104,7 @@ def library_genre(music: Path, artist_folder: str) -> str:
     d = music / style.folder_name(artist_folder)
     if not d.is_dir():
         return ""
-    from mutagen.flac import FLAC          # only in the container (the beets image ships it)
+    from mutagen.flac import FLAC          # only in the container (py3-mutagen, from the s6 init script)
     votes = Counter()
     for album in sorted(d.iterdir())[:12]:
         for f in sorted(album.glob("*.flac"))[:2]:

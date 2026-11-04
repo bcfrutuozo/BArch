@@ -8,6 +8,7 @@
 #   - PT-BR audio preferred, not required: "BArch: PT-BR audio" +2000 (no more, or a -10000 release
 #     with it and the best audio could reach 0). The video pipeline (barch_video) adds the dub to any
 #     file that lacks it; a release that already has it just saves that step
+#   - Blu-ray and WEB 2160p are one quality step, so the score decides; 250 MB/min at most (no remuxes)
 #   - upgrades on, so a file below the bar is replaced when something better shows up
 #
 # Left out on purpose: the guide's "Bad Dual Groups" (alfaHD, GUEIRA, SiGLA, C76, XiQUEXiQUE...) are
@@ -21,8 +22,14 @@ radarr:
     api_key: !secret radarr_key
     delete_old_custom_formats: true
 
+    # 250 MB per minute at most (~30 GB for 2 h, ~37 GB for 2 h 30): good encodes and WEB-DLs fit,
+    # full remuxes (50-80 GB) do not
     quality_definition:
       type: movie
+      qualities:
+        - {name: Bluray-2160p, max: 250, preferred: 240}
+        - {name: WEBDL-2160p, max: 250, preferred: 240}
+        - {name: WEBRip-2160p, max: 250, preferred: 240}
 
     quality_profiles:
       - name: BArch 4K
@@ -30,14 +37,14 @@ radarr:
           enabled: true
         upgrade:
           allowed: true
-          until_quality: Bluray-2160p
+          until_quality: 2160p
           until_score: 20000
         min_format_score: 0
         quality_sort: top
         qualities:
-          - name: Bluray-2160p
-          - name: WEB 2160p
-            qualities: [WEBDL-2160p, WEBRip-2160p]
+          # one step: Blu-ray and WEB are equal, the custom format score decides between them
+          - name: 2160p
+            qualities: [Bluray-2160p, WEBDL-2160p, WEBRip-2160p]
 
     custom_formats:
       - trash_ids: [eb41082b76e883d189d5980f7dc5ed01] # BArch: PT-BR audio
@@ -85,8 +92,14 @@ sonarr:
     api_key: !secret sonarr_key
     delete_old_custom_formats: true
 
+    # 250 MB per minute at most (~30 GB for 2 h, ~37 GB for 2 h 30): good encodes and WEB-DLs fit,
+    # full remuxes (50-80 GB) do not
     quality_definition:
       type: series
+      qualities:
+        - {name: Bluray-2160p, max: 250, preferred: 240}
+        - {name: WEBDL-2160p, max: 250, preferred: 240}
+        - {name: WEBRip-2160p, max: 250, preferred: 240}
 
     quality_profiles:
       - name: BArch 4K
@@ -94,14 +107,14 @@ sonarr:
           enabled: true
         upgrade:
           allowed: true
-          until_quality: Bluray-2160p
+          until_quality: 2160p
           until_score: 20000
         min_format_score: 0
         quality_sort: top
         qualities:
-          - name: Bluray-2160p
-          - name: WEB 2160p
-            qualities: [WEBDL-2160p, WEBRip-2160p]
+          # one step: Blu-ray and WEB are equal, the custom format score decides between them
+          - name: 2160p
+            qualities: [Bluray-2160p, WEBDL-2160p, WEBRip-2160p]
 
     custom_formats:
       - trash_ids: [a4d4531970fc57484773d336e70fd366] # BArch: PT-BR audio

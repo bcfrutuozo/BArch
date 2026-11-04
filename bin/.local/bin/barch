@@ -454,7 +454,7 @@ cmd_nightlight() {
 
 cmd_dnd() { toggle notifs dndSet "${1:-}" '"do not disturb: \(.dnd | '"$onoff_text"')"'; }
 
-# music: the pipeline runs in the beets container on the NAS (server/music); this only talks
+# music: the pipeline runs in the barch-music container on the NAS (server/music); this only talks
 # to its API with the URL and token install.sh left in ~/.config/barch/music.json
 music_api() {   # music_api GET|POST <path> [json body]
   local conf="$HOME/.config/barch/music.json" url token

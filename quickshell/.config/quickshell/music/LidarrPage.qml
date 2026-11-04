@@ -45,7 +45,7 @@ Item {
                 title: "Container"
                 Text {
                     Layout.fillWidth: true
-                    text: (Store.status.missing || []).length ? "Missing in the beets container: " + Store.status.missing.join(", ") + " (custom-cont-init.d not run? barch music install)" : "Every tool the pipeline needs is installed in the container."
+                    text: (Store.status.missing || []).length ? "Missing in the barch-music container: " + Store.status.missing.join(", ") + " (custom-cont-init.d not run? barch music install)" : "Every tool the pipeline needs is installed in the container."
                     color: (Store.status.missing || []).length ? Ui.red : Ui.subtext
                     font.family: Ui.font; font.pixelSize: Ui.fontSize - 1; wrapMode: Text.Wrap
                 }

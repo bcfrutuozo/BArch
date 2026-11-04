@@ -84,10 +84,16 @@ reusing the widget's own functions.
   it can listen in (`barch voice lang`), which skip the table and go straight to Claude. Test a sentence with
   `barch voice match "..."` (prints what would run, runs nothing); `barch voice test "..."` runs it
   for real on the live desktop, so never use it on a list of examples.
-- **Music pipeline** (`server/music/`): runs on the NAS in the beets container, not on this machine;
+- **Music pipeline** (`server/music/`): runs on the NAS in its own container (`barch-music`), not on this machine;
   `barch music install` copies it there. The naming rules are in `style.py` and were measured over
   the whole library: change them only with `tests/test_style.py` passing. Never write to `/music`
   from here (the share is read only for this user); fixes go through scripts run in the container.
+- **Video** (`server/video/`): Recyclarr keeps Radarr/Sonarr's "BArch 4K" profile (2160p HEVC HDR,
+  one quality step, 250 MB/min cap, PT-BR preferred) and the PT-BR pipeline (`barch-video` container,
+  `barch video`) muxes a dub from another release into each 4K file. Change `sync.py` only with
+  `tests/` passing and a real pair checked (`python3 -m barch_video mux` in the container writes a
+  `.barch.mkv` next to the reference, nothing replaced). Never delete movie files with Radarr's
+  `moviefile/bulk` (6.4 leaves them on disk); one by one, and check the disk.
 - **NAS kernel module** (`server/unraid/`): the `i2c-nct6793` build script for OpenRGB on the NAS
   (README "NAS"). It runs on the NAS, never here; the package is per Unraid kernel.
 - **Theme:** `quickshell/.config/quickshell/theme/palettes.json` holds the palettes (ten tones
