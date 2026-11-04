@@ -147,6 +147,8 @@ Desktop (through the bar):
                               (one Lidarr's metadata server does not know yet waits: lidarr-pending, tried hourly)
   music lidarr-commands       Lidarr's running and recent commands · lidarr-cancel <id> stops one (a RefreshArtist in flight undoes monitor changes)
   music digest [days]         the week of the pipeline in one message (Telegram gets it on Sundays at 18:00)
+  music seeds [days] [--live]  seed history of the torrents the pipeline removed (uploaded, ratio, seed time,
+                              per tracker); --live adds the ones still in qBittorrent
   music lidarr-stalled [h]    downloads with no progress for 48 h (or h): the hourly check blocklists them and searches another
   music lidarr-queue          what Lidarr grabbed and is downloading · lidarr-queue-remove <ids>|all [--keep]: drop them (blocklisted)
   music lidarr-release-profiles   what Lidarr never grabs (box sets, discographies, complete collections: kept by the hourly check)
@@ -854,6 +856,20 @@ cmd_music() {
       [[ -n ${1:-} ]] || usage_error "music lidarr-albums <artist name or id>"
       music_api GET "/api/lidarr/albums?artist=$(jq -rn --arg v "$1" '$v | @uri')"
       show "$OUT" '.albums[] | "\(.id)\t\(.date)  \(.title)  [\(.type)\(if (.secondary|length) > 0 then ", " + (.secondary|join(", ")) else "" end)]  \(.files)/\(.tracks)\(if .monitored then "  monitored" else "" end)\(if .canon == null then "" elif .canon == "" then "  · unofficial" else "  · " + .canon end)"' ;;
+    seeds)
+      local days="" live=""
+      for a in "$@"; do
+        case $a in --live) live=1 ;; *) days=$a ;; esac
+      done
+      music_api GET "/api/seeds?days=${days:-0}${live:+&live=1}"
+      show "$OUT" 'def gb: (. / 1e9 * 100 | round / 100 | tostring) + " GB";
+        def hrs: (. / 3600 | floor | tostring) + " h";
+        def line: "\(.torrents) torrents  up \(.uploaded|gb)  down \(.downloaded|gb)  ratio \(.ratio)  seed avg \(.avg_seeding_time|hrs)  below 1: \(.below_1)";
+        "removed from qBittorrent\(if .days > 0 then " (last \(.days) days)" else "" end): " + (.total|line),
+        (.trackers[] | "  \(.tracker): " + line),
+        (if (.recent|length) > 0 then "latest:" else empty end),
+        (.recent[:15][] | "  \(.removed|strftime("%Y-%m-%d"))  \(.reason)\t\(.uploaded|gb) / \(.downloaded|gb)  ratio \(.ratio)  \(.seeding_time|hrs)  \(.trackers|join(","))  \(.name)"),
+        (if .live then "still in qBittorrent: " + (.live.total|line), (.live.torrents[:15][] | "  \(.uploaded|gb) / \(.downloaded|gb)  ratio \(.ratio)  \(.seeding_time|hrs)  \(.trackers|join(","))  \(.name)") else empty end)' ;;
     digest)
       music_api GET "/api/digest${1:+?days=$1}"
       show "$OUT" '.text' ;;

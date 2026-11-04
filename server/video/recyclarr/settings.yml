@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://schemas.recyclarr.dev/latest/settings-schema.json
+# The BArch custom formats (PT-BR audio, not HEVC) live next to this file and are offered to
+# recyclarr.yml by trash_id like the guide's own.
+resource_providers:
+  - name: barch-radarr
+    type: custom-formats
+    service: radarr
+    path: /config/custom-formats/radarr
+  - name: barch-sonarr
+    type: custom-formats
+    service: sonarr
+    path: /config/custom-formats/sonarr

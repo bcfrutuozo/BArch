@@ -24,6 +24,7 @@ from . import audio, cover, matcher, mb, merge, style, tagger
 from .canon import Canon
 from .library import Library
 from .libcovers import LibraryCovers
+from .seeds import SeedLog
 from .integrations import Lidarr, Plex, QBit, Telegram
 
 STATES = ("queued", "working", "review", "done", "failed", "rejected")
@@ -153,6 +154,7 @@ class Pipeline:
         self.covers = LibraryCovers(self.music, self.store.root / "covers", self.plex)
         self.canon = Canon(self.store.root)
         self.library = Library(self.music, self.store.root, self.lidarr)
+        self.seeds = SeedLog(self.store.root)
 
     # ------------------------------------------------------------ intake
     def log(self, job: dict, msg: str) -> None:
@@ -312,6 +314,10 @@ class Pipeline:
         judged = sum(c.values())
         lines.append(f"• Biblioteca: {c.get('tagged', 0) + c.get('had', 0)} de {lib['albums']} álbuns com ids do MusicBrainz"
                      f" ({judged} vistos), {len(lib['decide'])} para decidir na aba Library")
+        st = self.seeds.totals(self.seeds.rows(days))
+        if st["torrents"]:
+            lines.append(f"• Seed dos {st['torrents']} torrent(s) removidos: {st['uploaded'] / 1e9:.1f} GB enviados de"
+                         f" {st['downloaded'] / 1e9:.1f} GB baixados (ratio {st['ratio']}), {st['below_1']} abaixo de 1")
         pend = self.pending_artists()
         if pend:
             lines.append("• Esperando o Lidarr conhecer: " + ", ".join(x["folder"] for x in pend))
@@ -396,6 +402,8 @@ class Pipeline:
             self.stalled_before = {d["id"] for d in found}
             if not dead:
                 return ""
+            for d in dead:
+                self.seeds.record(self.qbit, d["hash"], "stalled", d.get("album") or d.get("title", ""))
             self.lidarr.remove_queue([d["id"] for d in dead], blocklist=True, from_client=True, redownload=True)
         except Exception as e:  # noqa: BLE001
             return f"stalled downloads: {e}"
@@ -605,8 +613,12 @@ class Pipeline:
         if any(j["state"] not in finished for j in group) or len(group) < job.get("siblings", 1):
             return
         if job.get("kind") == "torrent" and self.cfg.get("delete_torrent", True):
+            reason = "imported" if all(j["state"] == "done" for j in group) else "rejected"
+            row = self.seeds.record(self.qbit, job["hash"], reason, job.get("name", ""))
             self.qbit.delete(job["hash"], files=True)
-            self.log(job, "torrent and its files deleted from qBittorrent")
+            self.log(job, "torrent and its files deleted from qBittorrent" + (
+                f" (seeded {row['uploaded'] / 1e9:.2f} GB, ratio {row['ratio']}, {row['seeding_time'] // 3600} h; seed-history.jsonl)"
+                if row else " (its seed numbers could not be read)"))
         elif job.get("kind") == "inbox":
             shutil.rmtree(job["inbox"], ignore_errors=True)
             self.log(job, "inbox folder removed")
