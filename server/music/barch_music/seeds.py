@@ -119,7 +119,7 @@ class SeedLog:
 
 
 SEED_DEFAULTS = {"ratio": 3.0, "min_hours": 72, "max_days": 90, "min_free_gb": 100, "path": "/data",
-                 "categories": ["radarr", "sonarr", "tv-sonarr", "barch-dub"]}
+                 "categories": ["radarr", "sonarr", "tv-sonarr", "barch-dub", "books", "audiobooks"]}
 
 
 class SeedKeeper:
@@ -129,7 +129,7 @@ class SeedKeeper:
     seeding, or `max_days` after it finished whatever its ratio. While the downloads disk has less than
     `min_free_gb` free, the ones past `min_hours` go first (oldest first), then the others. Lidarr does
     not follow a finished torrent, so it stays in its category without being imported again.
-    The finished torrents of `categories` (Radarr's and Sonarr's, the video pipeline's PT-BR donors) are
+    The finished torrents of `categories` (Radarr's and Sonarr's, the video pipeline's PT-BR donors, Shelfmark's books) are
     adopted by the same check: Radarr and Sonarr import in minutes and the donor is muxed in hours, long
     before `min_hours`, and they only remove a torrent qBittorrent stopped (it never stops one here: no
     share limits), so this is the one place a finished torrent leaves the client, through the history.

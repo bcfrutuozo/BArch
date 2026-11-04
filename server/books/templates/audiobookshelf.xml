@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!-- BArch books (server/books): the audiobook library. Copied to /boot/config/plugins/dockerMan/templates-user/my-audiobookshelf.xml -->
+<Container version="2">
+  <Name>audiobookshelf</Name>
+  <Repository>ghcr.io/advplyr/audiobookshelf:2.37.2</Repository>
+  <Registry>https://github.com/advplyr/audiobookshelf/pkgs/container/audiobookshelf</Registry>
+  <Network>frutuozoproxy</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Project>https://www.audiobookshelf.org</Project>
+  <Overview>The audiobook library and player (web, iOS, Android). Shelfmark delivers into /audiobooks as Author/Title.</Overview>
+  <Category>MediaServer:Books</Category>
+  <WebUI>http://[IP]:[PORT:13378]/</WebUI>
+  <Icon>https://cdn.jsdelivr.net/gh/selfhst/icons/png/audiobookshelf.png</Icon>
+  <ExtraParams>--user 99:100</ExtraParams>
+  <PostArgs/>
+  <Config Name="WebUI" Target="13378" Default="13378" Mode="tcp" Description="Web UI and the apps (PORT below: a non-root user cannot listen on 80)" Type="Port" Display="always" Required="true" Mask="false">13378</Config>
+  <Config Name="Config" Target="/config" Default="/mnt/user/appdata/audiobookshelf/config" Mode="rw" Description="" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/audiobookshelf/config</Config>
+  <Config Name="Metadata" Target="/metadata" Default="/mnt/user/appdata/audiobookshelf/metadata" Mode="rw" Description="Covers, cache, backups" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/audiobookshelf/metadata</Config>
+  <Config Name="Audiobooks" Target="/audiobooks" Default="/mnt/user/media/audiobooks" Mode="rw" Description="" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/audiobooks</Config>
+  <Config Name="Port" Target="PORT" Default="13378" Mode="" Description="" Type="Variable" Display="advanced" Required="true" Mask="false">13378</Config>
+  <Config Name="TZ" Target="TZ" Default="America/Sao_Paulo" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">America/Sao_Paulo</Config>
+</Container>

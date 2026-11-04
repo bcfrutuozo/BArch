@@ -261,7 +261,8 @@ sweep, one album per turn, so a new download never waits for either.
   `min_hours` go first, oldest first, then the rest. `ratio: 0` deletes at once as before. Defaults: ratio 3.0,
   72 h, 90 days. A torrent left in the client with every album finished (rejected without delete included) is
   handed to it too, and so are the finished torrents of `categories` (Radarr `radarr`, Sonarr `sonarr`/`tv-sonarr`,
-  the video pipeline's `barch-dub` donors, whose `delete_donor` is false for this): qBittorrent 5.2's API cannot
+  the video pipeline's `barch-dub` donors, whose `delete_donor` is false for this, Shelfmark's `books`/`audiobooks`,
+  whose completion action is Keep, `server/books`): qBittorrent 5.2's API cannot
   set share limits per category, and Radarr/Sonarr only remove torrents qBittorrent stopped, so this check is
   where every finished torrent leaves the client, recorded in the history. Checked every hour;
   `POST /api/seeds/check` (`barch music seeds check`) now.

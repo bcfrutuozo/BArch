@@ -65,6 +65,12 @@ if [ -d server/music ]; then
   ((fail)) || ok "compiles, tests pass"
 fi
 
+step "Book templates (server/books)"
+for f in server/books/templates/*.xml; do
+  [ -e "$f" ] || continue
+  python3 -c 'import sys, xml.dom.minidom as m; m.parse(sys.argv[1])' "$f" 2>/dev/null || problem "books: $f is not valid XML"
+done
+
 step "Video pipeline (server/video)"
 if [ -d server/video ]; then
   python3 -m compileall -q server/video/barch_video server/video/audit.py >/dev/null || problem "video pipeline: python does not compile"
