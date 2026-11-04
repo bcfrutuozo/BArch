@@ -376,3 +376,47 @@ def _acoustid_releases(key: str, fingerprints: list[tuple[str, int]]) -> list[st
             for r in mb.recording_releases(rec):
                 votes[r["id"]] = votes.get(r["id"], 0) + 1
     return [k for k, _ in sorted(votes.items(), key=lambda kv: -kv[1])][:6]
+
+
+def compare(job_tracks: list[dict], rel: dict) -> dict:
+    """The download next to a release, track by track, as the matcher pairs them (the review's
+    comparison when a release is picked): one row per position of either side, with both titles,
+    both lengths, the difference and how close the titles are. `job_tracks` as the job keeps them
+    ({disc, index, seconds, title}); a one-disc download over several discs is spread like score() does."""
+    from types import SimpleNamespace
+    media = audio_media(rel)
+    ts = [SimpleNamespace(disc=int(t.get("disc") or 1), index=int(t.get("index") or 0), seconds=float(t.get("seconds") or 0),
+                          title=t.get("title") or "") for t in job_tracks]
+    discs, split = discs_for(ts, media)
+    ours = [sorted(v, key=lambda x: x.index) for _, v in sorted(discs.items())]
+    if len(ours) == 1 and len(media) > 1 and not split:
+        # one disc against several with another total: laid out over MusicBrainz's discs anyway, in
+        # order, so the row where the two drift apart shows (whatever is left over follows the last disc)
+        flat, ours, i = ours[0], [], 0
+        for k, m in enumerate(media):
+            n = len(m.get("tracks") or [])
+            ours.append(flat[i:] if k == len(media) - 1 else flat[i:i + n])
+            i += n
+    rows, diffs = [], []
+    for n in range(max(len(ours), len(media))):
+        a = ours[n] if n < len(ours) else []
+        b = (media[n].get("tracks") or []) if n < len(media) else []
+        for i in range(max(len(a), len(b))):
+            o = a[i] if i < len(a) else None
+            m = b[i] if i < len(b) else None
+            ml = ((m.get("length") or (m.get("recording") or {}).get("length") or 0) / 1000) if m else 0
+            row = {"disc": n + 1, "pos": i + 1,
+                   "mb_title": (m or {}).get("title", ""), "mb_seconds": round(ml, 1) if ml else None,
+                   "title": o.title if o else "", "seconds": round(o.seconds, 1) if o else None,
+                   "file": f"{o.disc}.{o.index:02d}" if o else "",
+                   "diff": round(abs(ml - o.seconds), 1) if (o and ml) else None,
+                   "title_sim": round(_sim(o.title, m.get("title", "")), 2) if (o and m and o.title) else None}
+            if row["diff"] is not None:
+                diffs.append(row["diff"])
+            rows.append(row)
+    return {"rows": rows, "split": split,
+            "media": [{"format": m.get("format") or "?", "tracks": len(m.get("tracks") or [])} for m in media],
+            "ours": [sum(1 for t in ts if t.disc == d) for d in sorted({t.disc for t in ts})],   # as downloaded
+            "worst": max(diffs) if diffs else None, "mean": round(sum(diffs) / len(diffs), 1) if diffs else None,
+            "title": rel.get("title", ""), "artist": _credit(rel.get("artist-credit")), "date": rel.get("date", ""),
+            "country": rel.get("country", "")}

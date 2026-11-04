@@ -81,3 +81,17 @@ class OneDiscForTwo(unittest.TestCase):
     def test_other_total_is_not_split(self):
         _, split = matcher.discs_for(self.tracks(self.OURS[:12]), self.release()["media"])
         self.assertFalse(split)
+
+    def test_compare_rows(self):
+        job = [{"disc": 1, "index": i, "seconds": s, "title": t}
+               for i, (s, t) in enumerate(zip(self.OURS, [t for d in self.MB for t, _ in d]), 1)]
+        job[3]["seconds"] = 400                               # one track cut short
+        c = matcher.compare(job[:12], self.release())          # and the last one missing: no split
+        self.assertFalse(c["split"])
+        self.assertEqual(len(c["rows"]), 13)
+        self.assertEqual(c["rows"][3]["diff"], 52)
+        self.assertIsNone(c["rows"][12]["seconds"])           # MusicBrainz 2.07 has nothing in front of it
+        full = matcher.compare(job, self.release())
+        self.assertTrue(full["split"])
+        self.assertEqual((full["rows"][6]["disc"], full["rows"][6]["pos"], full["rows"][6]["file"]), (2, 1, "1.07"))
+        self.assertEqual(full["rows"][6]["title_sim"], 1.0)

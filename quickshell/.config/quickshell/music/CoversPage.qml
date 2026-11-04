@@ -33,16 +33,28 @@ Item {
             .filter(e => all || !(e.verdict === "fine" || e.verdict === "kept" || e.verdict === "nothing") || e.applied || e.queued)
     }
     readonly property int unchecked: list.filter(e => e.verdict === "unchecked").length
-    // what the ListView shows: frozen while a check runs (the overlay says how far it is) and replaced
-    // only when the content differs, so nothing blinks and the scroll stays where it was
-    property var shown: []
-    property string shownKey: ""
+    // what the ListView shows: frozen while a check runs (the overlay says how far it is) and updated in
+    // place, row by row (a Check, a picked candidate change one row only): a new array as the model would
+    // rebuild every delegate and throw the scroll back to the top
+    ListModel { id: shown }
     function sync() {
-        if (Store.coversBusy && shown.length) return
-        const key = JSON.stringify(list)
-        if (key !== shownKey) { shownKey = key; shown = list }
+        if (Store.coversBusy && shown.count) return
+        const rows = list.map(e => ({ folder: e.folder, json: JSON.stringify(e) }))
+        const keep = {}
+        for (const r of rows) keep[r.folder] = true
+        for (let i = shown.count - 1; i >= 0; i--) if (!keep[shown.get(i).folder]) shown.remove(i)
+        for (let i = 0; i < rows.length; i++) {
+            let j = i
+            while (j < shown.count && shown.get(j).folder !== rows[i].folder) j++
+            if (j === shown.count) { shown.insert(i, rows[i]); continue }
+            if (j !== i) shown.move(j, i, 1)
+            if (shown.get(i).json !== rows[i].json) shown.setProperty(i, "json", rows[i].json)
+        }
     }
     onListChanged: sync()
+    // another artist (or the "to decide" view) starts at the top; a row changing does not
+    onArtistChanged: Qt.callLater(() => albumList.positionViewAtBeginning())
+    onPendingChanged: Qt.callLater(() => albumList.positionViewAtBeginning())
     Connections { target: Store; function onCoversBusyChanged() { page.sync() } }
     // the progress of the check: the queue is longest right after Check, the rest is done
     property int total: 0
@@ -72,7 +84,7 @@ Item {
         signal picked()
         implicitWidth: size; implicitHeight: size + (label ? 18 : 0)
         color: "transparent"
-        function load() { th.src = ""; if (folder) Store.coverImage(folder, which, stamp, p => th.src = p) }
+        function load() { th.src = ""; if (folder) Store.coverImage(folder, which, stamp, p => { if (th) th.src = p }) }   // the row may be gone when the image arrives
         onStampChanged: load()
         onWhichChanged: load()
         Component.onCompleted: load()
@@ -138,24 +150,25 @@ Item {
         }
         Text {
             Layout.leftMargin: 14
-            visible: page.shown.length === 0 && !Store.coversBusy
+            visible: shown.count === 0 && !Store.coversBusy
             text: page.pending ? "Nothing waits for a decision." : !page.artist ? "Pick an artist (type to filter the list)."
                 : Store.albums.length === 0 ? "No album folder with FLAC files under " + page.artist + "."
                 : "Every cover of " + page.artist + " is fine (show all to see them)."
             color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize
         }
         ListView {
+            id: albumList
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
             spacing: 8
-            model: page.shown
+            model: shown
             enabled: !Store.coversBusy
             ScrollBar.vertical: ScrollBar {}
             delegate: Rectangle {
                 id: row
-                required property var modelData
-                readonly property var e: modelData
+                required property string json
+                readonly property var e: JSON.parse(json)
                 width: ListView.view.width - 28
                 x: 14
                 implicitHeight: rl.implicitHeight + 20

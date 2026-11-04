@@ -193,7 +193,9 @@ The main pieces:
   the pipeline found (the download, the problems, the MusicBrainz candidates with why they fit, the
   merge plan for an album already in the library, the proposed files, the log, the cover) and the
   inputs of `barch music resolve` as a form: Use a candidate or a release found with the
-  MusicBrainz search right there, date (or the year-only last resort), genre, album, artist folder,
+  MusicBrainz search right there (the release picked shows up next to the download track by track:
+  disc and position, both titles, both lengths and the difference, the rows that do not fit in red,
+  so you see where a match drifts; `GET /api/jobs/<id>/compare?release=`), date (or the year-only last resort), genre, album, artist folder,
   the cover (a URL, or **Upload…** an image found online: checked, kept with the job and shown at
   once; **Find cover** sends Claude to search the web for it, `barch music cover-ask <id>`, which
   the `music-cover` rule already does by itself for every album that waits only for a cover),
