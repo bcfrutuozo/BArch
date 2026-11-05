@@ -3,6 +3,7 @@
   "music": "/music",
   "jobs": "/data/music-pipeline",
   "inbox": "/data/music-inbox",
+  "extra_inboxes": [{"path": "/data/slskd/completed", "settle_min": 30}],
   "categories": ["lidarr", "music"],
   "poll_s": 120,
   "port": 8338,

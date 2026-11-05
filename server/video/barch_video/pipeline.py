@@ -635,13 +635,9 @@ class Pipeline:
         log(j, f"muxed: PT-BR from {c['title']} at {r['offset_ms']:+d} ms ({r['speed']}); file replaced")
         c["status"] = "used"
         self.drop_donor(j, c)
+        if not self.movie_linked(j):
+            return
         try:
-            cid = self.radarr.rescan(j["movie_id"])
-            for _ in range(60):
-                st = self.radarr.get(f"/command/{cid}") or {}
-                if st.get("status") in ("completed", "failed"):
-                    break
-                time.sleep(5)
             m = self.radarr.movie(j["movie_id"])
             if m.get("movieFile"):
                 self.radarr.set_file_languages(m["movieFile"]["id"], [j.get("original") or "English",
@@ -706,13 +702,8 @@ class Pipeline:
 
     def after_series_mux(self, j: dict, muxed: list[str]) -> None:
         """Sonarr rescans the series and is told the muxed files' languages."""
+        self.episodes_linked(j, muxed)
         try:
-            cid = self.sonarr.rescan(j["series_id"])
-            for _ in range(120):
-                st = self.sonarr.get(f"/command/{cid}") or {}
-                if st.get("status") in ("completed", "failed"):
-                    break
-                time.sleep(5)
             by_path = {f["path"]: f for f in self.sonarr.episode_files(j["series_id"])}
             for k in muxed:
                 e = j["episodes"][k]
@@ -727,6 +718,71 @@ class Pipeline:
             log(j, f"Sonarr after the mux: {ex}")
         todo = self.todo(j)
         j["audio"] = [f"{len(j['episodes']) - len(todo)}/{len(j['episodes'])} episodes with por"]
+
+    # ------------------------------------------------------------------------------- after a replace
+
+    def movie_linked(self, j: dict) -> bool:
+        """After the file was replaced: Radarr rescans and must still have it. Once (2026-11-05) Radarr saw
+        the path missing during the replace, dropped the record and re-added it without linking the movie
+        (hasFile false: it would have downloaded the film again). Then: rescan again, import it in place;
+        still not linked -> review, Telegram. True when Radarr has the file."""
+        mid = j["movie_id"]
+        for attempt in ("rescan", "rescan again", "manual import"):
+            try:
+                if attempt == "manual import":
+                    st = self.radarr.manual_import(str(Path(j["file"]).parent), j["file"], {"movieId": mid})
+                else:
+                    if attempt == "rescan again":
+                        time.sleep(30)
+                    st = self.radarr.wait(self.radarr.rescan(mid))
+                m = self.radarr.movie(mid)
+            except Exception as e:  # noqa: BLE001
+                log(j, f"Radarr after the replace ({attempt}): {e}")
+                continue
+            if m.get("hasFile"):
+                if attempt != "rescan":
+                    log(j, f"Radarr had lost the file after the replace; linked again by {attempt}")
+                return True
+            log(j, f"Radarr has no file for the movie after {attempt} ({st})")
+        j["state"] = "review"
+        j["reason"] = "Radarr lost the file after it was replaced (it would search the movie again): import it by hand"
+        self.store.save(j)
+        self.tg.send(f"⚠️ {j['title']}: o Radarr perdeu o arquivo depois da troca; importar à mão")
+        return False
+
+    def episodes_linked(self, j: dict, keys: list[str]) -> bool:
+        """movie_linked() for episodes: every replaced file must still be an episode file of the series."""
+        sid = j["series_id"]
+        missing: list[str] = []
+        for attempt in ("rescan", "rescan again", "manual import"):
+            try:
+                if attempt == "manual import":
+                    eps = {e["episodeNumber"]: e["id"] for e in self.sonarr.episodes(sid) if e["seasonNumber"] == j["season"]}
+                    for k in missing:
+                        e = j["episodes"][k]
+                        self.sonarr.manual_import(str(Path(e["file"]).parent), e["file"],
+                                                  {"seriesId": sid, "seasonNumber": j["season"],
+                                                   "episodeIds": [eps[n] for n in e.get("episodes", [int(k)]) if n in eps]})
+                else:
+                    if attempt == "rescan again":
+                        time.sleep(30)
+                    self.sonarr.wait(self.sonarr.rescan(sid))
+                have = {f["path"] for f in self.sonarr.episode_files(sid)}
+            except Exception as ex:  # noqa: BLE001
+                log(j, f"Sonarr after the replace ({attempt}): {ex}")
+                continue
+            missing = [k for k in keys if j["episodes"][k]["file"] not in have]
+            if not missing:
+                if attempt != "rescan":
+                    log(j, f"Sonarr had lost episode files after the replace; linked again by {attempt}")
+                return True
+            log(j, f"Sonarr lost {len(missing)} episode file(s) after {attempt}")
+        for k in missing:
+            j["episodes"][k]["state"] = "review"
+            j["episodes"][k]["reason"] = "Sonarr lost the file after it was replaced: import it by hand"
+        self.store.save(j)
+        self.tg.send(f"⚠️ {j['title']}: o Sonarr perdeu {len(missing)} episódio(s) depois da troca; importar à mão")
+        return False
 
     # ---------------------------------------------------------------------------------------- trim
 
@@ -796,14 +852,10 @@ class Pipeline:
                 self.store.save(j)
             self.current = ""
             if touched:
-                try:
-                    if j.get("kind") == "season":
-                        self.sonarr.rescan(j["series_id"])
-                    else:
-                        self.radarr.rescan(j["movie_id"])
-                except Exception as e:  # noqa: BLE001
-                    log(j, f"rescan after trim: {e}")
-                    self.store.save(j)
+                if j.get("kind") == "season":
+                    self.episodes_linked(j, touched)
+                else:
+                    self.movie_linked(j)
             if budget <= 0:
                 return
 

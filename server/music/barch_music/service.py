@@ -11,7 +11,8 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
     GET  /api/jobs/<id>/compare?release=<mbid|URL>   the download next to that release, track by track
     GET  /api/seeds[?days=N&live=1]      the seed history (seeds.py): what each torrent removed from qBittorrent gave
                                          back, in total, per tracker and the latest; live=1 adds the torrents still there;
-                                         "seeding": the ones kept seeding by the policy (config "seed") and how far each is
+                                         "seeding": the ones kept seeding by the policy (config "seed") and how far each is,
+                                         "seeding_total": their totals (uploaded, ratio: the homepage card)
     POST /api/seeds/check                the hourly seed check now: deletes what reached its ratio or its time
     GET  /api/status                     counts per state, the job running now
     GET  /api/jobs[?state=review]        summaries
@@ -179,6 +180,7 @@ def make_handler(p: Pipeline, token: str):
                 out = p.seeds.summary(float((q.get("days") or ["0"])[0]), live)
                 try:
                     out["seeding"] = p.seeding.status()
+                    out["seeding_total"] = p.seeds.totals(out["seeding"])   # what the ones still seeding gave so far
                 except Exception as e:  # noqa: BLE001
                     out["seeding_error"] = str(e)
                 return self._send(200, {"ok": True, "policy": p.seeding.cfg, **out})

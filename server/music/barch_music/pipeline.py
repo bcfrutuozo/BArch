@@ -142,6 +142,11 @@ class Pipeline:
         self.music = Path(cfg.get("music", "/music"))
         self.store = Store(Path(cfg.get("jobs", "/data/music-pipeline")))
         self.inbox = Path(cfg.get("inbox", "/data/music-inbox"))
+        # other folders read like the inbox, each with how long a folder must sit still before it is taken:
+        # Soulseek's downloads (slskd, fed by Soularr from Lidarr's wanted list), which nothing else cleans
+        self.inboxes = [(self.inbox, 120)] + [
+            (Path(x["path"]), int(x.get("settle_min", 30)) * 60)
+            for x in cfg.get("extra_inboxes", [{"path": "/data/slskd/completed", "settle_min": 30}]) if x.get("path")]
         self.qbit = QBit(cfg.get("qbittorrent", {}))
         self.lidarr = Lidarr(cfg.get("lidarr", {}))
         self.plex = Plex(cfg.get("plex", {}))
@@ -176,7 +181,10 @@ class Pipeline:
     def from_inbox(self, folder: Path) -> list[dict]:
         roots = album_roots(folder)
         jobs = [self.store.new(kind="inbox", source=str(r), name=r.name, inbox=str(folder), siblings=len(roots)) for r in roots]
-        (folder / ".pipeline").write_text(json.dumps([j["id"] for j in jobs]))
+        try:
+            (folder / ".pipeline").write_text(json.dumps([j["id"] for j in jobs]))
+        except OSError:
+            pass                                       # read-only to the container: scan() knows it by its jobs
         return jobs
 
     def scan(self) -> int:
@@ -189,13 +197,21 @@ class Pipeline:
                 n += len(self.from_torrent(t))
         except Exception as e:  # noqa: BLE001
             print("scan qBittorrent:", e, flush=True)
-        if self.inbox.is_dir():
-            for d in sorted(self.inbox.iterdir()):
-                if d.name.startswith(".") or (d / ".pipeline").exists():
+        # a folder that already has jobs is never taken again, marker or not: the container user cannot
+        # write the marker into slskd's folders, and every scan made the same albums anew (2026-11-04)
+        taken = {j.get("inbox") for j in self.store.all() if j.get("kind") == "inbox" and not j.get("superseded")}
+        for box, settle in self.inboxes:
+            if not box.is_dir():
+                continue
+            for d in sorted(box.iterdir()):
+                if not d.is_dir() or d.name.startswith(".") or (d / ".pipeline").exists() or str(d) in taken:
                     continue
-                if time.time() - max((p.stat().st_mtime for p in d.rglob("*")), default=0) < 120:
-                    continue                                   # still being copied
-                n += len(self.from_inbox(d))
+                try:
+                    if time.time() - max((p.stat().st_mtime for p in d.rglob("*")), default=0) < settle:
+                        continue                               # still being copied / downloaded
+                    n += len(self.from_inbox(d))
+                except OSError as e:
+                    print(f"scan {d}: {e}", flush=True)
         if n:
             self.wake.set()
         return n
@@ -209,10 +225,18 @@ class Pipeline:
         return None
 
     def run_forever(self) -> None:
+        seen = set()
         for j in self.store.all():              # a job cut by a restart starts again
             if j["state"] == "working":
                 j["state"] = "queued"
                 self.store.save(j)
+            # the same album queued twice (an inbox folder taken again by an older version): one is enough
+            key = (j.get("inbox"), j.get("source")) if j.get("kind") == "inbox" and not j.get("superseded") else None
+            if key and j["state"] == "queued" and key in seen:
+                shutil.rmtree(self.store.path(j["id"]), ignore_errors=True)
+                print(f"[{j['id']}] duplicate of a queued job, removed", flush=True)
+            elif key:
+                seen.add(key)
         while True:
             job = self.next_job()
             if not job:
@@ -220,6 +244,7 @@ class Pipeline:
                 self.enforce_lidarr()
                 self.doing = "seed check"
                 self.seed_check()
+                self.purge_work()
                 self.weekly_digest()
                 # idle: one album of the library tied to MusicBrainz, then the queue is looked at again
                 if self.cfg.get("library_sweep", True):
@@ -252,6 +277,22 @@ class Pipeline:
                 self.fail(self.store.load(job["id"]) or job, e)
             finally:
                 self.current = ""
+
+    def purge_work(self) -> int:
+        """Every hour: the working copy of a finished job (done, rejected) goes. Delivery removes it, but a
+        rejected job kept its copy of the whole download forever (14 GB of the downloads cache on
+        2026-11-04); a retry collects the download again from scratch, so nothing needs it."""
+        if time.time() - getattr(self, "_purged", 0) < 3600:
+            return 0
+        self._purged, n = time.time(), 0
+        for j in self.store.all():
+            w = self.store.path(j["id"]) / "work"
+            if j["state"] in ("done", "rejected") and w.is_dir():
+                shutil.rmtree(w, ignore_errors=True)
+                n += 1
+        if n:
+            print(f"[work] removed the working copy of {n} finished job(s)", flush=True)
+        return n
 
     def seed_check(self, force: bool = False) -> list[str]:
         """Every hour (or now): the torrents seeding for the pipeline that reached their goal go (seeds.py).
@@ -476,7 +517,7 @@ class Pipeline:
         try:
             tracks, notes = audio.collect(src, work)
         except audio.AudioError as e:
-            return self.to_review(job, [str(e)])
+            return self.discard(job, str(e)) if self.disposable(job) else self.to_review(job, [str(e)])
         job["notes"] += notes
         job["audio"] = {"tracks": len(tracks), "discs": len({t.disc for t in tracks}),
                         "format": sorted({f"{t.bits or 16}/{t.rate // 1000 if t.rate % 1000 == 0 else t.rate / 1000}" for t in tracks})}
@@ -490,7 +531,7 @@ class Pipeline:
                                            keep_order=bool(job.get("keep_order")))
         job["candidates"] = [c.summary() for c in cands[:8]]
         if not best:
-            return self.to_review(job, [reason])
+            return self.discard(job, reason) if self.disposable(job) else self.to_review(job, [reason])
         job["match"] = best.summary()
         for attempt in (1, 2):
             alb = albummod.build(best, tracks, self.music, job.get("overrides"))
@@ -578,6 +619,25 @@ class Pipeline:
         self.log(job, f"merged into {alb.folder}: {len(done)} changes")
         self.after(job, alb, merged=done)
 
+    def disposable(self, job: dict) -> bool:
+        """A folder of an extra inbox (Soulseek) not touched by hand (no release chosen, no overrides): what
+        has no MusicBrainz match or is not lossless is rejected and deleted instead of waiting in the
+        review, since Lidarr still wants the album and searches again (Soularr brings bootlegs, vinyl
+        rips of unknown pressings, stray discs)."""
+        if job.get("kind") != "inbox" or job.get("chosen") or job.get("overrides"):
+            return False
+        return Path(job.get("inbox", "")).parent in {b for b, _ in self.inboxes[1:]}
+
+    def discard(self, job: dict, reason: str) -> None:
+        """A disposable job that would go to the review: rejected, its folder deleted once its siblings are
+        settled too (cleanup_source), no Telegram; the album stays wanted in Lidarr."""
+        job["state"], job["problems"] = "rejected", [reason]
+        job.pop("net_retries", None)
+        self.log(job, f"discarded (extra inbox, nothing to review): {reason}")
+        shutil.rmtree(self.store.path(job["id"]) / "work", ignore_errors=True)
+        self.store.save(job)
+        self.cleanup_source(job, finished=("done", "rejected"))
+
     def to_review(self, job: dict, problems: list[str]) -> None:
         job["state"] = "review"
         job["problems"] = problems
@@ -647,6 +707,8 @@ class Pipeline:
         """When every album of the torrent (or inbox folder) is in the library: delete it. A reject
         with delete counts the rejected ones as finished too (a box set Bruno does not want)."""
         key = "hash" if job.get("kind") == "torrent" else "inbox"
+        if self.disposable({**job, "chosen": "", "overrides": None}):
+            finished = ("done", "rejected")             # a Soulseek folder goes once nothing of it waits
         group = [j for j in self.store.all() if j.get(key) == job.get(key) and not j.get("superseded")]
         if any(j["state"] not in finished for j in group) or len(group) < job.get("siblings", 1):
             return
@@ -816,6 +878,7 @@ class Pipeline:
             raise KeyError(jid)
         if action == "reject":
             job["state"] = "rejected"
+            shutil.rmtree(self.store.path(jid) / "work", ignore_errors=True)
             self.log(job, "rejected in the review" + (" (download deleted once every album of it is settled)" if kw.get("delete") else ""))
             rel = mb.release((job.get("match") or {}).get("mbid", "")) if job.get("match") else None
             note = self.lidarr.unmonitor_group(((rel or {}).get("release-group") or {}).get("id", ""), "rejected")
