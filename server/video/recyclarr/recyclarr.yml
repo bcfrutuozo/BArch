@@ -11,6 +11,13 @@
 #   - Blu-ray and WEB 2160p are one quality step, so the score decides; 250 MB/min at most (no remuxes)
 #   - upgrades on, so a file below the bar is replaced when something better shows up
 #
+# BArch 1080p, for what never came out in 4K (The Walking Dead): Blu-ray and WEB 1080p as one step,
+# HEVC preferred but AVC accepted ("BArch: not HEVC" -2500 against a minimum of -2500: more than a tier bonus, so an x264 encode
+# is taken only when it is the best there is, and upgraded to an x265 one later), PT-BR +2000 as in 4K,
+# the same unwanted formats refused, HDR not asked for; 10 to 120 MB/min (a good x265 season is ~40,
+# below the apps' default minimum of ~50; no 1080p remuxes).
+# Pick it by hand per movie or series; 4K stays the default.
+#
 # Left out on purpose: the guide's "Bad Dual Groups" (alfaHD, GUEIRA, SiGLA, C76, XiQUEXiQUE...) are
 # exactly the Brazilian dual-audio groups.
 # The profiles are user-defined (no guide trash_id) so the guide's "Original" language rule never comes
@@ -30,6 +37,9 @@ radarr:
         - {name: Bluray-2160p, max: 250, preferred: 240}
         - {name: WEBDL-2160p, max: 250, preferred: 240}
         - {name: WEBRip-2160p, max: 250, preferred: 240}
+        - {name: Bluray-1080p, min: 10, max: 120, preferred: 110}
+        - {name: WEBDL-1080p, min: 10, max: 120, preferred: 110}
+        - {name: WEBRip-1080p, min: 10, max: 120, preferred: 110}
 
     quality_profiles:
       - name: BArch 4K
@@ -46,24 +56,71 @@ radarr:
           - name: 2160p
             qualities: [Bluray-2160p, WEBDL-2160p, WEBRip-2160p]
 
+      - name: BArch 1080p
+        reset_unmatched_scores:
+          enabled: true
+        upgrade:
+          allowed: true
+          until_quality: 1080p
+          until_score: 20000
+        min_format_score: -2500
+        quality_sort: top
+        qualities:
+          - name: 1080p
+            qualities: [Bluray-1080p, WEBDL-1080p, WEBRip-1080p]
+
     custom_formats:
       - trash_ids: [eb41082b76e883d189d5980f7dc5ed01] # BArch: PT-BR audio
         assign_scores_to:
           - name: BArch 4K
             score: 2000
+          - name: BArch 1080p
+            score: 2000
+      - trash_ids: [d295ca6f4c437dd552f31851e6613600] # BArch: not HEVC
+        assign_scores_to:
+          - name: BArch 4K
+          - name: BArch 1080p
+            score: -2500
       - trash_ids:
-          - d295ca6f4c437dd552f31851e6613600 # BArch: not HEVC (-10000)
           - e7718d7a3ce595f289bfee26adc178f5 # Repack/Proper
           - ae43b294509409a6a13919dedd4764c4 # Repack2
           - 5caaaa1c08c1742aa4342d8c4cc463f2 # Repack3
-          - 4d74ac4c4db0b64bff6ce0cffef99bf0 # UHD Bluray Tier 01
-          - a58f517a70193f8e578056642178419d # UHD Bluray Tier 02
-          - e71939fae578037e7aed3ee219bbe7c1 # UHD Bluray Tier 03
           - c20f169ef63c5f40c2def54abaf4438e # WEB Tier 01
           - 403816d65392c79236dcb6dd591aeda4 # WEB Tier 02
           - af94e0fe497124d1f9ce732069ec8c3b # WEB Tier 03
         assign_scores_to:
           - name: BArch 4K
+          - name: BArch 1080p
+      - trash_ids:
+          - ed27ebfef2f323e964fb1f61391bcb35 # HD Bluray Tier 01
+          - c20c8647f2746a1f4c4262b0fbbeeeae # HD Bluray Tier 02
+          - 5608c71bcebba0a5e666223bae8c9227 # HD Bluray Tier 03
+        assign_scores_to:
+          - name: BArch 1080p
+      - trash_ids:
+          - 4d74ac4c4db0b64bff6ce0cffef99bf0 # UHD Bluray Tier 01
+          - a58f517a70193f8e578056642178419d # UHD Bluray Tier 02
+          - e71939fae578037e7aed3ee219bbe7c1 # UHD Bluray Tier 03
+        assign_scores_to:
+          - name: BArch 4K
+
+      # unwanted, for 1080p at -20000: its minimum is -2500 and the audio formats reach +5000, so the
+      # guide's -10000 could come back above it (4K keeps the group's -10000 against a minimum of 0)
+      - trash_ids:
+          - b8cd450cbfa689c0259a01d9e29ba3d6 # 3D
+          - cae4ca30163749b891686f95532519bd # AV1
+          - cc444569854e9de0b084ab2b8b1532b2 # Black and White Editions
+          - ed38b889b31be83fda192888e2286d83 # BR-DISK
+          - 0a3f082873eb454bde444150b70253cc # Extras
+          - e6886871085226c3da1830830146846c # Generated Dynamic HDR
+          - c465ccc73923871b3eb1802042331306 # Line/Mic Dubbed
+          - 90a6f9a284dff5103f6346090e6280c8 # LQ
+          - e204b80c87be9497a8a6eaff48f72905 # LQ (Release Title)
+          - 712d74cd88bceb883ee32f773656b1f5 # Sing-Along Versions
+          - bfd8eb01832d646a0a89c4deb46f8564 # Upscaled
+        assign_scores_to:
+          - name: BArch 1080p
+            score: -20000
 
     custom_format_groups:
       add:
@@ -82,9 +139,9 @@ radarr:
         - trash_id: ff204bbcecdd487d1cefcefdbf0c278d # Golden rule UHD: x265 (no HDR/DV)
           assign_scores_to: [{name: BArch 4K}]
         - trash_id: 9d5acd8f1da78dfbae788182f7605200 # Audio formats
-          assign_scores_to: [{name: BArch 4K}]
+          assign_scores_to: [{name: BArch 4K}, {name: BArch 1080p}]
         - trash_id: d9cc9a504e5ede6294c8b973aad4f028 # Streaming services
-          assign_scores_to: [{name: BArch 4K}]
+          assign_scores_to: [{name: BArch 4K}, {name: BArch 1080p}]
 
 sonarr:
   series:
@@ -100,6 +157,9 @@ sonarr:
         - {name: Bluray-2160p, max: 250, preferred: 240}
         - {name: WEBDL-2160p, max: 250, preferred: 240}
         - {name: WEBRip-2160p, max: 250, preferred: 240}
+        - {name: Bluray-1080p, min: 10, max: 120, preferred: 110}
+        - {name: WEBDL-1080p, min: 10, max: 120, preferred: 110}
+        - {name: WEBRip-1080p, min: 10, max: 120, preferred: 110}
 
     quality_profiles:
       - name: BArch 4K
@@ -116,13 +176,32 @@ sonarr:
           - name: 2160p
             qualities: [Bluray-2160p, WEBDL-2160p, WEBRip-2160p]
 
+      - name: BArch 1080p
+        reset_unmatched_scores:
+          enabled: true
+        upgrade:
+          allowed: true
+          until_quality: 1080p
+          until_score: 20000
+        min_format_score: -2500
+        quality_sort: top
+        qualities:
+          - name: 1080p
+            qualities: [Bluray-1080p, WEBDL-1080p, WEBRip-1080p]
+
     custom_formats:
       - trash_ids: [a4d4531970fc57484773d336e70fd366] # BArch: PT-BR audio
         assign_scores_to:
           - name: BArch 4K
             score: 2000
+          - name: BArch 1080p
+            score: 2000
+      - trash_ids: [3a19f7e88eddbf316a882427a11b8e38] # BArch: not HEVC
+        assign_scores_to:
+          - name: BArch 4K
+          - name: BArch 1080p
+            score: -2500
       - trash_ids:
-          - 3a19f7e88eddbf316a882427a11b8e38 # BArch: not HEVC (-10000)
           - ec8fa7296b64e8cd390a1600981f3923 # Repack/Proper
           - eb3d5cc0a2be0db205fb823640db6a3c # Repack2
           - 44e7c4de10ae50265753082e5dc76047 # Repack3
@@ -132,6 +211,25 @@ sonarr:
           - d0c516558625b04b363fa6c5c2c7cfd4 # WEB Scene
         assign_scores_to:
           - name: BArch 4K
+          - name: BArch 1080p
+      - trash_ids:
+          - d6819cba26b1a6508138d25fb5e32293 # HD Bluray Tier 01
+          - c2216b7b8aa545dc1ce8388c618f8d57 # HD Bluray Tier 02
+        assign_scores_to:
+          - name: BArch 1080p
+
+      # unwanted, for 1080p at -20000: its minimum is -2500 and the audio formats reach +5000, so the
+      # guide's -10000 could come back above it (4K keeps the group's -10000 against a minimum of 0)
+      - trash_ids:
+          - 15a05bc7c1a36e2b57fd628f8977e2fc # AV1
+          - 85c61753df5da1fb2aab6f2a47426b09 # BR-DISK
+          - fbcb31d8dabd2a319072b84fc0b7249c # Extras
+          - 9c11cd3f07101cdba90a2d81cf0e56b4 # LQ
+          - e2315f990da2e2cbfc9fa5b7a6fcfe48 # LQ (Release Title)
+          - 23297a736ca77c0fc8e70f8edd7ee56c # Upscaled
+        assign_scores_to:
+          - name: BArch 1080p
+            score: -20000
 
     custom_format_groups:
       add:
@@ -150,6 +248,6 @@ sonarr:
         - trash_id: e3f37512790f00d0e89e54fe5e790d1c # Golden rule UHD: x265 (no HDR/DV)
           assign_scores_to: [{name: BArch 4K}]
         - trash_id: abe720fab2d27682adc2a735136cec02 # Streaming services
-          assign_scores_to: [{name: BArch 4K}]
+          assign_scores_to: [{name: BArch 4K}, {name: BArch 1080p}]
         - trash_id: 85fae4a2294965b75710ef2989c850eb # UHD streaming boost
           assign_scores_to: [{name: BArch 4K}]

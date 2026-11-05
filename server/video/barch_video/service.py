@@ -29,8 +29,9 @@ from .pipeline import STATES, Pipeline
 
 DEFAULTS = {"jobs": "/data/video-pipeline", "poll_s": 300, "port": 8339, "category": "barch-dub",
             "download_path": "/data/completed/videos/barch-dub", "max_downloads": 3, "searches_per_tick": 4,
-            "research_h": 24, "stalled_h": 24, "max_failures": 4, "max_donor_gb": 40,
-            "subtitles": ["por", "eng"], "delete_donor": False, "digest": True}
+            "research_h": 24, "stalled_h": 24, "max_failures": 4, "max_donor_gb": 40, "max_season_donor_gb": 120,
+            "subtitles": ["por", "eng"], "delete_donor": False, "digest": True, "trim": True,
+            "trims_per_tick": 4}
 
 
 def load_config(path: str) -> dict:
@@ -38,8 +39,11 @@ def load_config(path: str) -> dict:
     p = Path(path)
     if p.exists():
         cfg.update(json.loads(p.read_text()))
-    sec = p.with_name("secrets.json")              # tokens and keys: never in the repository
-    if sec.exists():
+    # tokens and keys, never in the repository: secrets.json, then any secrets-<name>.json next to it
+    # (install.sh adds secrets-sonarr.json without touching the container-owned secrets.json)
+    for sec in [p.with_name("secrets.json")] + sorted(p.parent.glob("secrets-*.json")):
+        if not sec.exists():
+            continue
         for k, v in json.loads(sec.read_text()).items():
             if isinstance(v, dict):
                 cfg.setdefault(k, {}).update(v)
@@ -59,11 +63,14 @@ def missing_tools() -> list[str]:
 
 
 def summary(j: dict) -> dict:
-    keys = ("id", "movie_id", "title", "year", "original", "state", "reason", "audio", "updated", "done_at")
+    keys = ("id", "kind", "movie_id", "series_id", "season", "title", "year", "original", "state", "reason", "audio",
+            "updated", "done_at")
     c = next((c for c in j.get("candidates", []) if c["guid"] == j.get("donor")), None)
     return {k: j.get(k) for k in keys} | {
         "donor": (c or {}).get("title", ""), "progress": (c or {}).get("progress"),
         "candidates": len(j.get("candidates", [])), "failures": j.get("failures", 0),
+        "episodes": len(j.get("episodes", {})) or None,
+        "episodes_todo": sum(1 for e in j.get("episodes", {}).values() if e["state"] != "done") if j.get("episodes") else None,
         "offset_ms": (j.get("alignment") or {}).get("offset_ms") if (j.get("alignment") or {}).get("ok") else None}
 
 

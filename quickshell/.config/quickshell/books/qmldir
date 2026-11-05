@@ -1,0 +1,13 @@
+singleton Ui Ui.qml
+singleton Store Store.qml
+Badge 1.0 Badge.qml
+Card 1.0 Card.qml
+Tip 1.0 Tip.qml
+UiButton 1.0 UiButton.qml
+UiCombo 1.0 UiCombo.qml
+UiField 1.0 UiField.qml
+Cover 1.0 Cover.qml
+SearchPage 1.0 SearchPage.qml
+ShelfPage 1.0 ShelfPage.qml
+RequestsPage 1.0 RequestsPage.qml
+DownloadsPage 1.0 DownloadsPage.qml

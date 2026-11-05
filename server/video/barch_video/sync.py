@@ -391,3 +391,64 @@ def verify(muxed: str | Path, orig_pos: int = 0, por_pos: int = 1, count: int = 
         return Alignment(ok=False, reason="the muxed file lacks the original or the Portuguese track")
     return align_pcm(decode(muxed, audio[orig_pos]["index"]), decode(muxed, audio[por_pos]["index"]),
                      count, expect=0.0)
+
+
+# --------------------------------------------------------------------------------------------- trim
+
+def trim_plan(path: str | Path, original: list[str], keep_subs: list[str]) -> dict | None:
+    """What a file that already has PT-BR carries beyond the rule: audio in other languages, subtitles
+    outside `keep_subs`, or a default audio that is not the original. None when there is nothing to do,
+    or when it cannot be done safely (not Matroska, no track in the original language or in Portuguese)."""
+    path = Path(path)
+    if path.suffix.lower() != ".mkv":
+        return None
+    info = mkvmerge_ids(path)
+    orig = {norm_lang(x) for x in original}
+    tlang = lambda t: norm_lang(t["properties"].get("language", "und"))
+    audio = [t for t in info["tracks"] if t["type"] == "audio"]
+    subs = [t for t in info["tracks"] if t["type"] == "subtitles"]
+    keep_o = [t for t in audio if tlang(t) in orig]
+    keep_p = [t for t in audio if tlang(t) == "por"]
+    if not keep_o or not keep_p:
+        return None
+    keep_a = keep_o + [t for t in keep_p if t not in keep_o]
+    drop_a = [t for t in audio if t not in keep_a]
+    ks = {norm_lang(x) for x in keep_subs}
+    keep_s = [t for t in subs if tlang(t) in ks]
+    drop_s = [t for t in subs if t not in keep_s]
+    default_ok = bool(audio) and audio[0] is keep_o[0] and bool(keep_o[0]["properties"].get("default_track", True)) \
+        and not any(t["properties"].get("default_track") for t in keep_a[1:])
+    if not drop_a and not drop_s and default_ok:
+        return None
+    return {"keep_audio": [t["id"] for t in keep_a], "keep_subs": [t["id"] for t in keep_s],
+            "drop_audio": [f"{tlang(t)} {t.get('codec', '')}".strip() for t in drop_a],
+            "drop_subs": sorted({tlang(t) for t in drop_s}), "reorder": not default_ok}
+
+
+def trim(path: str | Path, plan: dict) -> Path:
+    """Write <stem>.barch.mkv next to `path` with the video, the audio in `plan["keep_audio"]` (the original
+    first and default) and the subtitles in `plan["keep_subs"]`; chapters kept. Checked (same length, the
+    tracks expected) before it is returned; nothing is replaced here."""
+    path = Path(path)
+    out = path.with_name(path.stem + ".barch.mkv")
+    vid = [t["id"] for t in mkvmerge_ids(path)["tracks"] if t["type"] == "video"]
+    cmd = ["mkvmerge", "-q", "-o", str(out), "--audio-tracks", ",".join(map(str, plan["keep_audio"]))]
+    cmd += ["--subtitle-tracks", ",".join(map(str, plan["keep_subs"]))] if plan["keep_subs"] else ["--no-subtitles"]
+    for n, tid in enumerate(plan["keep_audio"]):
+        cmd += ["--default-track-flag", f"{tid}:{'1' if n == 0 else '0'}"]
+    for tid in plan["keep_subs"]:
+        cmd += ["--default-track-flag", f"{tid}:0"]
+    cmd += ["--track-order", ",".join(f"0:{t}" for t in vid + plan["keep_audio"] + plan["keep_subs"])]
+    cmd += ["--no-attachments", str(path)]
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=7200)
+    if p.returncode > 1:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("mkvmerge failed: " + (p.stdout + p.stderr)[-500:])
+    a, b = probe(path), probe(out)
+    da, db = float(a["format"].get("duration", 0)), float(b["format"].get("duration", 0))
+    na = sum(1 for s in b["streams"] if s["codec_type"] == "audio")
+    nv = sum(1 for s in b["streams"] if s["codec_type"] == "video")
+    if abs(da - db) > 2 or na != len(plan["keep_audio"]) or nv < 1:
+        out.unlink(missing_ok=True)
+        raise RuntimeError(f"the trimmed copy did not check out ({db:.0f} s vs {da:.0f} s, {na} audio, {nv} video)")
+    return out

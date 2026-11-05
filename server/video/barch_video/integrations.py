@@ -1,4 +1,4 @@
-"""Radarr, Prowlarr, qBittorrent, Telegram and Wikidata: the few calls the video pipeline needs,
+"""Radarr, Sonarr, Prowlarr, qBittorrent, Telegram and Wikidata: the few calls the video pipeline needs,
 standard library only (same shape as server/music's)."""
 from __future__ import annotations
 
@@ -77,6 +77,35 @@ class Radarr(Arr):
             return
         mf["languages"] = [langs[n] for n in names if n in langs]
         self.put(f"/moviefile/{file_id}", mf)
+
+
+class Sonarr(Arr):
+    def __init__(self, cfg: dict):
+        super().__init__(cfg, "http://sonarr:8989")
+
+    def all_series(self) -> list[dict]:
+        return self.get("/series") or []
+
+    def series(self, sid: int) -> dict:
+        return self.get(f"/series/{sid}") or {}
+
+    def episode_files(self, sid: int) -> list[dict]:
+        return self.get("/episodefile", seriesId=sid) or []
+
+    def episodes(self, sid: int) -> list[dict]:
+        return self.get("/episode", seriesId=sid) or []
+
+    def rescan(self, sid: int) -> int:
+        return self.command("RescanSeries", seriesId=sid)
+
+    def set_file_languages(self, file_id: int, names: list[str]) -> None:
+        """Same as Radarr's: the episode file's languages, so the PT-BR custom format sees the dub."""
+        langs = self.languages()
+        ef = self.get(f"/episodefile/{file_id}") or {}
+        if not ef:
+            return
+        ef["languages"] = [langs[n] for n in names if n in langs]
+        self.put(f"/episodefile/{file_id}", ef)
 
 
 class Prowlarr:

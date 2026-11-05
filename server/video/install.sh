@@ -69,6 +69,12 @@ if [ ! -f "$dst/secrets.json" ]; then
       telegram: {bot_token: "", chat_id: ""}}' > "$dst/secrets.json")
   echo "pipeline: secrets.json created${pk:+ (Prowlarr key found)}; Telegram: copy bot_token/chat_id from the music pipeline's"
 fi
+# Sonarr's key in a file of its own: secrets.json belongs to the container user once it runs (mode 600),
+# so it cannot be edited from here; group users (100, the container's PGID) may read this one
+if [ ! -f "$dst/secrets-sonarr.json" ] && [ "$(jq -r '.sonarr.key // ""' "$keys")" != "" ]; then
+  (umask 027; jq -n --arg k "$(jq -r .sonarr.key "$keys")" '{sonarr: {api_key: $k}}' > "$dst/secrets-sonarr.json")
+  echo "pipeline: secrets-sonarr.json created (series: the dub for every season Sonarr has)"
+fi
 token=$(jq -r .token "$dst/secrets.json" 2>/dev/null || true)
 if [ -n "$token" ] && [ "$token" != null ]; then
   tmpk=$(mktemp)
