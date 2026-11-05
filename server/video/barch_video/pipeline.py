@@ -209,7 +209,7 @@ class Pipeline:
             j = self.store.load(jid)
             path, size = mf["path"], int(mf.get("size", 0))
             if j and j.get("file") == path and j.get("file_size") == size and \
-                    (j.get("state") != "done" or j.get("trim_checked") == f"{path}:{size}"):
+                    (j.get("state") != "done" or j.get("trim_checked") == f"{path}:{size}:{sync.TRIM_VERSION}"):
                 continue
             if j and j["state"] == "aligning":
                 continue   # our own mux in flight changes the file; the next tick sees the result
@@ -233,7 +233,7 @@ class Pipeline:
                     log(j, "the file has PT-BR audio")
                 j["state"], j["reason"] = "done", ""
                 j["trim"] = self.plan_trim(j, path)
-                j["trim_checked"] = f"{path}:{size}"
+                j["trim_checked"] = f"{path}:{size}:{sync.TRIM_VERSION}"
             elif j.get("state") == "downloading":
                 log(j, "Radarr replaced the file; the dub being downloaded will be aligned with the new one")
             else:
@@ -284,7 +284,7 @@ class Pipeline:
             old = j["episodes"].get(key)
             path, size = f["path"], int(f.get("size", 0))
             if old and old["file"] == path and old["size"] == size and \
-                    (old["state"] != "done" or old.get("trim_checked") == f"{path}:{size}"):
+                    (old["state"] != "done" or old.get("trim_checked") == f"{path}:{size}:{sync.TRIM_VERSION}"):
                 if old.get("file_id") != f["id"]:
                     old["file_id"], changed = f["id"], True
                 continue
@@ -297,7 +297,7 @@ class Pipeline:
             e = {"file_id": f["id"], "file": path, "size": size, "episodes": nums, "audio": langs,
                  "state": "done" if "por" in langs else "todo", "reason": ""}
             if e["state"] == "done":
-                e["trim"], e["trim_checked"] = self.plan_trim(j, path), f"{path}:{size}"
+                e["trim"], e["trim_checked"] = self.plan_trim(j, path), f"{path}:{size}:{sync.TRIM_VERSION}"
             j["episodes"][key] = e
             changed = True
         for k in [k for k in j["episodes"] if k not in seen]:
@@ -789,9 +789,9 @@ class Pipeline:
                                 if x["codec_type"] == "audio"]
                 if k is None:
                     j["file_size"] = after
-                    j["trim_checked"] = f"{path}:{after}"
+                    j["trim_checked"] = f"{path}:{after}:{sync.TRIM_VERSION}"
                 else:
-                    rec["size"], rec["trim_checked"] = after, f"{path}:{after}"
+                    rec["size"], rec["trim_checked"] = after, f"{path}:{after}:{sync.TRIM_VERSION}"
                 touched.append(k)
                 self.store.save(j)
             self.current = ""

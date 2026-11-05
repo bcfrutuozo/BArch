@@ -20,6 +20,7 @@ ratio sync. The result is checked once more the same way before it may replace a
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -272,6 +273,44 @@ def mkvmerge_ids(path: str | Path) -> dict:
     return json.loads(p.stdout)
 
 
+PORTUGAL_RE = re.compile(r"(?i)portugal|europe|\bpt[-_ ]?pt\b|\(pt\)")
+SDH_RE = re.compile(r"(?i)\bsdh\b|\bcc\b|hearing|deaf|surdos|closed caption")
+FORCED_RE = re.compile(r"(?i)forced|for[cç]ad[ao]")
+TRIM_VERSION = 2   # bump when the rules below change: done files are checked again
+
+
+def is_portugal(t: dict) -> bool:
+    """A Portuguese track from Portugal (pt-PT tag, or a name saying so), not Brazil's."""
+    pr = t["properties"]
+    return (pr.get("language_ietf") or "").lower() in ("pt-pt",) or bool(PORTUGAL_RE.search(pr.get("track_name") or ""))
+
+
+def is_forced(t: dict) -> bool:
+    return bool(t["properties"].get("forced_track")) or bool(FORCED_RE.search(t["properties"].get("track_name") or ""))
+
+
+def is_sdh(t: dict) -> bool:
+    return bool(t["properties"].get("flag_hearing_impaired")) or bool(SDH_RE.search(t["properties"].get("track_name") or ""))
+
+
+def pick_subs(subs: list[dict], keep: set[str], have: set[tuple[str, bool]] = frozenset()) -> list[dict]:
+    """Per language in `keep`: one full subtitle and one forced; SDH (sound descriptions) and Portugal's
+    Portuguese never, even when they are all there is. `have` = (language, forced) already covered (the
+    reference's, when picking a donor's)."""
+    tl = lambda t: norm_lang(t["properties"].get("language", "und"))
+    out = []
+    for lang in sorted(keep):
+        cands = [t for t in subs if tl(t) == lang and not is_sdh(t) and not (lang == "por" and is_portugal(t))]
+        for forced in (False, True):
+            if (lang, forced) in have:
+                continue
+            pool = [t for t in cands if is_forced(t) == forced]
+            pool.sort(key=lambda t: t["id"])
+            if pool:
+                out.append(pool[0])
+    return sorted(out, key=lambda t: t["id"])
+
+
 @dataclass
 class MuxPlan:
     ref: str
@@ -304,13 +343,13 @@ def mux(plan: MuxPlan, workdir: str | Path | None = None) -> Path:
                  else [t for t in ra_all if tlang(t) in orig])
     if not ref_audio:
         raise ValueError(f"the reference has no audio in {sorted(orig)}")
-    ref_subs = [t for t in tracks(ri, "subtitles") if tlang(t) in keep_subs]
-    have_subs = {tlang(t) for t in ref_subs}
+    ref_subs = pick_subs(tracks(ri, "subtitles"), keep_subs)
+    have_subs = {(tlang(t), is_forced(t)) for t in ref_subs}
     don_audio = ([da_all[k] for k in plan.donor_por_pos if k < len(da_all)] if plan.donor_por_pos is not None
                  else [t for t in da_all if tlang(t) == "por"])
     if not don_audio:
         raise ValueError("the donor has no Portuguese audio track")
-    don_subs = [t for t in tracks(di, "subtitles") if tlang(t) in keep_subs and tlang(t) not in have_subs]
+    don_subs = pick_subs(tracks(di, "subtitles"), keep_subs, have_subs)
 
     tmp = Path(tempfile.mkdtemp(prefix="barch-mux-", dir=workdir))
     out = ref.with_name(ref.stem + ".barch.mkv")
@@ -408,13 +447,14 @@ def trim_plan(path: str | Path, original: list[str], keep_subs: list[str]) -> di
     audio = [t for t in info["tracks"] if t["type"] == "audio"]
     subs = [t for t in info["tracks"] if t["type"] == "subtitles"]
     keep_o = [t for t in audio if tlang(t) in orig]
-    keep_p = [t for t in audio if tlang(t) == "por"]
+    keep_p = [t for t in audio if tlang(t) == "por" and not is_portugal(t)]
+    if "por" in orig:
+        keep_o = [t for t in keep_o if not is_portugal(t)] or keep_o
     if not keep_o or not keep_p:
-        return None
+        return None     # no Brazilian dub (Portugal's only, or none): the pipeline's business, not a trim
     keep_a = keep_o + [t for t in keep_p if t not in keep_o]
     drop_a = [t for t in audio if t not in keep_a]
-    ks = {norm_lang(x) for x in keep_subs}
-    keep_s = [t for t in subs if tlang(t) in ks]
+    keep_s = pick_subs(subs, {norm_lang(x) for x in keep_subs})
     drop_s = [t for t in subs if t not in keep_s]
     default_ok = bool(audio) and audio[0] is keep_o[0] and bool(keep_o[0]["properties"].get("default_track", True)) \
         and not any(t["properties"].get("default_track") for t in keep_a[1:])
@@ -422,7 +462,9 @@ def trim_plan(path: str | Path, original: list[str], keep_subs: list[str]) -> di
         return None
     return {"keep_audio": [t["id"] for t in keep_a], "keep_subs": [t["id"] for t in keep_s],
             "drop_audio": [f"{tlang(t)} {t.get('codec', '')}".strip() for t in drop_a],
-            "drop_subs": sorted({tlang(t) for t in drop_s}), "reorder": not default_ok}
+            "drop_subs": sorted({tlang(t) + (" (Portugal)" if is_portugal(t) else " SDH" if is_sdh(t) else
+                                         " forced" if is_forced(t) else "") for t in drop_s}),
+            "reorder": not default_ok}
 
 
 def trim(path: str | Path, plan: dict) -> Path:

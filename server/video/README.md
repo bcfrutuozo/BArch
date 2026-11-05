@@ -107,8 +107,13 @@ python3 -m barch_video align <4k file> <donor> [ref_audio_no donor_audio_no]   #
 
 **Trim.** A file that already has PT-BR (it came dual, or was muxed) but carries more is remuxed with
 mkvmerge, nothing re-encoded: the video, the audio in the original language (first and default) and in
-Portuguese, the subtitles in `subtitles` (por, eng), chapters; every other audio language (a MULTi release's
-French, Italian, Spanish...) and subtitle goes, a dub that was the default stops being it. The copy is
+Portuguese (Brazil's: a Portugal dub goes when a Brazilian one is there), and per subtitle language in
+`subtitles` (por, eng) one full track plus one forced (signs, texts and foreign lines, shown by itself
+with the dub); SDH (sound descriptions, Bruno does not want them) and Portugal's Portuguese never, even
+when they are the only track of the language (Bazarr can fetch a plain one). Every other
+audio language (a MULTi release's French, Italian, Spanish...) and subtitle goes, a dub that was the
+default stops being it, chapters stay. The mux picks the donor's subtitles by the same rule. Files already
+done are checked again when these rules change (`TRIM_VERSION` in sync.py). The copy is
 checked (same length, the tracks expected) before it takes the file's place, and Radarr/Sonarr rescan.
 Never on a file still hardlinked to a seeding torrent: the copy would be a second file until the seed is
 removed, so it waits (`trim_wait` in the job) and runs once the seed check deletes the torrent. Only
