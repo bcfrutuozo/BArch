@@ -80,6 +80,14 @@ if [ -d server/video ]; then
   ((fail)) || ok "compiles, tests pass"
 fi
 
+step "Torrent statistics (server/torrents)"
+if [ -d server/torrents ]; then
+  python3 -m compileall -q server/torrents/barch_torrents >/dev/null || problem "torrent statistics: python does not compile"
+  python3 -m unittest discover -s server/torrents/tests -q >/dev/null 2>&1 || problem "torrent statistics: unit tests fail (python3 -m unittest discover -s server/torrents/tests)"
+  find server/torrents -name __pycache__ -prune -exec rm -rf {} +
+  ((fail)) || ok "compiles, tests pass"
+fi
+
 if command -v hyprctl >/dev/null && hyprctl version >/dev/null 2>&1; then
   step "Hyprland"
   errs=$(hyprctl configerrors 2>/dev/null)

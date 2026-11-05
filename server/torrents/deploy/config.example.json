@@ -1,0 +1,12 @@
+{
+  "_doc": "Torrent statistics settings (copied to appdata/barch-torrents/config.json once; edit it there). Tokens and keys go in secrets.json / secrets-arr.json next to it, never here. Every key has a default in service.py.",
+  "db": "/config/data/torrents.db",
+  "port": 8340,
+  "poll_s": 300,
+  "goal_ratio": 3.0,
+  "keep_hours_days": 60,
+  "qbittorrent": {"url": "http://qbittorrent:8080"},
+  "lidarr": {"url": "http://lidarr:8686"},
+  "radarr": {"url": "http://radarr:7878"},
+  "sonarr": {"url": "http://sonarr:8989"}
+}

@@ -27,7 +27,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | Folder | Goes to | What it is |
 |---|---|---|
 | `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, `scripts/lock.sh` (locks; starts and supervises the resident lock process); `settings.json` is what the Hyprland Settings app saved (below) |
-| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/`, `mixer/`, `music/`, `books/` and `video/` the other apps, `voice/` the voice control daemon, `ui/` the controls they all share (linked into each) |
+| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/`, `mixer/`, `music/`, `books/`, `video/` and `torrents/` the other apps, `voice/` the voice control daemon, `ui/` the controls they all share (linked into each) |
 | `foot/` | `~/.config/foot` | Terminal |
 | `ghostty/` | `~/.config/ghostty/config.ghostty` | Ghostty config as cmux reads it (it embeds libghostty): Ctrl+C copies a selection (^C without one), Ctrl+V pastes, Ctrl+Shift+C/V send the originals, like foot |
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
@@ -42,7 +42,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `backup/` | — | `barch backup`: what restic saves to the NAS (`include.txt`, `exclude.txt`), see Backup |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
 | `agent/` | — | Scheduled agent tasks (`tasks/`), the reactive rules (`rules.json`) and their daemon (`events.py`), the failure ignore list and the upstream watch list; used by `barch` |
-| `server/` | NAS | `music/`: the music pipeline (its own container, `barch-music`), downloads to `/music` in the library's style with a review queue (`barch music`, see Music); `unraid/`: the SMBus driver OpenRGB needs there, built per Unraid kernel (see NAS); `books/`: the book stack's Unraid templates (Shelfmark requests, Calibre-Web-Automated for ebooks, Audiobookshelf), its README; `video/`: what Radarr and Sonarr accept (2160p HEVC HDR, a 1080p profile for what never came out in 4K, Recyclarr) and the pipeline that muxes the PT-BR dub from another release into each movie and episode, subtitles shifted along (`barch video`, its README) |
+| `server/` | NAS | `music/`: the music pipeline (its own container, `barch-music`), downloads to `/music` in the library's style with a review queue (`barch music`, see Music); `unraid/`: the SMBus driver OpenRGB needs there, built per Unraid kernel (see NAS); `books/`: the book stack's Unraid templates (Shelfmark requests, Calibre-Web-Automated for ebooks, Audiobookshelf), its README; `video/`: what Radarr and Sonarr accept (2160p HEVC HDR, a 1080p profile for what never came out in 4K, Recyclarr) and the pipeline that muxes the PT-BR dub from another release into each movie and episode, subtitles shifted along (`barch video`, its README); `torrents/`: qBittorrent's counters sampled every five minutes into SQLite (its own container, `barch-torrents`), so ratio, upload and download have a history (`barch torrents`, its README) |
 | `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, sixteen scenes in the colors of each palette), Limine theme (`limine-theme.py`) |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
 | `packages/` | — | Explicitly installed packages (`pacman.txt`, `aur.txt`, `aur-ignore.txt`) |
@@ -254,6 +254,20 @@ The main pieces:
   together) with progress and warnings; remove, or blocklist and search another. **PT-BR dub**: the jobs
   (`m<id>`, `s<series>x<season>`) with the reason they wait, the candidates (Use one), the alignment, the
   episodes and the history; Retry / Skip / Unskip. `qs ipc call app select movie|series|dub <id>` opens one.
+- **Torrents** (`quickshell/torrents/`, "Torrents" in the launcher, `barch torrents browse [overview|sources|torrents]`):
+  qBittorrent over time. The client only knows its totals as they are now, so a small service on the NAS
+  (`server/torrents`, container `barch-torrents`, read only) samples it every five minutes; the app draws what
+  it kept, in one range for the whole window (24 h, 7 d, 30 d, 90 d, 1 y, all). **Overview**: the all-time
+  ratio and how far it moved in the range, upload and download in the range, the last day and week, how many
+  torrents reached the seeding goal (ratio 3), and the charts: ratio, speed, uploaded and downloaded per hour /
+  day / week / month, torrents, data in the client. **Sources**: where the traffic comes from, by indexer (the
+  one Lidarr, Radarr or Sonarr grabbed the torrent from, by their history), category or tracker (the first
+  announce host; public torrents carry many, so it says less): torrents, upload and download in the range and
+  in total, lifetime ratio; a click shows that source's ratio and its upload and download over time.
+  **Torrents**: every torrent the service has seen, the ones the seed policy already removed included (their
+  numbers would be gone from qBittorrent), filtered by name or state and sorted by upload, ratio, size, age or
+  seeding time; a click shows its facts and history. `qs ipc call app torrent <hash>` opens one. Traffic a
+  torrent had before the service first saw it has no date: it counts in the totals, never in a day's bar.
 - **Audio Mixer** (`quickshell/mixer/`, "Audio Mixer" in the launcher, `barch mixer`): PipeWire through
   `Quickshell.Services.Pipewire`. **Devices**: outputs and inputs with volume, mute, a peak
   meter, their format (`s32le 2ch 192000Hz`) and the default. **Apps**: every stream playing or
@@ -371,6 +385,9 @@ barch music lidarr-enforce         # the library's rule on every artist now: BAr
 barch music lidarr-artist-set all|<ids> --new-albums all|new|none [--monitored on|off]   # what happens to an album that shows up later
 barch books browse [search|shelf|requests|rejected|downloads]   # the Books app (see Books)
 barch video browse [search|movies|series|downloads|dub]   # the Video app: add, checklist, releases, queue, dub
+barch torrents browse [overview|sources|torrents]   # the Torrents app: qBittorrent's ratio, upload and download over time
+barch torrents status|summary [range]|sources [indexer|category|tracker] [range]|top [range] [n]   # the same numbers in a shell (range: 24h, 7d, 30d, 1y, all)
+barch torrents sample|restart|install   # read qBittorrent now · restart the service · copy it to the NAS (server/torrents)
 barch books search <query> · shelf · want|unwant <id> · sync   # Hardcover through Shelfmark, Want to Read
 barch books requests [status] · show|releases <id> [--query Q] [--source S] · fulfil <id> --pick N · accept <id> · reject|reopen <id>
 barch books fix <id> ["hint"]         # Claude takes a request no source matched and downloads the right release

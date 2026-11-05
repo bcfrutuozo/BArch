@@ -99,6 +99,14 @@ hl.window_rule({
     center = true,
     size   = "1320 840",
 })
+-- BArch Torrents (quickshell/torrents, `barch torrents browse`): gráficos lado a lado pedem largura
+hl.window_rule({
+    name  = "barch-torrents",
+    match = { title = "^BArch Torrents$" },
+    float  = true,
+    center = true,
+    size   = "1360 880",
+})
 -- os outros apps do BArch (backup, pacotes, mixer, música): mesmo tratamento
 hl.window_rule({
     name  = "barch-apps",
