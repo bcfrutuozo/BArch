@@ -27,7 +27,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | Folder | Goes to | What it is |
 |---|---|---|
 | `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, `scripts/lock.sh` (locks; starts and supervises the resident lock process); `settings.json` is what the Hyprland Settings app saved (below) |
-| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/`, `mixer/`, `music/` and `books/` the other apps, `voice/` the voice control daemon, `ui/` the controls they all share (linked into each) |
+| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/`, `mixer/`, `music/`, `books/` and `video/` the other apps, `voice/` the voice control daemon, `ui/` the controls they all share (linked into each) |
 | `foot/` | `~/.config/foot` | Terminal |
 | `ghostty/` | `~/.config/ghostty/config.ghostty` | Ghostty config as cmux reads it (it embeds libghostty): Ctrl+C copies a selection (^C without one), Ctrl+V pastes, Ctrl+Shift+C/V send the originals, like foot |
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
@@ -240,6 +240,20 @@ The main pieces:
   Claude finds out what the book really is, searches with better queries and downloads the right release
   once, or says what is missing; it never rejects. **Rejected**: everything you said no to (an audiobook you skipped, say), with the same
   release search: **Download** on one takes the request back and downloads it. **Downloads**: Shelfmark's queue with progress.
+- **Video** (`quickshell/video/`, "Video" in the launcher, `barch video browse [search|movies|series|downloads|dub]`):
+  Radarr, Sonarr and the PT-BR pipeline (`server/video`) through `video.py` next to it (keys in
+  `~/.config/barch/video.json`, the same as `barch video`). **Search**: TMDB/TVDB lookups through Radarr and
+  Sonarr, and Add with a profile: *auto* adds it with BArch 4K, looks at the 2160p releases that fit and
+  falls back to BArch 1080p when none does, then searches. **Movies**: the posters with the checklist of each
+  file (original-language audio, PT-BR audio, English and PT-BR subtitles; green, red, or dim without a file),
+  filters (wanted, incomplete, downloading, complete); a click opens the file and its media info, the profile
+  (4K / 1080p), the dub job, **Search now** and **Releases**: everything the indexers have, ranked (the ones
+  that fit first), each with why Radarr rejected it, and **Grab** for any of them. **Series**: episodes on
+  disk and the dub per season; a series opens to its seasons (checklist over the episodes, Search and
+  Releases per season or episode). **Downloads**: Radarr's and Sonarr's queue (a season pack's episodes
+  together) with progress and warnings; remove, or blocklist and search another. **PT-BR dub**: the jobs
+  (`m<id>`, `s<series>x<season>`) with the reason they wait, the candidates (Use one), the alignment, the
+  episodes and the history; Retry / Skip / Unskip. `qs ipc call app select movie|series|dub <id>` opens one.
 - **Audio Mixer** (`quickshell/mixer/`, "Audio Mixer" in the launcher, `barch mixer`): PipeWire through
   `Quickshell.Services.Pipewire`. **Devices**: outputs and inputs with volume, mute, a peak
   meter, their format (`s32le 2ch 192000Hz`) and the default. **Apps**: every stream playing or
@@ -356,6 +370,7 @@ barch music lidarr-queue|lidarr-queue-remove <ids>|all|lidarr-commands|lidarr-ca
 barch music lidarr-enforce         # the library's rule on every artist now: BArch profile, every album without a file monitored (hourly by itself)
 barch music lidarr-artist-set all|<ids> --new-albums all|new|none [--monitored on|off]   # what happens to an album that shows up later
 barch books browse [search|shelf|requests|rejected|downloads]   # the Books app (see Books)
+barch video browse [search|movies|series|downloads|dub]   # the Video app: add, checklist, releases, queue, dub
 barch books search <query> · shelf · want|unwant <id> · sync   # Hardcover through Shelfmark, Want to Read
 barch books requests [status] · show|releases <id> [--query Q] [--source S] · fulfil <id> --pick N · accept <id> · reject|reopen <id>
 barch books fix <id> ["hint"]         # Claude takes a request no source matched and downloads the right release
