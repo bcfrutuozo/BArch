@@ -20,7 +20,12 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
    (`/data/slskd/completed`, slskd fed by Soularr from Lidarr's wanted list) once they sat still for
    30 minutes (`extra_inboxes` in `config.json`); like any inbox folder, it is removed once its albums
    are in the library or rejected, so Soulseek's downloads no longer pile up in the downloads cache
-   (69 GB on 2026-11-04). A torrent with several albums (a
+   (69 GB on 2026-11-04). slskd moves each finished file into a folder named after the one it was in,
+   so the discs of a double album land in loose `CD 02` folders (two albums' `CD 02` mixed): those are
+   put back together by their tags as `Artist - Album/CD<n>/` first (`pipeline.regroup_discs`, waiting
+   up to 6 h for the discs the tags say are missing). What comes from Soulseek and has no MusicBrainz
+   match or no lossless audio is rejected and deleted instead of going to the review (Lidarr still
+   wants the album). A torrent with several albums (a
    discography) becomes one job per album; disc folders (`CD1`, `Disc 2 - Title`, `Album, disc 2`,
    `Album (CD 3)`: `pipeline.is_disc_folder`) stay one album. `barch music rescan <id>` takes a
    download in again from scratch when an older version split it wrong (the old jobs are
