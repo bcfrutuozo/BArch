@@ -8,6 +8,8 @@ ColumnLayout {
     property var history: null
     readonly property var buckets: history ? history.buckets : []
     readonly property string per: history ? "per " + Store.bucketWord[history.kind] : ""
+    // the ratio a bucket ended with, drawn where the bucket ends (the last one: now)
+    readonly property var ratioPoints: buckets.map((b, i) => ({ t: i + 1 < buckets.length ? buckets[i + 1].t : history.to, v: b.ratio })).filter(p => p.v !== null)
     spacing: 6
 
     component Heading: RowLayout {
@@ -25,14 +27,18 @@ ColumnLayout {
     }
     Chart {
         Layout.fillWidth: true
+        from: panel.history ? panel.history.from : NaN
+        to: panel.history ? panel.history.to : NaN
+        markT: Store.began; markLabel: Store.beganLabel
         implicitHeight: 150
-        series: panel.history ? [{ label: "", color: Ui.accent, points: panel.buckets.filter(b => b.ratio !== null).map(b => ({ t: b.t, v: b.ratio })) }] : []
+        series: panel.history ? [{ label: "", color: Ui.accent, points: panel.ratioPoints }] : []
         format: v => Store.ratio(v)
         padL: 58
     }
     Heading { title: "Uploaded " + panel.per; value: panel.history ? Store.bytes(panel.history.up) + " " + Store.rangeLabel : "" }
     Bars {
         Layout.fillWidth: true
+        markT: Store.began; markLabel: Store.beganLabel
         implicitHeight: 150
         points: panel.buckets.map(b => ({ t: b.t, v: b.up }))
         kind: panel.history ? panel.history.kind : "day"
@@ -43,6 +49,7 @@ ColumnLayout {
     Heading { title: "Downloaded " + panel.per; value: panel.history ? Store.bytes(panel.history.down) + " " + Store.rangeLabel : "" }
     Bars {
         Layout.fillWidth: true
+        markT: Store.began; markLabel: Store.beganLabel
         implicitHeight: 150
         points: panel.buckets.map(b => ({ t: b.t, v: b.down }))
         kind: panel.history ? panel.history.kind : "day"

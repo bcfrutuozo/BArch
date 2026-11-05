@@ -8,5 +8,6 @@
   "qbittorrent": {"url": "http://qbittorrent:8080"},
   "lidarr": {"url": "http://lidarr:8686"},
   "radarr": {"url": "http://radarr:7878"},
-  "sonarr": {"url": "http://sonarr:8989"}
+  "sonarr": {"url": "http://sonarr:8989"},
+  "prowlarr": {"url": "http://prowlarr:9696"}
 }

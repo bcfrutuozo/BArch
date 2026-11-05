@@ -30,6 +30,12 @@ Singleton {
     property var status: ({})
     property var overview: ({})
     property var samples: []
+    // the period the charts show (the whole range asked for, however little of it has data yet) and
+    // when tracking began, marked on them
+    property real axisFrom: NaN
+    property real axisTo: NaN
+    readonly property real began: status.start || NaN
+    readonly property string beganLabel: "tracking began " + day(status.start)
     property var history: ({ kind: "day", buckets: [] })
 
     // Sources: every category, indexer or tracker, and the history of the one picked
@@ -108,7 +114,7 @@ Singleton {
             else if (statusBad) say("")
         })
         api("GET", "/api/overview?" + qs({ range: range }), d => overview = d, true)
-        api("GET", "/api/samples?" + qs({ range: range }), d => samples = d.samples, true)
+        api("GET", "/api/samples?" + qs({ range: range }), d => { axisFrom = d.from; axisTo = d.to; samples = d.samples }, true)
         api("GET", "/api/history?" + qs({ range: range }), d => history = d, true)
         loadGroups()
         loadTorrents()
@@ -133,7 +139,7 @@ Singleton {
         api("GET", "/api/history?range=" + encodeURIComponent(range) + "&by=" + b + "&key=" + encodeURIComponent(k),
             d => { if (b === by && k === groupKey) groupHistory = d }, true)
     }
-    function groupName(k) { return k !== "" ? k : by === "indexer" ? "(unknown)" : by === "category" ? "(no category)" : "(not read yet)" }
+    function groupName(k) { return k !== "" ? k : by === "indexer" ? "(no indexer)" : by === "category" ? "(no category)" : "(not read yet)" }
 
     // ---- torrents
     function loadTorrents() {

@@ -3,6 +3,8 @@ import QtQuick
 // a bar chart on a Canvas, one bar per bucket of time: points = [{ t, v }], `kind` says what a bucket
 // is (hour, day, week, month) for the labels, `format` (v => text) writes the axis and the readout.
 // One series (the card's title names it); the bar under the pointer is read out at the top.
+// `markT` draws a dashed line at a moment with `markLabel` (where the data begins: the buckets before
+// it are not zero, they are unknown).
 Item {
     id: bars
     property var points: []
@@ -10,6 +12,8 @@ Item {
     property color tint: Ui.accent
     property var format: null
     property string emptyText: "nothing in this range"
+    property real markT: NaN
+    property string markLabel: ""
     implicitHeight: 190
 
     readonly property real padL: 58
@@ -26,6 +30,7 @@ Item {
     onPointsChanged: { hover = -1; canvas.requestPaint() }
     onTintChanged: canvas.requestPaint()
     onHoverChanged: canvas.requestPaint()
+    onMarkTChanged: canvas.requestPaint()
     Connections { target: Ui; function onThemeChanged() { canvas.requestPaint() } }
 
     function css(c, a) { return "rgba(" + Math.round(c.r * 255) + "," + Math.round(c.g * 255) + "," + Math.round(c.b * 255) + "," + (a === undefined ? c.a : a) + ")" }
@@ -48,13 +53,13 @@ Item {
             const w = width - bars.padL - bars.padR, h = height - bars.padT - bars.padB
             ctx.font = "10px '" + Ui.font + "'"
             ctx.textBaseline = "middle"
-            if (!n || bars.peak <= 0 || w <= 0 || h <= 0) {
+            if (!n || w <= 0 || h <= 0) {
                 ctx.fillStyle = bars.css(Ui.overlay)
                 ctx.textAlign = "center"
-                ctx.fillText(n ? bars.emptyText : "loading…", width / 2, height / 2)
+                ctx.fillText("loading…", width / 2, height / 2)
                 return
             }
-            const hi = bars.peak * 1.08
+            const hi = (bars.peak > 0 ? bars.peak : 1) * 1.08
             const y = v => bars.padT + (1 - v / hi) * h
             // grid + y labels (recessive)
             ctx.strokeStyle = bars.css(Ui.text, 0.08)
@@ -65,12 +70,32 @@ Item {
                 const v = hi * i / 4
                 const yy = Math.round(y(v)) + 0.5
                 ctx.beginPath(); ctx.moveTo(bars.padL, yy); ctx.lineTo(width - bars.padR, yy); ctx.stroke()
-                ctx.fillText(bars.fmt(v), bars.padL - 6, yy)
+                if (bars.peak > 0 || i === 0) ctx.fillText(bars.fmt(bars.peak > 0 ? v : 0), bars.padL - 6, yy)
+            }
+            if (bars.peak <= 0) {
+                ctx.fillStyle = bars.css(Ui.overlay)
+                ctx.textAlign = "center"
+                ctx.fillText(bars.emptyText, bars.padL + w / 2, bars.padT + h / 2)
             }
             // bars: a 2 px gap between neighbours, rounded at the data end, square on the baseline
             const slot = w / n
             const bw = Math.max(1, Math.min(slot - 2, 26))
             const base = bars.padT + h
+            // where the data begins: inside the bucket that holds that moment
+            if (!isNaN(bars.markT) && bars.markT > bars.points[0].t) {
+                let i = n - 1
+                while (i > 0 && bars.points[i].t > bars.markT) i--
+                const len = i < n - 1 ? bars.points[i + 1].t - bars.points[i].t : (n > 1 ? bars.points[i].t - bars.points[i - 1].t : 3600)
+                const mx = Math.round(bars.padL + slot * (i + Math.min(1, (bars.markT - bars.points[i].t) / len))) + 0.5
+                ctx.save()
+                ctx.strokeStyle = bars.css(Ui.text, 0.3)
+                ctx.setLineDash([3, 3])
+                ctx.beginPath(); ctx.moveTo(mx, bars.padT); ctx.lineTo(mx, base); ctx.stroke()
+                ctx.restore()
+                ctx.fillStyle = bars.css(Ui.overlay)
+                ctx.textAlign = mx > bars.padL + w / 2 ? "right" : "left"
+                ctx.fillText(bars.markLabel, mx + (mx > bars.padL + w / 2 ? -6 : 6), bars.padT + 8)
+            }
             for (let i = 0; i < n; i++) {
                 const v = bars.points[i].v
                 if (!(v > 0)) continue

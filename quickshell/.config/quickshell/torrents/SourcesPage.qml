@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// where the traffic comes from: every indexer (the one Lidarr, Radarr or Sonarr grabbed the torrent
-// from, by their history), category or tracker (the torrent's first announce host), with its torrents,
+// where the traffic comes from: every indexer (the one the torrent was grabbed from, by the history of
+// Lidarr, Radarr and Sonarr and, for the rest, Prowlarr's), category or tracker (the torrent's first announce host), with its torrents,
 // what it uploaded and downloaded in the range and in total, and its lifetime ratio. A click shows
 // its history on the right.
 Item {
@@ -49,7 +49,8 @@ Item {
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignRight
                     elide: Text.ElideRight
-                    text: Store.by === "indexer" ? (page.missing.length ? "no API key for " + page.missing.join(", ") + ": its torrents have no indexer" : "from the history of Lidarr, Radarr and Sonarr")
+                    text: Store.by === "indexer" ? (page.missing.length ? "no API key for " + page.missing.join(", ") + ": its torrents have no indexer"
+                                                    : "from the history of " + (Store.status.indexers_from || []).join(", "))
                         : Store.by === "tracker" ? "the first announce host of each torrent (public ones carry many)" : "qBittorrent's category"
                     color: Store.by === "indexer" && page.missing.length ? Ui.yellow : Ui.overlay
                     font.family: Ui.font; font.pixelSize: Ui.fontSize - 2

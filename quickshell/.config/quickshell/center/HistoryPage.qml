@@ -8,6 +8,8 @@ Item {
     id: page
     property string range: "24h"
     readonly property var ranges: ["1h", "6h", "24h", "7d", "30d"]
+    // "24h" -> seconds: the charts span the whole range, the data sitting where it belongs in it
+    function spanOf(r) { return parseInt(r) * (r.slice(-1) === "d" ? 86400 : 3600) }
     readonly property var s: Store.summary
     readonly property var now: s.now || ({})
     readonly property var palette: [Ui.accent, Ui.green, Ui.yellow, Ui.red, Ui.overlay]
@@ -25,20 +27,31 @@ Item {
         property real fixedMax: NaN
         property var series: []
         property int pending: 0
+        property real axisFrom: NaN
+        property real axisTo: NaN
+        Layout.alignment: Qt.AlignTop
+        property int generation: 0
+        // loads overlap (creation, a new range, every refresh of the summary): only the newest one may
+        // publish, and only when all of its own answers are in, or a chart is left with a series missing
         function load() {
             if (!metrics.length) { series = []; return }
+            const mine = ++generation
             const out = new Array(metrics.length)
-            pending = metrics.length
+            const to = Date.now() / 1000, from = to - page.spanOf(page.range)
+            let left = metrics.length
+            pending = left
             metrics.forEach((m, i) => Store.series(m, page.range, d => {
+                if (mine !== generation) return
                 out[i] = { label: labels[i] || m, color: page.palette[i % page.palette.length], points: d.points || [] }
-                if (--pending === 0) series = out.filter(x => x)
+                pending = --left
+                if (left === 0) { axisFrom = from; axisTo = to; series = out }
             }))
         }
         Component.onCompleted: load()
         Connections { target: page; function onRangeChanged() { mc.load() } }
         Connections { target: Store; function onSummaryChanged() { if (mc.pending === 0) mc.load() } }
         onMetricsChanged: load()
-        Chart { Layout.fillWidth: true; series: mc.series; unit: mc.unit; fixedMin: mc.fixedMin; fixedMax: mc.fixedMax }
+        Chart { Layout.fillWidth: true; series: mc.series; unit: mc.unit; fixedMin: mc.fixedMin; fixedMax: mc.fixedMax; from: mc.axisFrom; to: mc.axisTo }
         RowLayout {
             spacing: 14
             visible: mc.series.length > 1

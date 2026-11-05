@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BArch Torrents</title>
+<!-- The Torrents app (quickshell/torrents in the BArch repo) as a page: the same three pages over the same
+     API, served by the service itself at / (static; it asks for the token once and keeps it in this browser).
+     Read only, like the app. Upload is always the accent color, download the neutral one. -->
+<style>
+  :root {
+    color-scheme: light;
+    --crust: #e6e9ef; --base: #eff1f5; --surface: #ccd0da; --overlay: #9ca0b0; --subtext: #6c6f85; --text: #4c4f69;
+    --accent: #8839ef; --green: #40a02b; --yellow: #df8e1d; --red: #d20f39;
+    --faint: #4c4f6910; --mono: ui-monospace, "JetBrainsMono Nerd Font", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --crust: #191a21; --base: #282a36; --surface: #44475a; --overlay: #6272a4; --subtext: #a7abbe; --text: #f8f8f2;
+      --accent: #bd93f9; --green: #50fa7b; --yellow: #f1fa8c; --red: #ff5555; --faint: #f8f8f210;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--crust); color: var(--text); font: 13px/1.4 system-ui, sans-serif;
+         padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0); }
+  [hidden] { display: none !important; }
+  .mono { font-family: var(--mono); }
+  .dim { color: var(--subtext); } .faint { color: var(--overlay); } .red { color: var(--red); }
+  button, select, input { font: inherit; color: var(--text); }
+  button { background: var(--surface); border: 1px solid transparent; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button:hover { border-color: var(--overlay); }
+  button.on { background: var(--accent); color: var(--crust); font-weight: 600; }
+  button.small { padding: 3px 10px; font-size: 12px; }
+  button.ghost { background: transparent; color: var(--subtext); }
+  input[type=text], input[type=password], select { background: var(--crust); border: 1px solid var(--surface); border-radius: 8px; padding: 6px 10px; }
+  input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  #login { max-width: 420px; margin: 60px auto; padding: 0 16px; }
+  #login input { width: 100%; margin: 10px 0; }
+
+  #app { display: grid; grid-template-columns: 200px minmax(0, 1fr); height: 100dvh; }
+  aside { background: var(--base); border-right: 1px solid var(--surface); padding: 12px 10px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .brand { padding: 4px 6px 12px; }
+  .brand b { font-size: 15px; display: block; }
+  .brand span { font-size: 11px; color: var(--subtext); }
+  nav { display: contents; }
+  nav a { display: block; padding: 7px 10px; border-radius: 8px; color: var(--text); text-decoration: none; cursor: pointer; }
+  nav a:hover { background: var(--faint); }
+  nav a.on { background: var(--surface); color: var(--accent); font-weight: 600; }
+  aside .grow { flex: 1; }
+  #lastSample { font-size: 11px; color: var(--overlay); padding: 0 6px 4px; }
+
+  #content { display: flex; flex-direction: column; min-width: 0; height: 100dvh; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 14px 16px 6px; }
+  header h1 { font-size: 19px; margin: 0; flex: 1; min-width: 120px; }
+  #ranges { display: flex; gap: 6px; flex-wrap: wrap; }
+  section.page { flex: 1; min-height: 0; overflow: auto; padding: 8px 16px 14px; }
+  footer { display: flex; gap: 12px; align-items: center; padding: 6px 14px; background: var(--base); border-top: 1px solid var(--surface); font-size: 12px; color: var(--subtext); }
+  footer #statusText { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  footer #statusText.bad { color: var(--red); }
+  footer #busy { color: var(--yellow); }
+  footer #counted { color: var(--overlay); font-size: 11px; white-space: nowrap; }
+
+  .card { background: var(--base); border: 1px solid var(--surface); border-radius: 10px; padding: 14px; min-width: 0; }
+  .card h2 { font-size: 14px; margin: 0; }
+  .card .sub { color: var(--subtext); font-size: 12px; margin: 2px 0 10px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .tile { background: var(--crust); border: 1px solid var(--surface); border-radius: 8px; padding: 9px 10px; min-width: 0; }
+  .tile .l { color: var(--subtext); font-size: 11px; }
+  .tile .v { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .s { color: var(--subtext); font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+  canvas { display: block; width: 100%; height: 190px; }
+  .panel canvas { height: 150px; }
+  .legend { display: flex; gap: 14px; font-size: 11px; color: var(--subtext); margin-top: 6px; }
+  .legend i { display: inline-block; width: 10px; height: 3px; border-radius: 1px; vertical-align: middle; margin-right: 5px; }
+
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) clamp(330px, 30vw, 420px); gap: 14px; height: 100%; }
+  .listcol { display: flex; flex-direction: column; gap: 8px; min-height: 0; min-width: 0; }
+  .bar { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+  .bar .note { flex: 1; text-align: right; font-size: 12px; color: var(--overlay); min-width: 120px; }
+  .bar .note.warn { color: var(--yellow); }
+  .rows { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+  .row, .head { display: grid; gap: 10px; align-items: center; padding: 0 12px; }
+  .head { color: var(--subtext); font-size: 11px; }
+  .row { background: var(--base); border-radius: 8px; min-height: 38px; flex: none; cursor: pointer; border: 1px solid transparent; }
+  .row:hover { border-color: var(--surface); }
+  .row.on { background: var(--surface); }
+  .row > *, .head > * { text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; min-width: 0; }
+  .row > :first-child, .head > :first-child { text-align: left; }
+  .row .name { font-size: 13px; }
+  .row.on .name { font-weight: 600; }
+  .g-src { grid-template-columns: minmax(110px, 1fr) 58px 130px 68px 68px 68px 50px; }
+  .g-tor { grid-template-columns: minmax(0, 1fr) 60px 66px 66px 66px 48px 54px; }
+  .g-tor.row { min-height: 46px; padding-top: 5px; padding-bottom: 5px; }
+  .row .meta { display: block; color: var(--overlay); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; }
+  .meter { display: flex; align-items: center; gap: 8px; }
+  .meter .track { flex: 1; height: 6px; border-radius: 3px; background: var(--crust); overflow: hidden; }
+  .meter .track i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+  .meter span { width: 58px; text-align: right; }
+  .gone .name { color: var(--subtext); }
+  .foot { color: var(--overlay); font-size: 10.5px; }
+  .empty { color: var(--subtext); text-align: center; padding: 40px 10px; }
+  .chip { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); border-radius: 12px; padding: 3px 10px; font-size: 11px; font-weight: 700; cursor: pointer; border: 0; }
+  .panel { background: var(--base); border: 1px solid var(--surface); border-radius: 10px; padding: 14px; overflow-y: auto; min-height: 0; min-width: 0; }
+  .panel h3 { font-size: 15px; margin: 0 0 2px; overflow-wrap: anywhere; }
+  .panel .phead { display: flex; gap: 10px; align-items: flex-start; }
+  .panel .phead > div { flex: 1; min-width: 0; }
+  .hh { display: flex; justify-content: space-between; gap: 8px; margin: 12px 0 4px; }
+  .hh b { font-size: 13px; }
+  .hh span { color: var(--subtext); font-size: 12px; }
+  dl { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 4px 8px; margin: 8px 0 0; font-size: 12px; }
+  dt { color: var(--subtext); } dd { margin: 0; overflow-wrap: anywhere; }
+
+  @media (max-width: 1180px) {
+    .split { grid-template-columns: minmax(0, 1fr); height: auto; }
+    .rows { max-height: 60vh; flex: none; }
+    .panel { overflow: visible; }
+  }
+  @media (max-width: 900px) { .charts { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 760px) {
+    #app { display: block; height: auto; }
+    aside { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; border-right: 0; border-bottom: 1px solid var(--surface);
+            position: sticky; top: env(safe-area-inset-top, 0); z-index: 3; padding: 8px 12px; }
+    .brand { padding: 0 6px 0 0; } .brand span { display: block; }
+    aside .grow { display: block; flex: 1; }
+    #lastSample { display: none; }
+    #content { height: auto; min-height: calc(100dvh - 60px); }
+    section.page { overflow: visible; padding: 8px 12px 14px; }
+    .tiles { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .g-src { grid-template-columns: minmax(0, 1fr) 56px 66px 66px 46px; }
+    .g-src > :nth-child(4), .g-src > :nth-child(6) { display: none; }
+    .g-src .meter .track { display: none; } .g-src .meter span { width: auto; flex: 1; }
+    .g-tor { grid-template-columns: minmax(0, 1fr) 62px 62px 44px; }
+    .g-tor > :nth-child(2), .g-tor > :nth-child(5), .g-tor > :nth-child(7) { display: none; }
+    .row .name { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .bar input[type=text] { flex: 1 1 100%; }
+    footer #counted { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="login" hidden>
+  <h1>BArch Torrents</h1>
+  <p class="dim">The token of <span class="mono">~/.config/barch/torrents.json</span> (the one <span class="mono">barch torrents</span> uses). It stays in this browser only.</p>
+  <form onsubmit="saveToken(); return false">
+    <input type="password" id="tok" placeholder="token" autocomplete="off">
+    <button class="on">Open</button>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <aside>
+    <div class="brand"><b>Torrents</b><span id="brandSub" class="mono"></span></div>
+    <nav id="nav"></nav>
+    <div class="grow"></div>
+    <div id="lastSample"></div>
+    <button class="small" onclick="sampleNow()" title="read qBittorrent's counters now instead of at the next five minutes">Sample now</button>
+    <button class="small ghost" onclick="logout()" title="forget the token in this browser">Token</button>
+  </aside>
+
+  <div id="content">
+    <header>
+      <h1 id="title"></h1>
+      <span class="dim">Range</span>
+      <div id="ranges"></div>
+    </header>
+
+    <section class="page" id="p-overview">
+      <div class="card">
+        <h2>At a glance</h2>
+        <div class="sub" id="glanceSub"></div>
+        <div class="tiles" id="tiles"></div>
+      </div>
+      <div class="charts">
+        <div class="card"><h2>Ratio</h2><div class="sub">all-time upload ÷ download, as qBittorrent counts it</div><canvas id="cRatio"></canvas></div>
+        <div class="card"><h2>Speed</h2><div class="sub">average between samples</div><canvas id="cSpeed"></canvas>
+          <div class="legend"><span><i style="background:var(--accent)"></i>upload</span><span><i style="background:var(--subtext)"></i>download</span></div></div>
+        <div class="card"><h2 id="hUp"></h2><div class="sub" id="sUp"></div><canvas id="cUp"></canvas></div>
+        <div class="card"><h2 id="hDown"></h2><div class="sub" id="sDown"></div><canvas id="cDown"></canvas></div>
+        <div class="card"><h2>Torrents</h2><div class="sub">in the client, and how many of them are seeding</div><canvas id="cCount"></canvas>
+          <div class="legend"><span><i style="background:var(--accent)"></i>seeding</span><span><i style="background:var(--subtext)"></i>all</span></div></div>
+        <div class="card"><h2>Data in the client</h2><div class="sub">the size of every torrent it holds</div><canvas id="cSize"></canvas></div>
+      </div>
+    </section>
+
+    <section class="page" id="p-sources" hidden>
+      <div class="split">
+        <div class="listcol">
+          <div class="bar"><span class="dim">By</span><span id="kinds" class="bar"></span><span class="note" id="byNote"></span></div>
+          <div class="head g-src" id="srcHead"></div>
+          <div class="rows" id="srcRows"></div>
+          <div class="foot">torrents: in the client, + the removed ones still counted · totals include what a torrent had before tracking began</div>
+        </div>
+        <div class="panel" id="srcPanel"></div>
+      </div>
+    </section>
+
+    <section class="page" id="p-torrents" hidden>
+      <div class="split">
+        <div class="listcol">
+          <div class="bar">
+            <input type="text" id="tq" placeholder="Filter by name…" style="width:220px">
+            <select id="tState"><option value="all">All</option><option value="live">In the client</option><option value="removed">Removed</option></select>
+            <select id="tSort"></select>
+            <button class="chip" id="chip" hidden onclick="clearGroupFilter()"></button>
+            <span class="note" id="tCount" style="color:var(--subtext); min-width:86px"></span>
+          </div>
+          <div class="head g-tor" id="torHead"></div>
+          <div class="rows" id="torRows"></div>
+        </div>
+        <div class="panel" id="torPanel"></div>
+      </div>
+    </section>
+
+    <footer><span id="statusText"></span><span id="busy" hidden>…</span><span id="counted"></span></footer>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const PAGES = [['overview', 'Overview'], ['sources', 'Sources'], ['torrents', 'Torrents']];
+const RANGES = [['24h', '24 h'], ['7d', '7 d'], ['30d', '30 d'], ['90d', '90 d'], ['1y', '1 y'], ['all', 'All']];
+const KINDS = [['indexer', 'Indexer'], ['category', 'Category'], ['tracker', 'Tracker']];
+const WORD = { hour: 'hour', day: 'day', week: 'week', month: 'month' };
+
+let token = '';
+try { token = localStorage.getItem('barch-torrents-token') || ''; } catch (e) {}
+const S = {
+  page: 'overview', range: '30d', busy: 0,
+  status: {}, overview: {}, samples: null, axis: {}, history: null,
+  by: 'indexer', groups: [], groupKey: '', groupPicked: false, groupHistory: null,
+  tBy: '', tKey: '', tState: 'all', tSort: 'up', tQuery: '', torrents: [], torrentsLoading: false,
+  torrentHash: '', torrent: null, torrentHistory: null,
+};
+try { const r = localStorage.getItem('barch-torrents-range'); if (RANGES.some(x => x[0] === r)) S.range = r; } catch (e) {}
+
+// ---- how numbers are written (Store.qml's)
+function bytes(v) {
+  if (v === null || v === undefined) return '—';
+  const a = Math.abs(v);
+  const u = a >= 1e12 ? ['TB', 1e12] : a >= 1e9 ? ['GB', 1e9] : a >= 1e6 ? ['MB', 1e6] : a >= 1e3 ? ['KB', 1e3] : ['B', 1];
+  const x = v / u[1];
+  return (u[1] === 1 || Math.abs(x) >= 100 ? Math.round(x) : Math.abs(x) >= 10 ? x.toFixed(1) : x.toFixed(2)) + ' ' + u[0];
+}
+const rate = v => bytes(v) + '/s';
+const ratio = v => v === null || v === undefined ? '—' : v >= 100 ? String(Math.round(v)) : v >= 10 ? v.toFixed(1) : v.toFixed(v < 1 ? 3 : 2);
+const ratioTint = v => v === null || v === undefined ? 'var(--overlay)' : v >= 1 ? 'var(--green)' : 'var(--yellow)';
+const p2 = n => String(n).padStart(2, '0');
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const dm = d => p2(d.getDate()) + '/' + p2(d.getMonth() + 1);
+const hm = d => p2(d.getHours()) + ':' + p2(d.getMinutes());
+const day = t => { if (!t) return ''; const d = new Date(t * 1000); return dm(d) + '/' + String(d.getFullYear()).slice(2); };
+const when = t => t ? day(t) + ' ' + hm(new Date(t * 1000)) : '';
+function ago(t) {
+  if (!t) return 'never';
+  const s = Math.max(0, (S.status.now || Date.now() / 1000) - t);
+  return s < 90 ? Math.round(s) + ' s ago' : s < 5400 ? Math.round(s / 60) + ' min ago' : s < 172800 ? Math.round(s / 3600) + ' h ago' : Math.round(s / 86400) + ' d ago';
+}
+const span = s => !s ? '—' : s < 3600 ? Math.round(s / 60) + ' min' : s < 172800 ? (s / 3600).toFixed(1) + ' h' : Math.round(s / 86400) + ' d';
+const rangeLabel = () => S.range === 'all' ? 'since tracking began' : 'in ' + (RANGES.find(r => r[0] === S.range) || [0, S.range])[1];
+const signed = (v, digits) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(digits);
+const groupName = k => k !== '' ? k : S.by === 'indexer' ? '(not via Prowlarr)' : S.by === 'category' ? '(no category)' : '(not read yet)';
+
+// ---- the API
+function say(msg, bad) { const e = $('#statusText'); e.textContent = msg || ''; e.classList.toggle('bad', !!bad); S.statusBad = !!bad; }
+function busy(n) { S.busy += n; $('#busy').hidden = S.busy <= 0; }
+async function api(path, quiet, method) {
+  busy(1);
+  try {
+    const r = await fetch(path, { method: method || 'GET', headers: { 'X-Barch-Token': token } });
+    if (r.status === 401) { showLogin(); return null; }
+    const d = await r.json();
+    if (!d.ok) { if (!quiet) say(d.error || 'the service refused', true); return null; }
+    return d;
+  } catch (e) {
+    if (!quiet) say('the service is not reachable', true);
+    return null;
+  } finally { busy(-1); }
+}
+const qs = o => Object.keys(o).filter(k => o[k] !== '' && o[k] !== undefined).map(k => k + '=' + encodeURIComponent(o[k])).join('&');
+
+function showLogin() { $('#app').hidden = true; $('#login').hidden = false; $('#tok').focus(); }
+function saveToken() {
+  token = $('#tok').value.trim();
+  try { localStorage.setItem('barch-torrents-token', token); } catch (e) {}
+  $('#login').hidden = true; $('#app').hidden = false; refresh();
+}
+function logout() { token = ''; try { localStorage.removeItem('barch-torrents-token'); } catch (e) {} showLogin(); }
+
+function refresh() {
+  const range = S.range, fresh = () => range === S.range;
+  api('/api/status').then(d => {
+    if (!d) return;
+    S.status = d;
+    if (d.error) say('qBittorrent: ' + d.error, true); else if (S.statusBad) say('');
+    renderChrome(); renderOverview(); renderSourcesBar();
+    document.querySelectorAll('canvas').forEach(paint);
+  });
+  api('/api/overview?' + qs({ range }), true).then(d => { if (d && fresh()) { S.overview = d; renderChrome(); renderOverview(); } });
+  api('/api/samples?' + qs({ range }), true).then(d => { if (d && fresh()) { S.samples = d.samples; S.axis = { from: d.from, to: d.to }; renderOverviewCharts(); } });
+  api('/api/history?' + qs({ range }), true).then(d => { if (d && fresh()) { S.history = d; renderOverviewCharts(); } });
+  loadGroups();
+  loadTorrents();
+}
+function setRange(r) {
+  if (r === S.range) return;
+  S.range = r; S.samples = null; S.history = null; S.groupHistory = null; S.torrentHistory = null;
+  try { localStorage.setItem('barch-torrents-range', r); } catch (e) {}
+  renderChrome(); renderOverviewCharts(); renderSources(); renderTorrentsBar(); renderTorrentPanel(); refresh();
+}
+async function sampleNow() {
+  if (await api('/api/sample', false, 'POST')) { say('sampling now'); setTimeout(refresh, 2500); }
+}
+
+// ---- sources
+async function loadGroups() {
+  const by = S.by, range = S.range;
+  const d = await api('/api/groups?' + qs({ by, range }), true);
+  if (!d || d.by !== S.by || range !== S.range) return;
+  S.groups = d.groups;
+  if (!S.groupPicked || !S.groups.some(g => g.key === S.groupKey)) { S.groupKey = S.groups.length ? S.groups[0].key : ''; S.groupPicked = S.groups.length > 0; }
+  renderSources();
+  loadGroupHistory();
+}
+function setBy(b) { if (b === S.by) return; S.by = b; S.groups = []; S.groupPicked = false; S.groupHistory = null; renderSources(); loadGroups(); }
+function pickGroup(k) { S.groupKey = k; S.groupPicked = true; S.groupHistory = null; renderSources(); loadGroupHistory(); reveal('#srcPanel'); }
+async function loadGroupHistory() {
+  if (!S.groupPicked) { S.groupHistory = null; return; }
+  const b = S.by, k = S.groupKey, range = S.range;
+  // an empty key is a real group (no indexer known), so it is sent even when empty
+  const d = await api('/api/history?range=' + encodeURIComponent(range) + '&by=' + b + '&key=' + encodeURIComponent(k), true);
+  if (d && b === S.by && k === S.groupKey && range === S.range) { S.groupHistory = d; renderHistory('src', d); }
+}
+
+// ---- torrents
+async function loadTorrents() {
+  S.torrentsLoading = true;
+  const range = S.range;
+  let path = '/api/torrents?' + qs({ range, state: S.tState, sort: S.tSort, q: S.tQuery, limit: 500 });
+  if (S.tBy) path += '&by=' + S.tBy + '&key=' + encodeURIComponent(S.tKey);
+  const asked = path;
+  S.torrentsAsked = asked;
+  if (S.torrentHash) loadTorrent();
+  const d = await api(path, true);
+  if (S.torrentsAsked !== asked) return;
+  S.torrentsLoading = false;
+  if (d) S.torrents = d.torrents;
+  renderTorrents();
+}
+function showTorrentsOf(b, k) { S.tBy = b; S.tKey = k; S.tQuery = ''; $('#tq').value = ''; go('torrents'); loadTorrents(); }
+function clearGroupFilter() { S.tBy = ''; S.tKey = ''; renderTorrentsBar(); loadTorrents(); }
+function pickTorrent(h) {
+  if (h !== S.torrentHash) { S.torrent = null; S.torrentHistory = null; }
+  S.torrentHash = h; renderTorrents(); renderTorrentPanel(); loadTorrent(); reveal('#torPanel');
+  history.replaceState(null, '', '#torrents/' + h);
+}
+async function loadTorrent() {
+  const h = S.torrentHash, range = S.range;
+  const d = await api('/api/torrents/' + h + '?' + qs({ range }), true);
+  if (d && h === S.torrentHash && range === S.range) { S.torrent = d.torrent; S.torrentHistory = d.history; renderTorrentPanel(); }
+}
+// in the stacked (narrow) layout the panel is under the list: bring it into view
+function reveal(sel) { if (matchMedia('(max-width: 1180px)').matches) $(sel).scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+
+// ---- pages
+function go(p) { if (location.hash.slice(1).split('/')[0] !== p) location.hash = p; else setPage(p); }
+function setPage(p) {
+  S.page = PAGES.some(x => x[0] === p) ? p : 'overview';
+  for (const [id] of PAGES) $('#p-' + id).hidden = id !== S.page;
+  renderChrome();
+}
+function route() {
+  const [p, h] = location.hash.slice(1).split('/');
+  setPage(p || 'overview');
+  if (p === 'torrents' && h && h !== S.torrentHash && token) pickTorrent(h.toLowerCase());
+}
+addEventListener('hashchange', route);
+
+function renderChrome() {
+  $('#nav').innerHTML = PAGES.map(([id, label]) => `<a class="${id === S.page ? 'on' : ''}" href="#${id}">${label}</a>`).join('');
+  $('#title').textContent = (PAGES.find(p => p[0] === S.page) || [0, ''])[1];
+  $('#ranges').innerHTML = RANGES.map(([v, l]) => `<button class="small ${v === S.range ? 'on' : ''}" onclick="setRange('${v}')">${l}</button>`).join('');
+  const now = S.overview.now || {};
+  $('#brandSub').textContent = now.ratio === undefined ? '' : 'ratio ' + ratio(now.ratio);
+  const st = S.status;
+  const ls = $('#lastSample');
+  ls.textContent = st.error ? 'qBittorrent does not answer the service' : st.last ? 'last sample ' + ago(st.last) : '';
+  ls.classList.toggle('red', !!st.error);
+  $('#counted').textContent = st.torrents ? st.live + ' torrents in the client · ' + (st.torrents - st.live) + ' removed, still counted' : '';
+}
+
+function renderOverview() {
+  const o = S.overview, now = o.now || {}, then = o.then || null, live = o.live || {}, st = S.status;
+  const win = n => o[n] || { up: 0, down: 0, ratio: null };
+  $('#glanceSub').textContent = !st.samples ? 'no sample yet'
+    : st.samples + ' samples since ' + day(st.start) + ', one every ' + Math.round((st.poll_s || 300) / 60) + ' min  ·  qBittorrent ' + (st.qbittorrent || '');
+  const rl = rangeLabel();
+  const tiles = [
+    ['Ratio (all time)', ratio(now.ratio), then && then.ratio !== null && now.ratio != null ? signed(now.ratio - then.ratio, 4) + ' ' + rl : 'as qBittorrent counts it', ratioTint(now.ratio)],
+    ['Uploaded (all time)', bytes(now.alltime_ul), then ? '+' + bytes(then.up) + ' ' + rl : ''],
+    ['Downloaded (all time)', bytes(now.alltime_dl), then ? '+' + bytes(then.down) + ' ' + rl : ''],
+    ['Ratio ' + rl, ratio(win('range').ratio), '↑ ' + bytes(win('range').up) + '  ↓ ' + bytes(win('range').down), ratioTint(win('range').ratio)],
+    ['Last 24 h', '↑ ' + bytes(win('day').up), '↓ ' + bytes(win('day').down) + '  ·  ratio ' + ratio(win('day').ratio)],
+    ['Last 7 days', '↑ ' + bytes(win('week').up), '↓ ' + bytes(win('week').down) + '  ·  ratio ' + ratio(win('week').ratio)],
+    ['Torrents', (now.torrents || 0) + '  ·  ' + bytes(now.size), (now.seeding || 0) + ' seeding  ·  ' + (now.downloading || 0) + ' downloading  ·  ' + ((o.tracked || {}).removed || 0) + ' removed'],
+    ['Seeding goal (ratio ' + (o.goal || 0) + ')', (live.at_goal || 0) + ' of ' + (live.done || 0) + ' there', (live.below_1 || 0) + ' still below 1  ·  together ' + ratio(live.ratio)],
+    ['Right now', '↑ ' + rate(now.up_speed), '↓ ' + rate(now.dl_speed) + '  ·  ' + (now.peers || 0) + ' peers  ·  ' + bytes(now.free_space) + ' free'],
+  ];
+  $('#tiles').innerHTML = tiles.map(([l, v, s, tint]) =>
+    `<div class="tile"><div class="l">${esc(l)}</div><div class="v"${tint ? ` style="color:${tint}"` : ''}>${esc(v)}</div><div class="s" title="${esc(s)}">${esc(s) || '&nbsp;'}</div></div>`).join('');
+}
+function renderOverviewCharts() {
+  const sm = S.samples, h = S.history, rl = rangeLabel();
+  const pts = k => sm.map(s => ({ t: s.t, v: s[k] }));
+  line($('#cRatio'), sm && [{ color: 'accent', points: sm.filter(s => s.ratio !== null).map(s => ({ t: s.t, v: s.ratio })) }], v => v.toFixed(4), 62, S.axis);
+  line($('#cSpeed'), sm && [{ label: 'upload', color: 'accent', points: pts('up_speed') }, { label: 'download', color: 'subtext', points: pts('dl_speed') }], rate, 62, S.axis);
+  line($('#cCount'), sm && [{ label: 'seeding', color: 'accent', points: pts('seeding') }, { label: 'all', color: 'subtext', points: pts('torrents') }], v => String(Math.round(v)), 62, S.axis);
+  line($('#cSize'), sm && [{ color: 'accent', points: pts('size') }], bytes, 62, S.axis);
+  const per = 'per ' + WORD[(h && h.kind) || 'day'];
+  $('#hUp').textContent = 'Uploaded ' + per; $('#hDown').textContent = 'Downloaded ' + per;
+  $('#sUp').textContent = h ? bytes(h.up || 0) + ' ' + rl : ''; $('#sDown').textContent = h ? bytes(h.down || 0) + ' ' + rl : '';
+  bars($('#cUp'), h && h.buckets.map(b => ({ t: b.t, v: b.up })), h ? h.kind : 'day', 'accent', bytes, 'nothing uploaded ' + rl);
+  bars($('#cDown'), h && h.buckets.map(b => ({ t: b.t, v: b.down })), h ? h.kind : 'day', 'subtext', bytes, 'nothing downloaded ' + rl);
+}
+
+function renderSourcesBar() {
+  const missing = S.status.indexers_missing || [];
+  $('#kinds').innerHTML = KINDS.map(([v, l]) => `<button class="small ${v === S.by ? 'on' : ''}" onclick="setBy('${v}')">${l}</button>`).join('');
+  const note = $('#byNote');
+  note.textContent = S.by === 'indexer' ? (missing.length ? 'no API key for ' + missing.join(', ') + ': its torrents have no indexer' : 'from the history of ' + (S.status.indexers_from || []).join(', '))
+    : S.by === 'tracker' ? 'the first announce host of each torrent (public ones carry many)' : "qBittorrent's category";
+  note.classList.toggle('warn', S.by === 'indexer' && missing.length > 0);
+}
+function renderSources() {
+  renderSourcesBar();
+  const rl = rangeLabel();
+  $('#srcHead').innerHTML = [S.by.charAt(0).toUpperCase() + S.by.slice(1), 'torrents', '↑ ' + rl, '↓ ' + rl, '↑ total', '↓ total', 'ratio'].map(h => `<span>${esc(h)}</span>`).join('');
+  const top = Math.max(1, ...S.groups.map(g => g.up));
+  $('#srcRows').innerHTML = S.groups.length ? S.groups.map((g, i) => `
+    <div class="row g-src ${S.groupPicked && S.groupKey === g.key ? 'on' : ''}" data-i="${i}">
+      <span class="name"${g.key === '' ? ' style="color:var(--subtext)"' : ''}>${esc(groupName(g.key))}</span>
+      <span class="dim">${g.live}${g.torrents > g.live ? ' +' + (g.torrents - g.live) : ''}</span>
+      <span class="meter"><span class="track">${g.up > 0 ? `<i style="width:${(100 * g.up / top).toFixed(1)}%"></i>` : ''}</span><span>${bytes(g.up)}</span></span>
+      <span class="dim">${bytes(g.down)}</span>
+      <span>${bytes(g.total_up)}</span>
+      <span class="dim">${bytes(g.total_down)}</span>
+      <b style="color:${ratioTint(g.ratio)}">${ratio(g.ratio)}</b>
+    </div>`).join('') : '<div class="empty">No torrents seen yet.</div>';
+  const g = S.groups.find(x => x.key === S.groupKey);
+  const panel = $('#srcPanel');
+  if (!S.groupPicked || !g) { panel.innerHTML = '<div class="empty">Pick a row to see its history.</div>'; return; }
+  panel.innerHTML = `
+    <div class="phead"><div><h3>${esc(groupName(g.key))}</h3>
+      <div class="dim" style="font-size:12px">${g.live} torrents in the client (${bytes(g.size)})${g.torrents > g.live ? ', ' + (g.torrents - g.live) + ' removed' : ''}${g.below_1 ? '  ·  ' + g.below_1 + ' below ratio 1' : ''}</div></div>
+      <button class="small" id="srcTorrents" title="the torrents of this ${esc(S.by)}">Torrents →</button></div>` + historyHtml('src');
+  $('#srcTorrents').onclick = () => showTorrentsOf(S.by, g.key);
+  renderHistory('src', S.groupHistory);
+}
+$('#srcRows').addEventListener('click', e => { const r = e.target.closest('.row'); if (r) pickGroup(S.groups[+r.dataset.i].key); });
+
+function renderTorrentsBar() {
+  const rl = rangeLabel();
+  const sorts = [['up', 'Most uploaded ' + rl], ['total_up', 'Most uploaded in total'], ['down', 'Most downloaded ' + rl], ['ratio', 'Highest ratio'],
+                 ['ratio_asc', 'Lowest ratio'], ['size', 'Largest'], ['added', 'Newest'], ['seeding', 'Longest seeding'], ['name', 'Name']];
+  $('#tSort').innerHTML = sorts.map(([v, l]) => `<option value="${v}"${v === S.tSort ? ' selected' : ''}>${esc(l)}</option>`).join('');
+  $('#tState').value = S.tState;
+  const chip = $('#chip');
+  chip.hidden = S.tBy === '';
+  chip.textContent = S.tBy + ': ' + (S.tKey || '(none)') + '  ✕';
+  $('#torHead').innerHTML = ['Torrent', 'size', '↑ ' + S.range, '↑ total', '↓ total', 'ratio', 'seeding'].map(h => `<span>${esc(h)}</span>`).join('');
+}
+function renderTorrents() {
+  renderTorrentsBar();
+  const list = S.torrents;
+  $('#tCount').textContent = S.torrentsLoading && !list.length ? 'loading…' : list.length + ' torrents';
+  $('#torRows').innerHTML = list.length ? list.map(t => {
+    const gone = t.removed_at !== null;
+    const meta = [t.category, t.indexer, t.tracker, 'added ' + day(t.added_on),
+                  gone ? 'removed ' + day(t.removed_at) : t.progress < 1 ? Math.floor(t.progress * 100) + ' %' : ''].filter(x => x).join('  ·  ');
+    return `<div class="row g-tor ${S.torrentHash === t.hash ? 'on' : ''} ${gone ? 'gone' : ''}" data-h="${esc(t.hash)}">
+      <span><span class="name" title="${esc(t.name)}">${esc(t.name || t.hash)}</span><span class="meta">${esc(meta)}</span></span>
+      <span class="dim">${bytes(t.size)}</span>
+      <span style="color:${t.up ? 'var(--accent)' : 'var(--overlay)'}">${t.up ? bytes(t.up) : '—'}</span>
+      <span>${bytes(t.total_up)}</span>
+      <span class="dim">${bytes(t.total_down)}</span>
+      <b style="color:${ratioTint(t.ratio)}">${ratio(t.ratio)}</b>
+      <span class="dim">${span(t.seeding_time)}</span>
+    </div>`;
+  }).join('') : `<div class="empty">${S.torrentsLoading ? 'loading…' : 'No torrents match.'}</div>`;
+}
+$('#torRows').addEventListener('click', e => { const r = e.target.closest('.row'); if (r) pickTorrent(r.dataset.h); });
+function renderTorrentPanel() {
+  const t = S.torrent, panel = $('#torPanel');
+  if (!t) { panel.innerHTML = `<div class="empty">${S.torrentHash ? 'loading…' : 'Pick a torrent to see its history.'}</div>`; return; }
+  const gone = t.removed_at !== null;
+  const facts = [
+    ['State', gone ? 'removed ' + when(t.removed_at) : t.state + (t.progress < 1 ? ', ' + Math.floor(t.progress * 100) + ' %' : ''), gone ? 'var(--subtext)' : ''],
+    ['Category', t.category], ['Indexer', t.indexer],
+    ['Tracker', t.tracker ? t.tracker + (t.private === true ? ' (private)' : '') : ''],
+    ['Size', bytes(t.size)],
+    ['Uploaded', bytes(t.total_up) + (t.base_up ? '  (' + bytes(t.base_up) + ' before tracking)' : '')],
+    ['Downloaded', bytes(t.total_down)],
+    ['Ratio', ratio(t.ratio), ratioTint(t.ratio)],
+    ['Added', when(t.added_on)], ['Finished', t.completion_on ? when(t.completion_on) : ''],
+    ['Seeding for', t.seeding_time ? span(t.seeding_time) : ''],
+  ].filter(f => f[1]);
+  panel.innerHTML = `<h3>${esc(t.name)}</h3><dl>${facts.map(([l, v, c]) => `<dt>${l}</dt><dd${c ? ` style="color:${c}"` : ''}>${esc(v)}</dd>`).join('')}</dl>` + historyHtml('tor');
+  renderHistory('tor', S.torrentHistory);
+}
+
+// the history of one source or one torrent: its lifetime ratio as a line, then upload and download per bucket
+function historyHtml(id) {
+  return `<div class="hh"><b>Ratio</b><span id="${id}HR"></span></div><canvas id="${id}CR"></canvas>
+    <div class="hh"><b id="${id}HUt">Uploaded</b><span id="${id}HU"></span></div><canvas id="${id}CU"></canvas>
+    <div class="hh"><b id="${id}HDt">Downloaded</b><span id="${id}HD"></span></div><canvas id="${id}CD"></canvas>`;
+}
+function renderHistory(id, h) {
+  if (!$('#' + id + 'CR')) return;
+  const b = h ? h.buckets : [], rl = rangeLabel(), per = h ? ' per ' + WORD[h.kind] : '';
+  $('#' + id + 'HR').textContent = b.length ? 'lifetime, now ' + ratio(b[b.length - 1].ratio) : '';
+  $('#' + id + 'HUt').textContent = 'Uploaded' + per; $('#' + id + 'HDt').textContent = 'Downloaded' + per;
+  $('#' + id + 'HU').textContent = h ? bytes(h.up) + ' ' + rl : ''; $('#' + id + 'HD').textContent = h ? bytes(h.down) + ' ' + rl : '';
+  const ends = b.map((x, i) => ({ t: h.to === undefined ? x.t : i + 1 < b.length ? b[i + 1].t : h.to, v: x.ratio })).filter(p => p.v !== null);
+  line($('#' + id + 'CR'), h && [{ color: 'accent', points: ends }], ratio, 58, h || {});
+  bars($('#' + id + 'CU'), h && b.map(x => ({ t: x.t, v: x.up })), h ? h.kind : 'day', 'accent', bytes, 'nothing uploaded ' + rl);
+  bars($('#' + id + 'CD'), h && b.map(x => ({ t: x.t, v: x.down })), h ? h.kind : 'day', 'subtext', bytes, 'nothing downloaded ' + rl);
+}
+
+// ---- charts on a canvas (Chart.qml and Bars.qml): theme colors, a readout under the pointer
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue('--' + n).trim();
+function rgba(hex, a) {
+  const n = parseInt(hex.slice(1, 7), 16);
+  return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`;
+}
+const resized = new ResizeObserver(es => { for (const e of es) paint(e.target); });
+function setup(c) {
+  if (c._ready) return;
+  c._ready = true; c._x = -1;
+  const at = x => { c._x = x; paint(c); };
+  c.addEventListener('mousemove', e => at(e.offsetX));
+  c.addEventListener('mouseleave', () => at(-1));
+  const touch = e => at(e.touches[0].clientX - c.getBoundingClientRect().left);
+  c.addEventListener('touchstart', touch, { passive: true });
+  c.addEventListener('touchmove', touch, { passive: true });
+  resized.observe(c);
+}
+// series: [{ label, color: 'accent', points: [{ t, v }] }], or null while loading; axis { from, to } pins the
+// time axis to a period (the data then sits where it belongs in it, however short)
+function line(c, series, fmt, padL, axis) { setup(c); c._cfg = { type: 'line', series, fmt, padL: padL || 62, from: (axis || {}).from, to: (axis || {}).to }; paint(c); }
+// a dashed line where the data begins (tracking began): what is before it is not zero, it is unknown
+function mark(ctx, mx, top, bottom, mid, labelY) {
+  ctx.save(); ctx.strokeStyle = rgba(cssVar('text'), 0.3); ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(mx, top); ctx.lineTo(mx, bottom); ctx.stroke(); ctx.restore();
+  ctx.fillStyle = cssVar('overlay'); ctx.textAlign = mx > mid ? 'right' : 'left';
+  ctx.fillText('tracking began ' + day(S.status.start), mx + (mx > mid ? -6 : 6), labelY);
+}
+// points: [{ t, v }] one per bucket (kind: hour, day, week, month), or null while loading
+function bars(c, points, kind, tint, fmt, empty) { setup(c); c._cfg = { type: 'bars', points, kind, tint, fmt, empty }; paint(c); }
+function paint(c) {
+  const cfg = c._cfg, w = c.clientWidth, h = c.clientHeight;
+  if (!cfg || !w || !h) return;
+  const dpr = devicePixelRatio || 1;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const ctx = c.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.font = '10px system-ui, sans-serif';
+  ctx.textBaseline = 'middle';
+  (cfg.type === 'line' ? paintLine : paintBars)(ctx, c, cfg, w, h);
+}
+function note(ctx, text, w, h) { ctx.fillStyle = cssVar('overlay'); ctx.textAlign = 'center'; ctx.fillText(text, w / 2, h / 2); }
+function paintLine(ctx, c, cfg, width, height) {
+  const padL = cfg.padL, padR = 10, padT = 8, padB = 22;
+  const w = width - padL - padR, h = height - padT - padB;
+  const series = cfg.series || [];
+  let lo = Infinity, hi = -Infinity, t0 = Infinity, t1 = -Infinity;
+  for (const s of series) for (const p of s.points) {
+    if (p.v === null || p.v === undefined) continue;
+    if (p.v < lo) lo = p.v; if (p.v > hi) hi = p.v; if (p.t < t0) t0 = p.t; if (p.t > t1) t1 = p.t;
+  }
+  if (!isFinite(lo) || w <= 0 || h <= 0) return note(ctx, cfg.series ? 'no data in this range' : 'loading…', width, height);
+  const min = lo, sp = (hi - lo) || Math.max(1, Math.abs(hi) * 0.1);
+  lo -= sp * 0.08; hi += sp * 0.08;
+  if (lo < 0 && min >= 0) lo = 0;
+  const pinned = cfg.from > 0 && cfg.to > cfg.from;
+  if (pinned) { t0 = cfg.from; t1 = cfg.to; }
+  if (t1 === t0) t1 = t0 + 60;
+  const x = t => padL + (t - t0) / (t1 - t0) * w, y = v => padT + (1 - (v - lo) / (hi - lo)) * h;
+  const text = cssVar('text'), sub = cssVar('subtext');
+  const tl = (t, long) => { const d = new Date(t * 1000); return long ? dm(d) : hm(d); };
+  // grid + y labels
+  ctx.strokeStyle = rgba(text, 0.08); ctx.fillStyle = sub; ctx.textAlign = 'right'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const v = lo + (hi - lo) * i / 4, yy = Math.round(y(v)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(width - padR, yy); ctx.stroke();
+    ctx.fillText(cfg.fmt(v), padL - 6, yy);
+  }
+  // x labels (the last one would be cut by the edge)
+  const tspan = t1 - t0, long = tspan > 2 * 86400;
+  for (let i = 0; i <= 5; i++) {
+    const t = t0 + tspan * i / 5;
+    ctx.textAlign = i === 5 ? 'right' : 'center';
+    ctx.fillText(tl(t, long), x(t) + (i === 5 ? padR : 0), height - padB / 2);
+  }
+  const began = S.status.start;
+  if (began > t0 && began < t1) mark(ctx, Math.round(x(began)) + 0.5, padT, padT + h, padL + w / 2, padT + h - 8);
+  for (const s of series) {
+    const pts = s.points.filter(p => p.v !== null && p.v !== undefined);
+    if (!pts.length) continue;
+    const col = cssVar(s.color);
+    ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    pts.forEach((p, i) => i ? ctx.lineTo(x(p.t), y(p.v)) : ctx.moveTo(x(p.t), y(p.v)));
+    ctx.stroke();
+    if (pts.length === 1) {                      // one sample is a dot, not an invisible line
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x(pts[0].t), y(pts[0].v), 3, 0, 2 * Math.PI); ctx.fill();
+    } else if (series.length === 1) {
+      ctx.lineTo(x(pts[pts.length - 1].t), padT + h); ctx.lineTo(x(pts[0].t), padT + h); ctx.closePath();
+      ctx.fillStyle = rgba(col, 0.12); ctx.fill();
+    }
+  }
+  const hx = c._x;
+  if (hx >= padL && hx <= width - padR) {
+    const t = t0 + (hx - padL) / w * (t1 - t0);
+    ctx.strokeStyle = rgba(text, 0.25);
+    ctx.beginPath(); ctx.moveTo(hx + 0.5, padT); ctx.lineTo(hx + 0.5, padT + h); ctx.stroke();
+    let out = tl(t, false) + (long ? ' ' + tl(t, true) : '');
+    for (const s of series) {
+      let best = null;
+      for (const p of s.points) if (p.v !== null && p.v !== undefined && (!best || Math.abs(p.t - t) < Math.abs(best.t - t))) best = p;
+      if (!best || (pinned && Math.abs(best.t - t) > tspan * 0.03)) continue;     // nothing sampled around here
+      ctx.fillStyle = cssVar(s.color);
+      ctx.beginPath(); ctx.arc(x(best.t), y(best.v), 3, 0, 2 * Math.PI); ctx.fill();
+      out += '   ' + (s.label ? s.label + ' ' : '') + cfg.fmt(best.v);
+    }
+    ctx.fillStyle = text; ctx.textAlign = hx > width / 2 ? 'right' : 'left';
+    ctx.fillText(out, hx + (hx > width / 2 ? -8 : 8), padT + 8);
+  }
+}
+function paintBars(ctx, c, cfg, width, height) {
+  const padL = 58, padR = 10, padT = 18, padB = 22;
+  const pts = cfg.points || [], n = pts.length;
+  const w = width - padL - padR, h = height - padT - padB;
+  let peak = 0;
+  for (const p of pts) if (p.v > peak) peak = p.v;
+  if (!n || w <= 0 || h <= 0) return note(ctx, cfg.points ? cfg.empty : 'loading…', width, height);
+  const label = (t, long) => {
+    const d = new Date(t * 1000);
+    if (cfg.kind === 'hour') return (long ? dm(d) + ' ' : '') + p2(d.getHours()) + ':00';
+    if (cfg.kind === 'month') return MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+    return (long && cfg.kind === 'week' ? 'week of ' : '') + dm(d);
+  };
+  const hi = (peak > 0 ? peak : 1) * 1.08, y = v => padT + (1 - v / hi) * h;
+  const text = cssVar('text'), sub = cssVar('subtext'), tint = cssVar(cfg.tint);
+  ctx.strokeStyle = rgba(text, 0.08); ctx.fillStyle = sub; ctx.textAlign = 'right'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const v = hi * i / 4, yy = Math.round(y(v)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(width - padR, yy); ctx.stroke();
+    if (peak > 0 || i === 0) ctx.fillText(cfg.fmt(peak > 0 ? v : 0), padL - 6, yy);
+  }
+  if (peak <= 0) { ctx.fillStyle = cssVar('overlay'); ctx.textAlign = 'center'; ctx.fillText(cfg.empty, padL + w / 2, padT + h / 2); }
+  // bars: a 2 px gap between neighbours, rounded at the data end, square on the baseline
+  const slot = w / n, bw = Math.max(1, Math.min(slot - 2, 26)), base = padT + h;
+  const hover = peak > 0 && c._x >= padL && c._x <= width - padR ? Math.min(n - 1, Math.floor((c._x - padL) / slot)) : -1;
+  const began = S.status.start;
+  if (began > pts[0].t) {                    // inside the bucket that holds that moment
+    let i = n - 1;
+    while (i > 0 && pts[i].t > began) i--;
+    const len = i < n - 1 ? pts[i + 1].t - pts[i].t : n > 1 ? pts[i].t - pts[i - 1].t : 3600;
+    mark(ctx, Math.round(padL + slot * (i + Math.min(1, (began - pts[i].t) / len))) + 0.5, padT, base, padL + w / 2, padT + 8);
+  }
+  for (let i = 0; i < n; i++) {
+    const v = pts[i].v;
+    if (!(v > 0)) continue;
+    const x = padL + slot * i + (slot - bw) / 2, top = Math.min(y(v), base - 1), r = Math.min(4, bw / 2, base - top);
+    ctx.fillStyle = rgba(tint, hover === -1 || hover === i ? 1 : 0.45);
+    ctx.beginPath();
+    ctx.moveTo(x, base); ctx.lineTo(x, top + r);
+    ctx.arcTo(x, top, x + r, top, r); ctx.lineTo(x + bw - r, top);
+    ctx.arcTo(x + bw, top, x + bw, top + r, r); ctx.lineTo(x + bw, base);
+    ctx.closePath(); ctx.fill();
+  }
+  // x labels: as many as fit
+  ctx.fillStyle = sub; ctx.textAlign = 'center';
+  const every = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(w / 62))));
+  for (let i = 0; i < n; i += every) ctx.fillText(label(pts[i].t, false), padL + slot * (i + 0.5), height - padB / 2);
+  if (hover >= 0) {
+    const p = pts[hover], cx = padL + slot * (hover + 0.5);
+    ctx.fillStyle = text;
+    ctx.textAlign = cx > width * 0.7 ? 'right' : cx < width * 0.3 ? 'left' : 'center';
+    ctx.fillText(label(p.t, true) + '   ' + cfg.fmt(p.v), cx, padT / 2);
+  }
+}
+// the colors are read when painting: paint again when the system theme flips
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => document.querySelectorAll('canvas').forEach(paint));
+
+// ---- controls of the Torrents page
+let typing = 0;
+$('#tq').addEventListener('input', e => { clearTimeout(typing); typing = setTimeout(() => { S.tQuery = e.target.value.trim(); loadTorrents(); }, 300); });
+$('#tState').addEventListener('change', e => { S.tState = e.target.value; loadTorrents(); });
+$('#tSort').addEventListener('change', e => { S.tSort = e.target.value; loadTorrents(); });
+
+renderChrome(); renderOverview(); renderOverviewCharts(); renderSources(); renderTorrents(); renderTorrentPanel();
+route();
+if (token) { $('#app').hidden = false; refresh(); } else showLogin();
+setInterval(() => { if (token && !$('#app').hidden && !document.hidden) refresh(); }, 60000);
+</script>
+</body>
+</html>
