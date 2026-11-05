@@ -11,10 +11,14 @@
   "stalled_h": 24,
   "max_failures": 4,
   "max_donor_gb": 40,
+  "max_season_donor_gb": 120,
   "subtitles": ["por", "eng"],
+  "trim": true,
+  "trims_per_tick": 4,
   "delete_donor": false,
   "digest": true,
   "radarr": {"url": "http://radarr:7878"},
+  "sonarr": {"url": "http://sonarr:8989"},
   "prowlarr": {"url": "http://prowlarr:9696"},
   "qbittorrent": {"url": "http://qbittorrent:8080"}
 }

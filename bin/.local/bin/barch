@@ -133,10 +133,19 @@ Desktop (through the bar):
   music covers ask <Artist/Album> "what is wrong"   Claude looks at the candidates, adapts one or finds
                               another and proposes it (Bruno still decides with apply)
   music restart               restart the pipeline in the container (new code after install)
+  books browse [page]         the Books app: search Hardcover, Want to Read, requests, downloads
+  books search <query>        Hardcover books (★ = on Want to Read) · shelf: Want to Read and what
+                              Shelfmark did with each · want|unwant <id> · sync (Hardcover Sync now)
+  books requests [status]     Shelfmark's requests (pending by default, "all"; rejected: what you said no to,
+                              fulfil takes one back) · show <id>
+  books releases <id> [--query Q] [--source S]   releases for a request · fulfil <id> --pick N
+  books accept <id> [--query Q]   download the best release carrying the title (no author check)
+  books reject|reopen|cancel <id> · downloads · install
+  books fix <id> ["hint"]     Claude takes a request no source matched and downloads the right release
   video status|list [state]   the video pipeline on the NAS (server/video): the PT-BR dub muxed into
                               each 4K file Radarr grabs (states: search, waiting, downloading,
                               aligning, review, done, skipped)
-  video show <id>             one movie: the dub candidates, the alignment, what happened
+  video show <id>             one movie (m<id>) or season (s<series>x<season>): candidates, alignment, history
   video retry|skip|unskip <id>   search again from scratch / leave alone / take back
   video use <id> <guid>       try this candidate next (from video show)
   video scan|digest [days]|restart   run now / the week / restart after install
@@ -944,6 +953,109 @@ cmd_music() {
   esac
 }
 
+# books: the book stack on the NAS (server/books) through Shelfmark's API; quickshell/books/books.py
+# does the calls (it is what the Books app runs too) and answers JSON.
+BOOKS_PY=$HOME/.config/quickshell/books/books.py
+books_py() {
+  OUT=$(python3 -I "$BOOKS_PY" "$@") || die 1 "$(jq -r '.error // "books.py failed"' <<<"$OUT" 2>/dev/null || echo "books.py failed")"
+}
+
+# books fix <request id> ["hint"]: a request no source matched by itself (a misspelt author, a subtitle
+# no release carries, a book only under another title): Claude finds out what the book really is,
+# searches the releases with better queries and downloads the right one, or says what is missing.
+books_fix() {
+  local id=${1:-} hint=${2:-} run rc=0 c
+  [[ -n $id ]] || usage_error "books fix <request id> [\"hint\"]"
+  need claude
+  books_py request "$id"
+  run=$STATE/books-agent/request-$id-$(date +%Y%m%d-%H%M%S)
+  mkdir -p "$run"
+  {
+    echo "# Context"
+    echo
+    echo "- Request id: \`$id\` (use exactly this with barch books releases / fulfil / reject)"
+    echo "- Run folder (write here only): $run"
+    if [[ -n $hint ]]; then echo; echo "## Bruno's hint"; echo; echo "$hint"; fi
+    echo
+    echo "## The request"
+    echo
+    echo '```json'
+    jq '.request | del(.book_data.description)' <<<"$OUT"
+    echo '```'
+  } >"$run/context.md"
+  { cat "$REPO/quickshell/.config/quickshell/books/request-fix.md"; echo; cat "$run/context.md"; } >"$run/prompt.md"
+  local allowed=(Read WebSearch WebFetch "Bash(barch books request *)" "Bash(barch books releases *)"
+                 "Bash(barch books fulfil *)" "Bash(barch books search *)" "Bash(jq *)" "Bash(head *)" "Bash(cat *)")
+  local schema='{"type":"object","properties":{"summary":{"type":"string"},"downloaded":{"type":"boolean"}},"required":["summary","downloaded"]}'
+  (cd "$run" && timeout "${BOOKS_CLAUDE_TIMEOUT:-20m}" claude -p --model "${BOOKS_CLAUDE_MODEL:-sonnet}" --output-format json \
+    --permission-mode dontAsk --strict-mcp-config --add-dir "$run" --json-schema "$schema" \
+    --disallowedTools Edit Write NotebookEdit --allowedTools "${allowed[@]}" \
+    <"$run/prompt.md" >"$run/result.json" 2>"$run/claude.log") || rc=$?
+  cost_log books-agent "$(jq -r '.total_cost_usd // empty' "$run/result.json" 2>/dev/null)" "fix $id"
+  jq -e '.structured_output | type == "object"' "$run/result.json" >/dev/null 2>&1 ||
+    die 1 "Claude did not finish (exit $rc): see $run/claude.log"
+  OUT=$(jq -c --arg id "$id" --arg run "$run" '{ok: true, id: $id, run: $run, summary: .structured_output.summary,
+    downloaded: .structured_output.downloaded, session: .session_id, cost: .total_cost_usd}' "$run/result.json")
+  show "$OUT" '.summary'
+}
+
+books_req_line='"#\(.id)  \(.status)\(if .delivery and .delivery != "none" then "/" + .delivery else "" end)  \(.type)\t\(.title) — \(.authors | join(", "))\(if .year then " (\(.year))" else "" end)\(if .reason != "" then "\n      " + .reason else "" end)\(if .admin_note != "" then "\n      note: " + .admin_note else "" end)"'
+
+cmd_books() {
+  local sub=${1:-status}
+  (($#)) && shift
+  case $sub in
+    browse) app_open books BARCH_BOOKS_PAGE "${1:-}" ;;
+    status)
+      books_py status
+      show "$OUT" '"shelfmark: " + (if .requests.error then .requests.error else "\(.requests.pending) pending of \(.requests.total) requests" end) + " · \(.active) in the queue"' ;;
+    search)
+      [[ -n ${1:-} ]] || usage_error "books search <query>"
+      books_py search "$@"
+      show "$OUT" '.books[] | "\(if .want then "★" else " " end) \(.id)\t\(.title)\(if .subtitle != "" then ": " + .subtitle else "" end) — \(.authors | join(", "))\(if .year then " (\(.year))" else "" end)\(if .owned then "  [in library]" else "" end)"' ;;
+    shelf)
+      books_py shelf
+      show "$OUT" '.books[] | "\(.id)\t\(.title) — \(.authors | join(", "))\(if (.requests | length) > 0 then "  [" + (.requests | map("\(.type) \(.status)" + (if .delivery and .delivery != "none" then "/" + .delivery else "" end)) | join(", ")) + "]" else "  [not synced yet]" end)"' ;;
+    want|unwant)
+      [[ -n ${1:-} ]] || usage_error "books $sub <hardcover book id>"
+      if [[ $sub == want ]]; then books_py want "$1"; else books_py want "$1" --off; fi
+      show "$OUT" '"\(.id): " + (if .want then "on Want to Read" else "off Want to Read" end)' ;;
+    sync)
+      books_py sync
+      show "$OUT" '.message' ;;
+    requests|list|rejected)
+      [[ $sub == rejected ]] && set -- rejected
+      books_py requests "${1:-pending}"
+      show "$OUT" ".requests[] | $books_req_line" ;;
+    show|request)
+      [[ -n ${1:-} ]] || usage_error "books show <request id>"
+      books_py request "$1"
+      show "$OUT" ".request | $books_req_line + (if .url != \"\" then \"\n      \" + .url else \"\" end) + (if .release then \"\n      release: \(.release.source) \(.release.title)\" else \"\" end)" ;;
+    releases)
+      [[ -n ${1:-} ]] || usage_error "books releases <request id> [--query Q] [--source S] [--type ebook|audiobook]"
+      books_py releases "$@"
+      show "$OUT" '"\(.releases | length) releases for #\(.request.id) \(.request.title) (searched: \(.searched | join(", ")))" + (if (.errors | length) > 0 then "\nerrors: \(.errors)" else "" end) + "\n" + (.releases | map("  [\(.n)] \(.source)\(if .indexer != "" then "/" + .indexer else "" end)  \(.format) \(.language) \(.size)\(if .seeders != null then " \(.seeders)s" else "" end)\t\(.title)") | join("\n"))' ;;
+    fulfil|download)
+      [[ -n ${1:-} ]] || usage_error "books fulfil <request id> --pick N"
+      books_py fulfil "$@"
+      show "$OUT" '"#\(.request.id // "?"): downloading \(.release.source) \(.release.title)"' ;;
+    accept)
+      [[ -n ${1:-} ]] || usage_error "books accept <request id> [--query Q] [--source S]"
+      books_py accept "$@"
+      show "$OUT" '"#\(.request.id // "?"): downloading \(.release.source) \(.release.format) \(.release.title) (best of \(.candidates))"' ;;
+    reject|reopen|cancel)
+      [[ -n ${1:-} ]] || usage_error "books $sub <request id>"
+      books_py "$sub" "$@"
+      show "$OUT" '"#\(.request.id): \(.request.status)"' ;;
+    downloads)
+      books_py downloads
+      show "$OUT" '.items[] | "\(.bucket)\t\(if .progress then "\(.progress | floor) %  " else "" end)\(.title) — \(.author)  [\(.source) \(.format)]\(if .message != "" then "\n      " + .message else "" end)"' ;;
+    fix) books_fix "$@" ;;
+    install) exec "$REPO/server/books/install.sh" "$@" ;;
+    *) usage_error "books status|browse|search|shelf|want|unwant|sync|requests|rejected|show|releases|fulfil|accept|reject|reopen|cancel|downloads|fix|install" ;;
+  esac
+}
+
 # video: the pipeline runs in its own container on the NAS (server/video); this only talks to its
 # API with the URL and token install.sh left in ~/.config/barch/video.json (.pipeline)
 video_api() {   # video_api GET|POST <path> [json body]
@@ -972,7 +1084,8 @@ cmd_video() {
     show)
       [[ -n ${1:-} ]] || usage_error "video show <id>"
       video_api GET "/api/jobs/$1"
-      show "$OUT" '.job | "\(.id)  \(.state)  \(.title) (\(.year)), original \(.original)\nfile: \(.file)\naudio: \(.audio // [] | join(", "))"
+      show "$OUT" '.job | "\(.id)  \(.state)  \(.title) (\(.year)), original \(.original)\n\(if .kind == "season" then "series" else "file" end): \(.file)\naudio: \(.audio // [] | join(", "))"
+        + (if .episodes then "\nepisodes:\n" + (.episodes | to_entries | sort_by(.key | tonumber) | map("  E\(.key | tonumber | if . < 10 then "0\(.)" else "\(.)" end)  \(.value.state)\(if .value.offset_ms != null then "  \(.value.offset_ms) ms" else "" end)\(if (.value.reason // "") != "" then "  " + .value.reason else "" end)") | join("\n")) else "" end)
         + (if .reason then "\nreason: \(.reason)" else "" end)
         + (if .alignment then "\nalignment: \(if .alignment.ok then "offset \(.alignment.offset_ms) ms, speed \(.alignment.speed), \(.alignment.agreeing)/\(.alignment.windows) windows (\(.alignment.compared) vs original)" else .alignment.reason end)" else "" end)
         + (if (.candidates|length) > 0 then "\ncandidates:\n" + (.candidates | sort_by(-.score) | map("  [\(.status)] \(.score)  \(.title)  \(.size / 1073741824 * 10 | floor / 10) GB  \(.seeders) seeders  \(.indexer)\(if .reason != "" then "\n        " + .reason else "" end)\n        guid: \(.guid)") | join("\n")) else "" end)
@@ -1992,6 +2105,7 @@ case $cmd in
   anon) cmd_anon "$@" ;;
   vpn) cmd_vpn "$@" ;;
   music) cmd_music "$@" ;;
+  books) cmd_books "$@" ;;
   video) cmd_video "$@" ;;
   health) cmd_health "$@" ;;
   rules) cmd_rules "$@" ;;

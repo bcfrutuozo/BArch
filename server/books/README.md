@@ -31,9 +31,19 @@ Choices made there:
   (`server/music`, `seed.categories`), which removes them at ratio 3 after 72 h or after 90 days and
   records them in the seed history, like Radarr's.
 - **Languages**: `BOOK_LANGUAGE=pt,en` (each user can change their own).
-- **Usenet** is off (no book indexer on Usenet yet): `PROWLARR_USENET_CLIENT=nzbget` plus nzbget's
-  URL and password in Shelfmark's settings turn it on; its download folder must be visible to Shelfmark
-  at the same path (or a Remote Path Mapping).
+- **Usenet** through NZBGet (NZBFinder in Prowlarr, tags `lidarr` + `vpn`, 4500 queries a day): categories
+  `books` and `audiobooks` with DestDir `/downloads/completed/usenet/{books,audiobooks}`, removed after import
+  (`PROWLARR_USENET_ACTION=move`). Shelfmark mounts NZBGet's `/downloads` at the same path, since it takes the
+  path NZBGet reports as is. NZBGet's `lidarr` category goes to `/downloads/music-inbox`, which the music
+  pipeline imports like a folder dropped by hand (Lidarr does not import finished downloads).
+
+## From the desktop
+
+The **Books** app (`barch books browse`) and `barch books` reach Shelfmark's API with an admin key:
+`SHELFMARK_API_KEY` in the container (template) and the same value in `~/.config/barch/books.json`
+(`{"shelfmark": {"url": "http://100.100.0.10:8084", "key": "..."}}`, mode 600). Hardcover is searched and
+written through Shelfmark, so its token stays there. Search a book, Want to Read, and Hardcover Sync does
+the rest; what it cannot match waits in Requests, where a fixed query or Fix with Agent settles it.
 
 ## Install
 

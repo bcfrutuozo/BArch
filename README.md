@@ -27,7 +27,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | Folder | Goes to | What it is |
 |---|---|---|
 | `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, `scripts/lock.sh` (locks; starts and supervises the resident lock process); `settings.json` is what the Hyprland Settings app saved (below) |
-| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/`, `mixer/` and `music/` the other apps, `voice/` the voice control daemon, `ui/` the controls they all share (linked into each) |
+| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/`, `mixer/`, `music/` and `books/` the other apps, `voice/` the voice control daemon, `ui/` the controls they all share (linked into each) |
 | `foot/` | `~/.config/foot` | Terminal |
 | `ghostty/` | `~/.config/ghostty/config.ghostty` | Ghostty config as cmux reads it (it embeds libghostty): Ctrl+C copies a selection (^C without one), Ctrl+V pastes, Ctrl+Shift+C/V send the originals, like foot |
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
@@ -42,7 +42,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `backup/` | — | `barch backup`: what restic saves to the NAS (`include.txt`, `exclude.txt`), see Backup |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
 | `agent/` | — | Scheduled agent tasks (`tasks/`), the reactive rules (`rules.json`) and their daemon (`events.py`), the failure ignore list and the upstream watch list; used by `barch` |
-| `server/` | NAS | `music/`: the music pipeline (its own container, `barch-music`), downloads to `/music` in the library's style with a review queue (`barch music`, see Music); `unraid/`: the SMBus driver OpenRGB needs there, built per Unraid kernel (see NAS); `books/`: the book stack's Unraid templates (Shelfmark requests, Calibre-Web-Automated for ebooks, Audiobookshelf), its README; `video/`: what Radarr and Sonarr accept (2160p HEVC HDR, Recyclarr) and the pipeline that muxes the PT-BR dub from another release into each 4K file, subtitles shifted along (`barch video`, its README) |
+| `server/` | NAS | `music/`: the music pipeline (its own container, `barch-music`), downloads to `/music` in the library's style with a review queue (`barch music`, see Music); `unraid/`: the SMBus driver OpenRGB needs there, built per Unraid kernel (see NAS); `books/`: the book stack's Unraid templates (Shelfmark requests, Calibre-Web-Automated for ebooks, Audiobookshelf), its README; `video/`: what Radarr and Sonarr accept (2160p HEVC HDR, a 1080p profile for what never came out in 4K, Recyclarr) and the pipeline that muxes the PT-BR dub from another release into each movie and episode, subtitles shifted along (`barch video`, its README) |
 | `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, sixteen scenes in the colors of each palette), Limine theme (`limine-theme.py`) |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
 | `packages/` | — | Explicitly installed packages (`pacman.txt`, `aur.txt`, `aur-ignore.txt`) |
@@ -225,6 +225,21 @@ The main pieces:
   it could not settle, each with its candidates; Use one to see it next to the album's files track by
   track, Tag writes its ids, Add to MusicBrainz opens the release editor filled in from the files, Skip.
   **Lidarr & scan**: scan now, FLAC only, monitor / search album ids.
+- **Books** (`quickshell/books/`, "Books" in the launcher, `barch books browse [search|shelf|requests|rejected|downloads]`):
+  the book stack on the NAS (`server/books`: Shelfmark, Calibre-Web-Automated, Audiobookshelf) through
+  Shelfmark's API (`books.py` next to it, the same calls `barch books` makes; Shelfmark's admin key in
+  `~/.config/barch/books.json`, the Hardcover token stays in Shelfmark). **Search**: Hardcover books with
+  their covers, series and whether the library has them, and a **Want to Read** button that puts the book
+  on the Hardcover shelf Shelfmark's Hardcover Sync turns into requests and downloads (hourly, or **Sync
+  now**). **Want to Read**: the shelf with what became of each book (not synced yet, needs a decision,
+  downloading, in the library). **Requests**: the ones the automatic download found no strict match for
+  (a misspelt author, a subtitle no release carries), with the reason, a release search whose query you
+  fix (title and surname by default, every source or one), **Download** on the right release, **Accept** (a window with the
+  releases, the ones that fit the request first, the best marked: the automatic rule minus the author's
+  surname, EPUB first, scanned DjVu last; you pick the one to download), Reject or Back to pending, and **Fix with Agent** (`barch books fix <id> ["hint"]`, prompt `quickshell/books/request-fix.md`):
+  Claude finds out what the book really is, searches with better queries and downloads the right release
+  once, or says what is missing; it never rejects. **Rejected**: everything you said no to (an audiobook you skipped, say), with the same
+  release search: **Download** on one takes the request back and downloads it. **Downloads**: Shelfmark's queue with progress.
 - **Audio Mixer** (`quickshell/mixer/`, "Audio Mixer" in the launcher, `barch mixer`): PipeWire through
   `Quickshell.Services.Pipewire`. **Devices**: outputs and inputs with volume, mute, a peak
   meter, their format (`s32le 2ch 192000Hz`) and the default. **Apps**: every stream playing or
@@ -340,7 +355,11 @@ barch music seeds [days] [--live]|check   # seeding until ratio 3 / 90 days (mus
 barch music lidarr-queue|lidarr-queue-remove <ids>|all|lidarr-commands|lidarr-cancel <id>   # what Lidarr is downloading and running
 barch music lidarr-enforce         # the library's rule on every artist now: BArch profile, every album without a file monitored (hourly by itself)
 barch music lidarr-artist-set all|<ids> --new-albums all|new|none [--monitored on|off]   # what happens to an album that shows up later
-barch video status|list [state]|show <id>   # the PT-BR pipeline on the NAS (server/video): dub muxed into each 4K file
+barch books browse [search|shelf|requests|rejected|downloads]   # the Books app (see Books)
+barch books search <query> · shelf · want|unwant <id> · sync   # Hardcover through Shelfmark, Want to Read
+barch books requests [status] · show|releases <id> [--query Q] [--source S] · fulfil <id> --pick N · accept <id> · reject|reopen <id>
+barch books fix <id> ["hint"]         # Claude takes a request no source matched and downloads the right release
+barch video status|list [state]|show <id>   # the PT-BR pipeline on the NAS (server/video): dub muxed into each movie and episode (s<id>x<season>)
 barch video retry|skip|unskip <id> · use <id> <guid> · scan · digest · audit · install
 barch replay share [file] [--from 12 --to 40]
                                    # newest replay (or FILE) → <name>-share.mp4 for WhatsApp status:

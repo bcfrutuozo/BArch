@@ -72,7 +72,7 @@ reusing the widget's own functions.
   (`BArch.settings.apply`). To change an option for Bruno, prefer `barch hypr set <opt> <value>`
   over editing the Lua by hand when it is a one-off; hand-written files stay the base.
 - **Apps with their own window** (`quickshell/hypr`, `center`, `backup`, `packages`, `mixer`,
-  `music`, `palette`) run as `qs -p <dir>` and cannot import outside their folder: the shared controls live
+  `music`, `books`, `palette`) run as `qs -p <dir>` and cannot import outside their folder: the shared controls live
   in `quickshell/ui/` and are symlinked into each app (`ln -s ../ui/X.qml`), and every component
   must be listed in the app's `qmldir`. Closing the window quits the process; `barch hypr|center|
   packages|mixer`, `barch backup browse`, `barch music browse` start a new one. In their shell commands resolve the repo
@@ -89,14 +89,15 @@ reusing the widget's own functions.
   the whole library: change them only with `tests/test_style.py` passing. Never write to `/music`
   from here (the share is read only for this user); fixes go through scripts run in the container.
 - **Video** (`server/video/`): Recyclarr keeps Radarr/Sonarr's "BArch 4K" profile (2160p HEVC HDR,
-  one quality step, 250 MB/min cap, PT-BR preferred) and the PT-BR pipeline (`barch-video` container,
+  one quality step, 250 MB/min cap, PT-BR preferred) and the PT-BR pipeline (`barch-video` container, movies and series,
   `barch video`) muxes a dub from another release into each 4K file. Change `sync.py` only with
   `tests/` passing and a real pair checked (`python3 -m barch_video mux` in the container writes a
   `.barch.mkv` next to the reference, nothing replaced). Never delete movie files with Radarr's
   `moviefile/bulk` (6.4 leaves them on disk); one by one, and check the disk.
-- **Books** (`server/books/`): no Readarr. Shelfmark (requests) -> qBittorrent/slskd -> Calibre-Web-Automated's
+- **Books** (`server/books/`): no Readarr. Shelfmark (requests) -> qBittorrent/slskd/NZBGet -> Calibre-Web-Automated's
   ingest folder (ebooks, `/mnt/user/media/books`) or Audiobookshelf (`/mnt/user/media/audiobooks`). The Unraid
-  templates in `templates/` are the configuration; keys go in the Unraid form, never in them.
+  templates in `templates/` are the configuration; keys go in the Unraid form, never in them. The Books app
+  (`quickshell/books/`, `barch books`) talks only to Shelfmark's API (`books.py`, key in `~/.config/barch/books.json`).
 - **NAS kernel module** (`server/unraid/`): the `i2c-nct6793` build script for OpenRGB on the NAS
   (README "NAS"). It runs on the NAS, never here; the package is per Unraid kernel.
 - **Theme:** `quickshell/.config/quickshell/theme/palettes.json` holds the palettes (ten tones

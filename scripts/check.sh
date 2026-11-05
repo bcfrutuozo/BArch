@@ -66,6 +66,7 @@ if [ -d server/music ]; then
 fi
 
 step "Book templates (server/books)"
+python3 -m py_compile quickshell/.config/quickshell/books/books.py 2>/dev/null || problem "books: books.py does not compile"
 for f in server/books/templates/*.xml; do
   [ -e "$f" ] || continue
   python3 -c 'import sys, xml.dom.minidom as m; m.parse(sys.argv[1])' "$f" 2>/dev/null || problem "books: $f is not valid XML"

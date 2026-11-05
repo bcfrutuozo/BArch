@@ -33,6 +33,13 @@ One quality profile, **BArch 4K**, in both apps:
 - Language of the profile: **Any** (set once by hand; the guide's "Original" would refuse a release
   parsed as PT-BR only).
 
+A second profile, **BArch 1080p**, is for what never came out in 4K (The Walking Dead: no UHD
+release exists, the "2160p" ones are AVC upscales): Blu-ray and WEB 1080p as one step, HEVC preferred
+but AVC accepted (`BArch: not HEVC` -2500 against a minimum of -2500, more than any tier bonus, so an x264 encode is taken only
+when nothing better exists and is upgraded later), PT-BR +2000, the same unwanted formats refused, HDR
+not asked for, 10 to 120 MB/min (a good x265 season is ~40, under the apps' default minimum of ~50).
+It is picked by hand per movie or series; BArch 4K stays the default.
+
 Left out on purpose: the guide's **Bad Dual Groups** (alfaHD, GUEIRA, SiGLA, C76, XiQUEXiQUE…) are
 the Brazilian dual-audio groups. What a title cannot tell is checked on the files themselves.
 
@@ -98,7 +105,26 @@ barch video audit                 # the library against the rule, from the files
 python3 -m barch_video align <4k file> <donor> [ref_audio_no donor_audio_no]   # in the container: just measure
 ```
 
-Movies only for now; series (Sonarr) follow the same way once movies run.
+**Trim.** A file that already has PT-BR (it came dual, or was muxed) but carries more is remuxed with
+mkvmerge, nothing re-encoded: the video, the audio in the original language (first and default) and in
+Portuguese, the subtitles in `subtitles` (por, eng), chapters; every other audio language (a MULTi release's
+French, Italian, Spanish...) and subtitle goes, a dub that was the default stops being it. The copy is
+checked (same length, the tracks expected) before it takes the file's place, and Radarr/Sonarr rescan.
+Never on a file still hardlinked to a seeding torrent: the copy would be a second file until the seed is
+removed, so it waits (`trim_wait` in the job) and runs once the seed check deletes the torrent. Only
+Matroska files; a few per tick (`trims_per_tick`, 4); `"trim": false` in config.json turns it off.
+
+**Series** (Sonarr) work the same way, one job per season (`s<series id>x<season>`, specials left out):
+every episode file is probed, and the season waits for a dub while any lacks PT-BR. A donor is a dubbed
+release of that season: a whole-season pack, a range (`S11.E01-E20`) or one episode, ranked by how many
+missing episodes it covers (then dual, 1080p, surround, seeders), up to `max_season_donor_gb` (120). The
+series' name must open the title and the season follow it, so `Fear the Walking Dead` or `The Walking Dead
+Daryl Dixon` never stand in for `The Walking Dead`; packs of every season are refused. Once downloaded, its
+files are matched by `SxxEyy`/`6x03` and each episode is aligned, muxed and checked on its own; what the
+donor lacked or what did not fit is searched again with the next donor, an episode file without the
+original audio goes to review. Sonarr then rescans and is told the files' languages. Sonarr's key goes in
+`secrets-sonarr.json` next to `secrets.json` (install.sh writes it, group-readable by the container).
+Donors are torrents only (they go through qBittorrent), for movies too.
 
 ## Files
 
