@@ -123,6 +123,8 @@ Item {
                     subtitle: "all-time upload ÷ download, as qBittorrent counts it"
                     Chart {
                         Layout.fillWidth: true
+                        from: Store.axisFrom; to: Store.axisTo
+                        markT: Store.began; markLabel: Store.beganLabel
                         series: [{ label: "", color: Ui.accent, points: Store.samples.filter(s => s.ratio !== null).map(s => ({ t: s.t, v: s.ratio })) }]
                         format: v => v.toFixed(4)
                         padL: 62
@@ -134,6 +136,8 @@ Item {
                     subtitle: "average between samples"
                     Chart {
                         Layout.fillWidth: true
+                        from: Store.axisFrom; to: Store.axisTo
+                        markT: Store.began; markLabel: Store.beganLabel
                         series: [
                             { label: "upload", color: Ui.accent, points: Store.samples.map(s => ({ t: s.t, v: s.up_speed })) },
                             { label: "download", color: Ui.subtext, points: Store.samples.map(s => ({ t: s.t, v: s.dl_speed })) }
@@ -149,6 +153,7 @@ Item {
                     subtitle: Store.bytes(page.h.up || 0) + " " + Store.rangeLabel
                     Bars {
                         Layout.fillWidth: true
+                        markT: Store.began; markLabel: Store.beganLabel
                         points: (page.h.buckets || []).map(b => ({ t: b.t, v: b.up }))
                         kind: page.h.kind || "day"
                         tint: Ui.accent
@@ -162,6 +167,7 @@ Item {
                     subtitle: Store.bytes(page.h.down || 0) + " " + Store.rangeLabel
                     Bars {
                         Layout.fillWidth: true
+                        markT: Store.began; markLabel: Store.beganLabel
                         points: (page.h.buckets || []).map(b => ({ t: b.t, v: b.down }))
                         kind: page.h.kind || "day"
                         tint: Ui.subtext
@@ -175,6 +181,8 @@ Item {
                     subtitle: "in the client, and how many of them are seeding"
                     Chart {
                         Layout.fillWidth: true
+                        from: Store.axisFrom; to: Store.axisTo
+                        markT: Store.began; markLabel: Store.beganLabel
                         series: [
                             { label: "seeding", color: Ui.accent, points: Store.samples.map(s => ({ t: s.t, v: s.seeding })) },
                             { label: "all", color: Ui.subtext, points: Store.samples.map(s => ({ t: s.t, v: s.torrents })) }
@@ -190,6 +198,8 @@ Item {
                     subtitle: "the size of every torrent it holds"
                     Chart {
                         Layout.fillWidth: true
+                        from: Store.axisFrom; to: Store.axisTo
+                        markT: Store.began; markLabel: Store.beganLabel
                         series: [{ label: "", color: Ui.accent, points: Store.samples.map(s => ({ t: s.t, v: s.size })) }]
                         format: v => Store.bytes(v)
                         padL: 62

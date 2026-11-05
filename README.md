@@ -169,7 +169,8 @@ The main pieces:
   reports), **Automation** (the rules of `agent/rules.json` with a switch each, Run now, when
   each fired last, and the event log of `barch-events`, see Automation below), **History**
   (the machine over time from `metrics.db`: boot time, failures per week, what Claude cost,
-  temperatures, load, GPU power, network latency, disk, any metric, in 1 h to 30 d ranges),
+  temperatures, load, GPU power, network latency, disk, any metric, in 1 h to 30 d ranges; a chart spans
+  the whole range and its lines stop where the sampling stopped, a night asleep is a hole, not a straight line),
   **Snapshots** (the pre/post pairs of the Claude sessions: Status and Undo open a
   terminal with the `sudo snapper` command, copy it, resume that session) and **Journal** (this
   boot, by priority, unit and regex). Nothing is reimplemented: it runs `systemctl`, `journalctl`
@@ -257,17 +258,21 @@ The main pieces:
 - **Torrents** (`quickshell/torrents/`, "Torrents" in the launcher, `barch torrents browse [overview|sources|torrents]`):
   qBittorrent over time. The client only knows its totals as they are now, so a small service on the NAS
   (`server/torrents`, container `barch-torrents`, read only) samples it every five minutes; the app draws what
-  it kept, in one range for the whole window (24 h, 7 d, 30 d, 90 d, 1 y, all). **Overview**: the all-time
+  it kept, in one range for the whole window (24 h, 7 d, 30 d, 90 d, 1 y, all); every chart spans that whole
+  period, with a dashed line where tracking began when it is younger than the range. **Overview**: the all-time
   ratio and how far it moved in the range, upload and download in the range, the last day and week, how many
   torrents reached the seeding goal (ratio 3), and the charts: ratio, speed, uploaded and downloaded per hour /
   day / week / month, torrents, data in the client. **Sources**: where the traffic comes from, by indexer (the
-  one Lidarr, Radarr or Sonarr grabbed the torrent from, by their history), category or tracker (the first
+  one the torrent was grabbed from: by its hash in Lidarr's, Radarr's and Sonarr's history, else by title and
+  time in Prowlarr's, which covers Shelfmark's books too), category or tracker (the first
   announce host; public torrents carry many, so it says less): torrents, upload and download in the range and
   in total, lifetime ratio; a click shows that source's ratio and its upload and download over time.
   **Torrents**: every torrent the service has seen, the ones the seed policy already removed included (their
   numbers would be gone from qBittorrent), filtered by name or state and sorted by upload, ratio, size, age or
   seeding time; a click shows its facts and history. `qs ipc call app torrent <hash>` opens one. Traffic a
   torrent had before the service first saw it has no date: it counts in the totals, never in a day's bar.
+  The same three pages are a web page too, served by the service itself at `http://<nas>:8340/` (asks for
+  the `barch torrents` token once; works on the phone): it is what the **Seeding** card of the portal opens.
 - **Audio Mixer** (`quickshell/mixer/`, "Audio Mixer" in the launcher, `barch mixer`): PipeWire through
   `Quickshell.Services.Pipewire`. **Devices**: outputs and inputs with volume, mute, a peak
   meter, their format (`s32le 2ch 192000Hz`) and the default. **Apps**: every stream playing or

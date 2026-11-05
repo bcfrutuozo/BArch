@@ -187,6 +187,11 @@ class Store:
             return [r["hash"] for r in self.db.execute(
                 f"SELECT hash FROM torrents WHERE {column} = ''" + (" AND removed_at IS NULL" if live else ""))]
 
+    def unlabeled(self) -> list[dict]:
+        """The torrents without an indexer, with what a grab can be matched on."""
+        with self.lock:
+            return [dict(r) for r in self.db.execute("SELECT hash, name, added_on FROM torrents WHERE indexer = ''")]
+
     def label(self, column: str, values: dict[str, str]) -> int:
         """Set the tracker (or indexer) of these hashes where none is known yet."""
         assert column in ("tracker", "indexer")
@@ -212,9 +217,14 @@ class Store:
 
     # ------------------------------------------------------------------------------------ reading
     def since(self, now: float, span_s: int) -> int:
-        """Where a range begins: `span_s` ago, never before tracking began (0 = all of it)."""
+        """Where the data of a range begins: `span_s` ago, never before tracking began (0 = all of it)."""
         start = self.start or int(now)
         return max(start, int(now) - span_s) if span_s else start
+
+    def origin(self, now: float, span_s: int) -> int:
+        """Where the axis of a range begins: `span_s` ago even when tracking is younger than that, so a
+        chart shows the whole period asked for (0 = since tracking began)."""
+        return int(now) - span_s if span_s else (self.start or int(now))
 
     @staticmethod
     def _filter(by: str = "", key: str = "") -> tuple[str, tuple]:
@@ -270,7 +280,7 @@ class Store:
     def samples(self, now: float, span_s: int, points: int = 240) -> list[dict]:
         """The client over time, averaged down to about `points`: ratio, average speeds (from the
         all-time counters, so nothing between two samples is lost), torrents, size, free space."""
-        since = self.since(now, span_s)
+        since = self.since(now, span_s)        # the points are spent on the part of the range that has data
         step = max(1, int((now - since) / points))
         with self.lock:
             rows = self.db.execute(
@@ -293,9 +303,11 @@ class Store:
 
     def history(self, now: float, span_s: int, by: str = "", key: str = "", kind: str = "") -> dict:
         """Upload and download per bucket (hour, day, week or month by the span) of everything, one
-        category/indexer/tracker or one torrent (by="hash"), with the lifetime ratio at each bucket's end."""
+        category/indexer/tracker or one torrent (by="hash"), with the lifetime ratio at each bucket's end.
+        The buckets cover the whole span; the ones before tracking began are empty, their ratio unknown."""
         where, params = self._filter(by, key)
-        since = self.since(now, span_s)
+        since = self.origin(now, span_s)
+        start = self.start
         kind = kind or bucket_kind(now - since)
         first = bucket_start(kind, since)
         with self.lock:
@@ -319,10 +331,11 @@ class Store:
             up, down = per.get(t, (0, 0))
             tot_up += up
             tot_down += down
+            nxt = bucket_next(kind, t)
             buckets.append({"t": t, "up": up, "down": down, "total_up": tot_up, "total_down": tot_down,
-                            "ratio": ratio(tot_up, tot_down)})
-            t = bucket_next(kind, t)
-        return {"kind": kind, "since": since, "buckets": buckets,
+                            "ratio": ratio(tot_up, tot_down) if start and nxt > start else None})
+            t = nxt
+        return {"kind": kind, "from": since, "to": int(now), "start": start, "buckets": buckets,
                 "up": sum(b["up"] for b in buckets), "down": sum(b["down"] for b in buckets)}
 
     def groups(self, now: float, span_s: int, by: str) -> list[dict]:

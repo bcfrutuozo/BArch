@@ -4,10 +4,12 @@
 
 Every `poll_s` (5 min, on the clock) it reads qBittorrent's counters and writes them down (store.py):
 the client's all-time totals, and what every torrent uploaded and downloaded since the last sample.
-A new torrent gets its tracker (first announce host) and, from Lidarr's, Radarr's and Sonarr's
-history, the indexer it was grabbed from. Read only: nothing is ever changed in qBittorrent.
+A new torrent gets its tracker (first announce host) and the indexer it was grabbed from: by its hash
+from Lidarr's, Radarr's and Sonarr's history, else by title and time from Prowlarr's, which every grab
+goes through (Shelfmark's books too). Read only: nothing is ever changed in qBittorrent.
 
-HTTP API (port 8340, header X-Barch-Token or ?token=); `range` is 24h, 7d, 30d, 12w, 1y or all:
+HTTP (port 8340). GET / is the Torrents app as a page (web.html next to this file: static, it asks for the
+token itself); the API wants the header X-Barch-Token or ?token=; `range` is 24h, 7d, 30d, 12w, 1y or all:
     GET  /api/status                          the sampler: last sample, how many, errors
     GET  /api/overview?range=30d              totals now, what moved in the range, the last day/week/month
     GET  /api/samples?range=7d                the client over time: ratio, speeds, torrents, size, free space
@@ -30,12 +32,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .integrations import Arr, QBit, first_tracker
+from .integrations import Arr, Prowlarr, QBit, first_tracker, match_grabs
 from .store import Store, parse_range
 
 DEFAULTS = {"db": "/config/data/torrents.db", "port": 8340, "poll_s": 300, "goal_ratio": 3.0, "keep_hours_days": 60,
             "qbittorrent": {"url": "http://qbittorrent:8080"}, "lidarr": {"url": "http://lidarr:8686"},
-            "radarr": {"url": "http://radarr:7878"}, "sonarr": {"url": "http://sonarr:8989"}}
+            "radarr": {"url": "http://radarr:7878"}, "sonarr": {"url": "http://sonarr:8989"},
+            "prowlarr": {"url": "http://prowlarr:9696"}}
 ARRS = ("lidarr", "radarr", "sonarr")
 
 
@@ -59,12 +62,13 @@ class Sampler:
         self.cfg, self.store = cfg, store
         self.qbit = QBit(cfg["qbittorrent"])
         self.arrs = [a for a in (Arr(n, cfg.get(n) or {}) for n in ARRS) if a.ok]
+        self.prowlarr = Prowlarr(cfg.get("prowlarr") or {})
         self.wake = threading.Event()
         self.error = ""               # why the last sample failed ("" = it worked)
         self.last = {}                # what the last sample moved
         self.version = ""
         self.asked: set[str] = set()  # hashes the *arr history was already asked about (since this start)
-        self.since: dict[str, str] = {}   # per *arr: its history was read up to here
+        self.since: dict[str, str] = {}   # per *arr (and Prowlarr): its history was read up to here
         self.compacted = ""
 
     def sample(self) -> dict:
@@ -82,7 +86,7 @@ class Sampler:
                 print(f"[torrents] trackers of {h}: {e}", flush=True)
                 break
         new = set(self.store.without("indexer", live=False)) - self.asked
-        if not new or not self.arrs:
+        if not new or not self.sources:
             return
         asked_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 86400))
         for arr in self.arrs:
@@ -95,7 +99,24 @@ class Sampler:
             except Exception as e:  # noqa: BLE001
                 print(f"[torrents] {arr.name} history: {e}", flush=True)
                 return                 # asked again at the next sample
+        if self.prowlarr.ok:
+            try:
+                left = self.store.unlabeled()      # what no *arr grabbed, or whose *arr has no key here
+                if left:
+                    grabs = self.prowlarr.grabs(self.since.get("prowlarr", "2000-01-01T00:00:00Z"))
+                    n = self.store.label("indexer", match_grabs(left, grabs))
+                    if n:
+                        print(f"[torrents] prowlarr: indexer of {n} torrents (by title and time)", flush=True)
+                self.since["prowlarr"] = asked_at
+            except Exception as e:  # noqa: BLE001
+                print(f"[torrents] prowlarr history: {e}", flush=True)
+                return
         self.asked |= new
+
+    @property
+    def sources(self) -> list[str]:
+        """Where indexers come from, by name."""
+        return [a.name for a in self.arrs] + (["prowlarr"] if self.prowlarr.ok else [])
 
     def loop(self) -> None:
         poll = max(30, int(self.cfg["poll_s"]))
@@ -128,10 +149,10 @@ def make_handler(s: Sampler, token: str):
         def log_message(self, *a):
             pass
 
-        def _send(self, code: int, obj) -> None:
-            body = json.dumps(obj, ensure_ascii=False).encode()
+        def _send(self, code: int, obj=None, raw: bytes | None = None, ctype: str = "application/json") -> None:
+            body = raw if raw is not None else json.dumps(obj, ensure_ascii=False).encode()
             self.send_response(code)
-            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -147,6 +168,10 @@ def make_handler(s: Sampler, token: str):
             u = urlparse(self.path)
             q = parse_qs(u.query)
             parts = [x for x in u.path.split("/") if x]
+            if not parts:                      # the app as a page: static, it asks for the token itself
+                return self._send(200, raw=Path(__file__).with_name("web.html").read_bytes(), ctype="text/html; charset=utf-8")
+            if parts == ["favicon.ico"]:
+                return self._send(404, {"ok": False, "error": "no icon"})
             if not self._auth(q):
                 return
             arg = lambda k, d="": (q.get(k) or [d])[0]  # noqa: E731
@@ -156,13 +181,16 @@ def make_handler(s: Sampler, token: str):
                 if parts == ["api", "status"]:
                     return self._send(200, {"ok": True, **store.status(), "start": store.start, "now": int(now),
                                             "poll_s": int(cfg["poll_s"]), "error": s.error, "moved": s.last,
-                                            "qbittorrent": s.version, "indexers_from": [a.name for a in s.arrs],
-                                            "indexers_missing": [n for n in ARRS if n not in {a.name for a in s.arrs}],
+                                            "qbittorrent": s.version, "indexers_from": s.sources,
+                                            # with Prowlarr every grab is covered; without it, only these apps' are not
+                                            "indexers_missing": [] if s.prowlarr.ok else [n for n in ARRS if n not in s.sources],
                                             "db_bytes": os.path.getsize(cfg["db"]) if os.path.exists(cfg["db"]) else 0})
                 if parts == ["api", "overview"]:
                     return self._send(200, {"ok": True, **store.overview(now, span, float(cfg["goal_ratio"]))})
                 if parts == ["api", "samples"]:
-                    return self._send(200, {"ok": True, "samples": store.samples(now, span, int(arg("points", "240")))})
+                    return self._send(200, {"ok": True, "from": store.origin(now, span), "to": int(now),
+                                            "start": store.start,
+                                            "samples": store.samples(now, span, int(arg("points", "240")))})
                 if parts == ["api", "history"]:
                     return self._send(200, {"ok": True, **store.history(now, span, arg("by"), arg("key"), arg("bucket"))})
                 if parts == ["api", "groups"]:
@@ -206,7 +234,7 @@ def serve(cfg_path: str) -> None:
     threading.Thread(target=s.loop, daemon=True).start()
     srv = ThreadingHTTPServer(("0.0.0.0", int(cfg["port"])), make_handler(s, cfg.get("token", "")))
     print(f"torrents: sampling {cfg['qbittorrent']['url']} every {cfg['poll_s']} s, listening on {cfg['port']}"
-          f" (indexers from {', '.join(a.name for a in s.arrs) or 'nowhere: no *arr key'})", flush=True)
+          f" (indexers from {', '.join(s.sources) or 'nowhere: no API key'})", flush=True)
     srv.serve_forever()
 
 

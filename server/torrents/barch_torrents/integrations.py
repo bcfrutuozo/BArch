@@ -1,9 +1,11 @@
-"""qBittorrent and the *arr history: the few read-only calls the torrent statistics need, standard
-library only (same shape as server/music's and server/video's)."""
+"""qBittorrent, the *arr history and Prowlarr's: the few read-only calls the torrent statistics need,
+standard library only (same shape as server/music's and server/video's)."""
 from __future__ import annotations
 
 import http.cookiejar
 import json
+import re
+from datetime import datetime
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -115,4 +117,72 @@ class Arr:
             name = ((r.get("data") or {}).get("indexer") or "").removesuffix(" (Prowlarr)").strip()
             if len(h) in (40, 64) and name:        # a torrent's info hash (a Usenet id is shorter)
                 out[h] = name
+        return out
+
+
+def norm_title(s: str) -> str:
+    """A release title or torrent name as words only: "Bon.Jovi-Best_Ballads [FLAC]" -> "bon jovi best ballads flac"."""
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).split())
+
+
+def match_grabs(torrents: list[dict], grabs: list[dict], exact_s: int = 5, near_s: int = 120) -> dict[str, str]:
+    """{hash: indexer} for the torrents ({hash, name, added_on}) a Prowlarr grab ({t, title, indexer})
+    explains. Prowlarr's history has no info hash, so a torrent is tied to a grab by what they share:
+    the same title (as words), the nearest in time when it was grabbed more than once; or, when the name
+    inside the torrent is not the indexer's title (or still the hash of a magnet), the moment: the client
+    gets the torrent the second it is grabbed. Among the grabs within `near_s` the one whose words overlap
+    most wins; it needs `exact_s` or some overlap, and two indexers equally near with nothing to tell them
+    apart is no answer."""
+    by_title: dict[str, list[dict]] = {}
+    for g in grabs:
+        g["_n"] = norm_title(g["title"])
+        by_title.setdefault(g["_n"], []).append(g)
+    out = {}
+    for t in torrents:
+        name, added = norm_title(t.get("name", "")), int(t.get("added_on") or 0)
+        same = by_title.get(name) if name else None
+        if same:
+            out[t["hash"]] = min(same, key=lambda g: abs(g["t"] - added))["indexer"]
+            continue
+        words = set(name.split())
+        scored = []
+        for g in grabs:
+            dt = abs(g["t"] - added)
+            if dt <= near_s:
+                gw = set(g["_n"].split())
+                scored.append((len(words & gw) / max(1, len(words | gw)), -dt, g["indexer"]))
+        if not scored:
+            continue
+        scored.sort(reverse=True)
+        overlap, dt, indexer = scored[0]
+        tied = [x for x in scored[1:] if x[:2] == (overlap, dt) and x[2] != indexer]
+        if (-dt <= exact_s or overlap >= 0.3) and not tied:
+            out[t["hash"]] = indexer
+    return out
+
+
+class Prowlarr:
+    """Every grab of every app goes through Prowlarr (Lidarr, Radarr, Sonarr, Shelfmark): its history is
+    the one place that knows the indexer of a torrent no *arr grabbed, by title and time (match_grabs)."""
+
+    def __init__(self, cfg: dict):
+        self.name = "prowlarr"
+        self.h = Http(cfg.get("url", ""), {"X-Api-Key": cfg.get("api_key", "")})
+        self.ok = bool(cfg.get("url") and cfg.get("api_key"))
+
+    def grabs(self, since: str = "2000-01-01T00:00:00Z") -> list[dict]:
+        """[{t, title, indexer}] of the releases grabbed since `since` (eventType 1 = releaseGrabbed)."""
+        # torrent indexers only: a Usenet grab of the same second is not where a torrent came from
+        names = {i["id"]: i.get("name", "") for i in self.h.call("GET", "/api/v1/indexer") or []
+                 if i.get("protocol", "torrent") == "torrent"}
+        rows = self.h.call("GET", "/api/v1/history/since", params={"date": since, "eventType": 1}) or []
+        out = []
+        for r in rows if isinstance(rows, list) else []:
+            title, name = (r.get("data") or {}).get("grabTitle") or "", names.get(r.get("indexerId"), "")
+            try:
+                t = datetime.fromisoformat((r.get("date") or "").replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                continue
+            if name:
+                out.append({"t": int(t), "title": title, "indexer": name})
         return out

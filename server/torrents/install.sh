@@ -4,8 +4,9 @@
 #   app        -> appdata/barch-torrents/app/barch_torrents   (replaced on every run, tests first)
 #   settings   -> appdata/barch-torrents/config.json          (only when missing)
 #   secrets    -> appdata/barch-torrents/secrets.json         (only when missing: a fresh API token)
-#   *arr keys  -> appdata/barch-torrents/secrets-arr.json     (every run: Radarr's and Sonarr's from
-#                 ~/.config/barch/video.json, Lidarr's from .lidarr.key in ~/.config/barch/torrents.json)
+#   API keys   -> appdata/barch-torrents/secrets-arr.json     (every run: Prowlarr's from its config.xml on
+#                 the share, Radarr's and Sonarr's from ~/.config/barch/video.json, Lidarr's from .lidarr.key
+#                 in ~/.config/barch/torrents.json when it is there: Prowlarr's history covers it anyway)
 #   s6 scripts -> staged in the temporary share when they change; root installs them
 #
 # The database (appdata/barch-torrents/data/torrents.db) is never touched from here. Nothing runs on
@@ -54,17 +55,21 @@ fi
 # (mode 600) and cannot be edited from here; group users (100, the container's PGID) may read this one
 key() { jq -r "$1 // \"\"" "$2" 2>/dev/null || true; }
 lk=$(key .lidarr.key "$conf"); rk=$(key .radarr.key "$video"); sk=$(key .sonarr.key "$video")
-if (umask 027; jq -n --arg l "$lk" --arg r "$rk" --arg s "$sk" \
-     '{lidarr: {api_key: $l}, radarr: {api_key: $r}, sonarr: {api_key: $s}} | with_entries(select(.value.api_key != ""))' \
-     > "$dst/secrets-arr.json") 2>/dev/null; then
-  echo "torrents: secrets-arr.json written (indexers from:$([ -n "$lk" ] && echo " lidarr")$([ -n "$rk" ] && echo " radarr")$([ -n "$sk" ] && echo " sonarr"))"
+pk=$(grep -oP '(?<=<ApiKey>)[^<]+' "$APPDATA/prowlarr/config.xml" 2>/dev/null || true)
+if (umask 027; jq -n --arg l "$lk" --arg r "$rk" --arg s "$sk" --arg p "$pk" \
+     '{lidarr: {api_key: $l}, radarr: {api_key: $r}, sonarr: {api_key: $s}, prowlarr: {api_key: $p}}
+      | with_entries(select(.value.api_key != ""))' > "$dst/secrets-arr.json") 2>/dev/null; then
+  echo "torrents: secrets-arr.json written (indexers from:$([ -n "$lk" ] && echo " lidarr")$([ -n "$rk" ] && echo " radarr")$([ -n "$sk" ] && echo " sonarr")$([ -n "$pk" ] && echo " prowlarr"))"
 else
   echo "torrents: secrets-arr.json could not be written from here"
 fi
-[ -n "$lk" ] || echo "torrents: no Lidarr key: put it in $conf as .lidarr.key (Lidarr > Settings > General) and run this again,"\
-  "or the music torrents have no indexer"
+# Prowlarr sees every grab (Lidarr's and Shelfmark's too); without its key only the *arr with a key count
+[ -n "$pk" ] || [ -n "$lk" ] || echo "torrents: no Prowlarr key ($APPDATA/prowlarr/config.xml not readable) and no Lidarr key"\
+  "(.lidarr.key in $conf): the music torrents will have no indexer"
 
-# the service reloads only when it restarts: ask it to (s6 brings it back with the new code)
+# the service reloads only when it restarts: ask it to (s6 brings it back with the new code); once the
+# container owns secrets.json the token is only readable in this desktop's copy
+{ [ -n "$token" ] && [ "$token" != null ]; } || token=$(key .token "$conf")
 if [ -n "$token" ] && [ "$token" != null ] && curl -sf --max-time 10 -X POST -H "X-Barch-Token: $token" \
      "$NAS_URL/api/restart" >/dev/null 2>&1; then
   echo "torrents: restarted with the new code"
@@ -95,9 +100,10 @@ cat <<'EOT'
 Unraid, once:
   barch-torrents (Docker > Add Container):
     Repository  ghcr.io/linuxserver/baseimage-alpine:3.23-0eccc513-ls2
-    Network     frutuozoproxy                                (qbittorrent, lidarr, radarr, sonarr by name)
+    Network     frutuozoproxy                                (qbittorrent, prowlarr, lidarr, radarr, sonarr by name)
     Variables   PUID=99  PGID=100  TZ=America/Sao_Paulo
-    Port        8340 -> 8340
+    Port        8340 -> 8340                                 (Add another Path, Port…: Port, container 8340, host 8340, TCP;
+                                                             without it the service samples but nothing reaches its API)
     Path  /mnt/user/appdata/barch-torrents                          -> /config
     Path  /mnt/user/appdata/barch-torrents-init/custom-cont-init.d -> /custom-cont-init.d   (read only)
     Path  /mnt/user/appdata/barch-torrents-init/custom-services.d  -> /custom-services.d    (read only)

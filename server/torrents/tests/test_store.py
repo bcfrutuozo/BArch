@@ -8,7 +8,7 @@ os.environ["TZ"] = "America/Sao_Paulo"
 time.tzset()
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from barch_torrents.integrations import first_tracker, tracker_site  # noqa: E402
+from barch_torrents.integrations import first_tracker, match_grabs, tracker_site  # noqa: E402
 from barch_torrents.store import Store, bucket_kind, bucket_next, bucket_start, parse_range  # noqa: E402
 
 T0 = 1793847600          # 2026-11-05 00:00 in São Paulo
@@ -93,6 +93,18 @@ class Record(unittest.TestCase):
         h = self.s.history(T0 + 2 * 86400 + 10, 0, kind="day")
         self.assertEqual([(b["up"], b["ratio"]) for b in h["buckets"]], [(50, 0.5), (100, 1.5), (0, 1.5)])
 
+    def test_a_range_longer_than_the_tracking_covers_all_of_it(self):
+        self.s.record(T0, server(ul=1, dl=10), {"a": tor(up=0, down=100)})
+        self.s.record(T0 + 3600, server(ul=2, dl=10), {"a": tor(up=50, down=100)})
+        now = T0 + 7200
+        h = self.s.history(now, 7 * 86400)
+        self.assertEqual((h["kind"], h["from"], len(h["buckets"])), ("day", now - 7 * 86400, 8))
+        self.assertEqual([b["up"] for b in h["buckets"]], [0] * 7 + [50])
+        self.assertEqual([b["ratio"] for b in h["buckets"]], [None] * 7 + [0.5])      # unknown before tracking began
+        self.assertEqual(self.s.history(now, 0)["from"], T0)                          # "all" starts where the data does
+        self.assertEqual([x["t"] for x in self.s.samples(now, 30 * 86400)], [T0, T0 + 3600])
+        self.assertEqual(self.s.overview(now, 7 * 86400)["range"]["up"], 50)
+
     def test_compact_merges_old_hours_into_days_without_changing_totals(self):
         self.s.record(T0, server(), {"a": tor(up=0, down=0)})
         for i in range(1, 30):
@@ -139,6 +151,33 @@ class Helpers(unittest.TestCase):
                                         {"url": "udp://tracker.opentrackr.org:1337/announce", "tier": 1},
                                         {"url": "http://bt02.nnm-club.cc:2710/0123abc/announce", "tier": 0}]), "nnm-club.cc")
         self.assertEqual(first_tracker([{"url": "** [PeX] **", "tier": -1}]), "")
+
+
+class Grabs(unittest.TestCase):
+    G = [{"t": 1000, "title": "Bon.Jovi-Best.Ballads.1997.[FLAC]", "indexer": "NoNaMe Club"},
+         {"t": 5000, "title": "Bon Jovi - Best Ballads 1997 FLAC", "indexer": "RuTracker"},
+         {"t": 9000, "title": "David Arkenstone - Citizen of the World (1999) FLAC lossless image cue", "indexer": "Knaben"},
+         {"t": 9040, "title": "Deep Purple - Colour Collection (2007) FLAC", "indexer": "1337x"}]
+
+    def match(self, name, added):
+        return match_grabs([{"hash": "h", "name": name, "added_on": added}], [dict(g) for g in self.G]).get("h")
+
+    def test_same_title_nearest_in_time(self):
+        self.assertEqual(self.match("Bon Jovi - Best Ballads 1997 [FLAC]", 5003), "RuTracker")
+        self.assertEqual(self.match("bon_jovi best ballads 1997 flac", 900), "NoNaMe Club")
+        self.assertEqual(self.match("Bon Jovi - Best Ballads 1997 [FLAC]", 10 ** 6), "RuTracker")    # days later: still it
+
+    def test_other_name_goes_by_the_moment(self):
+        self.assertEqual(self.match("David Arkenstone - 1999 - Citizen of the World", 9000), "Knaben")
+        self.assertEqual(self.match("7d09775810b9b15cdea67742b0d0a6d2bbef0c44", 9041), "1337x")          # a magnet: no name yet
+        self.assertEqual(self.match("David Arkenstone - 1999 - Citizen of the World", 9030), "Knaben")   # words decide in a burst
+        self.assertEqual(self.match("Deep Purple Colour Collection", 9010), "1337x")
+
+    def test_no_answer_when_nothing_ties_them(self):
+        self.assertIsNone(self.match("Lord of the Rings Unabridged", 9020))       # near two grabs, words of neither
+        self.assertIsNone(self.match("Lord of the Rings Unabridged", 20000))      # no grab around
+        self.assertIsNone(self.match("7d09775810b9b15cdea67742b0d0a6d2bbef0c44", 9020))   # as far from one as from the other
+        self.assertEqual(match_grabs([], self.G), {})
 
 
 if __name__ == "__main__":
