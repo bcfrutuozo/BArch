@@ -100,6 +100,77 @@ def is_disc_folder(name: str) -> bool:
     return bool(_DISC_ONLY.fullmatch(name) or _DISC_AT_END.search(name))
 
 
+def _disc_tags(f: Path) -> tuple[str, str, int, int]:
+    """(album artist, album, disc number, total discs) from a file's tags; empty strings / 0 when missing."""
+    try:
+        import mutagen
+        m = mutagen.File(f, easy=True)
+        t = dict(m.tags or {}) if m is not None else {}
+    except Exception:  # noqa: BLE001
+        return "", "", 0, 0
+    first = lambda *ks: next((str(t[k][0]).strip() for k in ks if t.get(k) and str(t[k][0]).strip()), "")
+    def num(s: str) -> tuple[int, int]:
+        m = re.match(r"\s*(\d+)\s*(?:/\s*(\d+))?", s or "")
+        return (int(m.group(1)), int(m.group(2) or 0)) if m else (0, 0)
+    disc, total = num(first("discnumber"))
+    total = total or num(first("disctotal", "totaldiscs"))[0]
+    return first("albumartist", "artist"), first("album"), disc, total
+
+
+_ALBUM_DISC = re.compile(r"[\s\-_,:(\[]*\b(?:cd|disc|disk)\s*#?\s*(\d+)\s*[)\]]?\s*$", re.I)
+
+
+def split_album_disc(album: str) -> tuple[str, int]:
+    """"Crossroads (Disc 1)", "A Fire In The Sky : ... CD2", "Red [Disc 1]" -> the album without the
+    disc, and the disc number (0 when the title names none)."""
+    m = _ALBUM_DISC.search(album or "")
+    if not m or not album[:m.start()].strip():
+        return album, 0
+    return album[:m.start()].strip(), int(m.group(1))
+
+
+def regroup_discs(box: Path, settle: float, now: float | None = None, wait_missing: float = 6 * 3600) -> list[str]:
+    """slskd moves a finished file into downloads/<the folder it was in>, so the discs of a double album
+    land in loose folders ("CD 02", "Disc 1", "CD2 - Come Hell or High Water") and two albums' "CD 02"
+    mix. Once an album's own files sat still for `settle` seconds, its audio is put back together by
+    its tags as <box>/<Artist> - <Album>/CD<n>/, which album_roots() reads as one album. An album whose
+    tags say it has more discs than arrived waits up to `wait_missing` for the rest. Files without an
+    album tag stay where they are. Returns the album folders made or completed."""
+    now = now or time.time()
+    disc_dirs = [d for d in sorted(box.iterdir()) if d.is_dir() and is_disc_folder(d.name)] if box.is_dir() else []
+    files = [f for d in disc_dirs for f in d.rglob("*") if f.is_file() and f.suffix.lower() in audio.LOSSLESS]
+    if not files:
+        return []
+    groups: dict[tuple[str, str], list[tuple[Path, int, int]]] = {}
+    for f in files:
+        artist, album, disc, total = _disc_tags(f)
+        album, named = split_album_disc(album)      # one disc per ALBUM tag: they are the same album
+        disc = disc or named
+        if album:
+            groups.setdefault((artist, album), []).append((f, disc, total))
+    made = []
+    for (artist, album), fs in groups.items():
+        total = max(t for _, _, t in fs)
+        discs = {d for _, d, _ in fs if d}
+        quiet = now - max(f.stat().st_mtime for f, _, _ in fs)
+        if quiet < settle:
+            continue                                   # this album is still arriving (slskd writes others meanwhile)
+        if total and len(discs) < total and quiet < wait_missing:
+            continue                                   # the other discs are probably still downloading
+        name = style.folder_name(f"{artist} - {album}" if artist else album)
+        dest = box / name
+        for f, disc, _ in fs:
+            sub = dest / f"CD{disc or 1}"
+            sub.mkdir(parents=True, exist_ok=True)
+            if not (sub / f.name).exists():
+                f.rename(sub / f.name)
+        made.append(name)
+    for d in disc_dirs:                                # what is left of a disc folder without audio goes
+        if d.exists() and not any(p.is_file() and p.suffix.lower() in audio.LOSSLESS for p in d.rglob("*")):
+            shutil.rmtree(d, ignore_errors=True)
+    return made
+
+
 def other_album_in(target: Path, group_mbid: str) -> str:
     """The MusicBrainz release group of the album already in `target`, when it is not `group_mbid`:
     a library with "Greatest Hits" (1998) must not receive the tracks of the other seven albums
@@ -200,15 +271,22 @@ class Pipeline:
         # a folder that already has jobs is never taken again, marker or not: the container user cannot
         # write the marker into slskd's folders, and every scan made the same albums anew (2026-11-04)
         taken = {j.get("inbox") for j in self.store.all() if j.get("kind") == "inbox" and not j.get("superseded")}
-        for box, settle in self.inboxes:
+        for i, (box, settle) in enumerate(self.inboxes):
             if not box.is_dir():
                 continue
+            if i:                                              # Soulseek: loose disc folders back into albums
+                try:
+                    for name in regroup_discs(box, settle):
+                        print(f"[inbox] {box}: discs regrouped into {name}", flush=True)
+                except OSError as e:
+                    print(f"regroup {box}: {e}", flush=True)
             for d in sorted(box.iterdir()):
                 if not d.is_dir() or d.name.startswith(".") or (d / ".pipeline").exists() or str(d) in taken:
                     continue
                 try:
-                    if time.time() - max((p.stat().st_mtime for p in d.rglob("*")), default=0) < settle:
-                        continue                               # still being copied / downloaded
+                    age = time.time() - max((p.stat().st_mtime for p in d.rglob("*")), default=0)
+                    if age < settle or (i and is_disc_folder(d.name) and age < 86400):
+                        continue                               # still arriving; a loose disc waits for regroup_discs
                     n += len(self.from_inbox(d))
                 except OSError as e:
                     print(f"scan {d}: {e}", flush=True)
@@ -232,7 +310,10 @@ class Pipeline:
                 self.store.save(j)
             # the same album queued twice (an inbox folder taken again by an older version): one is enough
             key = (j.get("inbox"), j.get("source")) if j.get("kind") == "inbox" and not j.get("superseded") else None
-            if key and j["state"] == "queued" and key in seen:
+            if key and j["state"] == "queued" and self.disposable(j) and is_disc_folder(Path(j["inbox"]).name):
+                shutil.rmtree(self.store.path(j["id"]), ignore_errors=True)   # a loose disc: regroup_discs has it
+                print(f"[{j['id']}] loose disc folder, left to regroup_discs", flush=True)
+            elif key and j["state"] == "queued" and key in seen:
                 shutil.rmtree(self.store.path(j["id"]), ignore_errors=True)
                 print(f"[{j['id']}] duplicate of a queued job, removed", flush=True)
             elif key:
@@ -292,6 +373,17 @@ class Pipeline:
                 n += 1
         if n:
             print(f"[work] removed the working copy of {n} finished job(s)", flush=True)
+        # an extra inbox (Soulseek) folder whose albums are all settled but still on disk (its delete failed:
+        # slskd wrote as root until 2026-11-04) goes now
+        left = {}
+        for j in self.store.all():
+            if self.disposable({**j, "chosen": "", "overrides": None}) and not j.get("superseded"):
+                left.setdefault(j["inbox"], []).append(j)
+        for folder, g in left.items():
+            if Path(folder).exists() and all(j["state"] in ("done", "rejected") for j in g) and len(g) >= g[0].get("siblings", 1):
+                shutil.rmtree(folder, ignore_errors=True)
+                if not Path(folder).exists():
+                    print(f"[work] {folder}: settled, removed", flush=True)
         return n
 
     def seed_check(self, force: bool = False) -> list[str]:
