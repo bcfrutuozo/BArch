@@ -142,6 +142,8 @@ Desktop (through the bar):
   books accept <id> [--query Q]   download the best release carrying the title (no author check)
   books reject|reopen|cancel <id> · downloads · install
   books fix <id> ["hint"]     Claude takes a request no source matched and downloads the right release
+  video browse [page]         the Video app: search and add, movies and series with the checklist of each
+                              file, releases by hand, downloads, the PT-BR dub (search|movies|series|downloads|dub)
   video status|list [state]   the video pipeline on the NAS (server/video): the PT-BR dub muxed into
                               each 4K file Radarr grabs (states: search, waiting, downloading,
                               aligning, review, done, skipped)
@@ -1075,6 +1077,7 @@ cmd_video() {
   (($#)) && shift
   need curl; need jq
   case $sub in
+    browse) app_open video BARCH_VIDEO_PAGE "${1:-}"; return ;;
     status)
       video_api GET /api/status
       show "$OUT" '"video pipeline: " + ((.counts | to_entries | map(select(.value > 0) | "\(.value) \(.key)") | join(", ")) | if . == "" then "no movies yet" else . end) + (if .doing != "" then " · \(.doing)" else "" end) + (if ((.missing // []) | length) > 0 then "\nMISSING in the container: " + (.missing | join(", ")) + " (custom-cont-init.d not run?)" else "" end)' ;;
