@@ -6,7 +6,8 @@ linuxserver Alpine base image plus the tools it needs), so nothing depends on Un
 
 ```
 qBittorrent (category lidarr or music) ─┐                       ┌─> /music/Artist/Album/D.TT - Title.flac + cover.jpg
-/data/music-inbox/<folder> (manual) ────┴─> collect ─> match ─> tags ─> cover ─> checks ─┤   Lidarr rescan + unmonitor, Plex scan,
+/data/music-inbox/<folder> (manual) ────┤
+/data/slskd/completed (Soulseek) ──────┴─> collect ─> match ─> tags ─> cover ─> checks ─┤   Lidarr rescan + unmonitor, Plex scan,
                                                                                          │   torrent deleted, Telegram ✅
                                                                                          └─> review (barch music, Telegram ⚠️)
 ```
@@ -15,7 +16,11 @@ qBittorrent (category lidarr or music) ─┐                       ┌─> /mus
 
 1. **Intake.** Every 2 min (or right away via `/done`) it takes the completed torrents of the
    categories in `config.json` that do not carry the `pipeline` tag yet, and the folders in
-   `/data/music-inbox` that stopped changing two minutes ago. A torrent with several albums (a
+   `/data/music-inbox` that stopped changing two minutes ago, and the albums Soulseek downloaded
+   (`/data/slskd/completed`, slskd fed by Soularr from Lidarr's wanted list) once they sat still for
+   30 minutes (`extra_inboxes` in `config.json`); like any inbox folder, it is removed once its albums
+   are in the library or rejected, so Soulseek's downloads no longer pile up in the downloads cache
+   (69 GB on 2026-11-04). A torrent with several albums (a
    discography) becomes one job per album; disc folders (`CD1`, `Disc 2 - Title`, `Album, disc 2`,
    `Album (CD 3)`: `pipeline.is_disc_folder`) stay one album. `barch music rescan <id>` takes a
    download in again from scratch when an older version split it wrong (the old jobs are

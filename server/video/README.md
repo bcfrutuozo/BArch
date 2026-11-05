@@ -116,7 +116,11 @@ default stops being it, chapters stay. The mux picks the donor's subtitles by th
 done are checked again when these rules change (`TRIM_VERSION` in sync.py). The copy is
 checked (same length, the tracks expected) before it takes the file's place, and Radarr/Sonarr rescan.
 Never on a file still hardlinked to a seeding torrent: the copy would be a second file until the seed is
-removed, so it waits (`trim_wait` in the job) and runs once the seed check deletes the torrent. Only
+removed, so it waits (`trim_wait` in the job) and runs once the seed check deletes the torrent. After every replace (trim or mux) Radarr/Sonarr rescan and must still
+have the file: on 2026-11-05 Radarr saw the path missing during a replace, dropped the record and re-added
+it without linking the movie (hasFile false, so it would have downloaded the film again). Then it is
+rescanned again and imported in place (manual import, what fixed it by hand); still not linked, the job
+goes to review with a Telegram message. Only
 Matroska files; a few per tick (`trims_per_tick`, 4); `"trim": false` in config.json turns it off.
 
 **Series** (Sonarr) work the same way, one job per season (`s<series id>x<season>`, specials left out):

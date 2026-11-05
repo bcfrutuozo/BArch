@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import http.cookiejar
 import json
+import time
 import urllib.parse
 import urllib.request
 
@@ -50,6 +51,25 @@ class Arr:
 
     def command(self, name: str, **body) -> int:
         return (self.h.call("POST", "/api/v3/command", body={"name": name, **body}) or {}).get("id", 0)
+
+    def wait(self, cid: int, timeout_s: int = 600) -> str:
+        for _ in range(timeout_s // 5):
+            st = (self.get(f"/command/{cid}") or {}).get("status", "")
+            if st in ("completed", "failed", "aborted"):
+                return st
+            time.sleep(5)
+        return "timeout"
+
+    def manual_import(self, folder: str, path: str, extra: dict) -> str:
+        """Import the file at `path` where it is (the app links its record to it again): what fixed a
+        movie Radarr marked MissingFromDisk during a replace and then left without a file (2026-11-05)."""
+        cands = self.get("/manualimport", folder=folder, filterExistingFiles="false") or []
+        c = next((x for x in cands if x.get("path") == path), None)
+        if not c:
+            return "not offered by manual import"
+        f = {"path": path, "quality": c.get("quality"), "languages": c.get("languages") or [],
+             "releaseGroup": c.get("releaseGroup") or "", "indexerFlags": c.get("indexerFlags") or 0} | extra
+        return self.wait(self.command("ManualImport", importMode="auto", files=[f]), 300)
 
     def languages(self) -> dict[str, dict]:
         return {x["name"]: {"id": x["id"], "name": x["name"]} for x in self.get("/language") or []}
