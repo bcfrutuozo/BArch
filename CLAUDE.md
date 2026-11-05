@@ -72,10 +72,10 @@ reusing the widget's own functions.
   (`BArch.settings.apply`). To change an option for Bruno, prefer `barch hypr set <opt> <value>`
   over editing the Lua by hand when it is a one-off; hand-written files stay the base.
 - **Apps with their own window** (`quickshell/hypr`, `center`, `backup`, `packages`, `mixer`,
-  `music`, `books`, `video`, `palette`) run as `qs -p <dir>` and cannot import outside their folder: the shared controls live
+  `music`, `books`, `video`, `torrents`, `palette`) run as `qs -p <dir>` and cannot import outside their folder: the shared controls live
   in `quickshell/ui/` and are symlinked into each app (`ln -s ../ui/X.qml`), and every component
   must be listed in the app's `qmldir`. Closing the window quits the process; `barch hypr|center|
-  packages|mixer`, `barch backup browse`, `barch music|books|video browse` start a new one. In their shell commands resolve the repo
+  packages|mixer`, `barch backup browse`, `barch music|books|video|torrents browse` start a new one. In their shell commands resolve the repo
   with `readlink -f` (`Quickshell.shellDir/../../../..` only works physically, the shell dir is a
   symlink). `hypridle.conf` and `hyprsunset.conf` are edited by the Hyprland app's Idle and Night
   light pages (hyprlang parser in `hypr/hypr.js`, comments kept).
@@ -94,6 +94,12 @@ reusing the widget's own functions.
   `tests/` passing and a real pair checked (`python3 -m barch_video mux` in the container writes a
   `.barch.mkv` next to the reference, nothing replaced). Never delete movie files with Radarr's
   `moviefile/bulk` (6.4 leaves them on disk); one by one, and check the disk.
+- **Torrent statistics** (`server/torrents/`): its own container on the NAS (`barch-torrents`, port 8340), read only
+  towards qBittorrent: `store.py` is the SQLite schema and every query (change it only with `tests/` passing; a
+  schema change must migrate `data/torrents.db`, the history cannot be rebuilt), `service.py` the sampler and the
+  API, which the Torrents app (`quickshell/torrents`, `barch torrents`) reads. Never store an announce URL, only
+  its host (a private tracker's carries the passkey). `quickshell/ui/Chart.qml` (lines) and `Bars.qml` are shared
+  with the System Center.
 - **Books** (`server/books/`): no Readarr. Shelfmark (requests) -> qBittorrent/slskd/NZBGet -> Calibre-Web-Automated's
   ingest folder (ebooks, `/mnt/user/media/books`) or Audiobookshelf (`/mnt/user/media/audiobooks`). The Unraid
   templates in `templates/` are the configuration; keys go in the Unraid form, never in them. The Books app

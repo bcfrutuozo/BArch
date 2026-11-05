@@ -1,0 +1,10 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+# What the torrent statistics need inside the linuxserver Alpine base image, at every start:
+# python3 (its sqlite3 module comes with it), and a data folder the service user can write.
+if ! command -v python3 >/dev/null; then
+  echo "**** torrents: installing python3 ****"
+  apk add --no-cache python3 || echo "**** torrents: apk failed, the service cannot start ****"
+fi
+mkdir -p /config/data
+chown abc:abc /config/data 2>/dev/null || true
