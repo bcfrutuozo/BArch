@@ -7,7 +7,8 @@ One daemon (barch-events.service) does three things:
   * turns what changes into events: Hyprland's socket2 (windows opened/closed, monitors,
     fullscreen), VPN and Anonymous Mode up/down, network down/up, AirPods connected, session
     locked/unlocked, a new failure log, a boot, what Claude cost (agent tasks, voice), an album of
-    the music pipeline landing in the review queue;
+    the music pipeline landing in the review queue, and the NAS (agent/nas.py, Unraid's API: down,
+    array, disks, containers, Unraid's own warnings, certificates about to expire);
   * runs the rules of agent/rules.json: "when <event or metric threshold>, do <commands>", with
     notification, spoken sentence, cooldown and an optional "ask first" button.
 
@@ -43,6 +44,9 @@ COST_LOG = STATE_DIR / "claude-cost.log"
 FAILURES = STATE_DIR / "failures"
 REPORTS = STATE_DIR / "reports"
 BARCH = HOME / ".local/bin/barch"
+
+sys.path.insert(0, str(HERE))        # python -I (the service, barch) leaves the script's folder out
+import nas  # noqa: E402  agent/nas.py
 RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
 
 DEFAULTS = {
@@ -52,6 +56,10 @@ DEFAULTS = {
     "ping": "1.1.1.1",
     "raw_days": 7,          # raw samples kept this long; hourly averages for a year
     "events_days": 180,
+    "nas_every_s": 300,          # the NAS (agent/nas.py); its certificates every nas_certs_every_s
+    "nas_certs_every_s": 21600,
+    "nas_grace_s": 900,          # a container down for less than this is a restart, not a problem
+    "cert_warn_days": 10,
 }
 
 
@@ -435,6 +443,9 @@ class Daemon:
         self.prev_cpu = None
         self.last_health = 0.0
         self.last_music = 0.0
+        self.next_nas = 0.0
+        self.last_certs = 0.0
+        self.nas_fails = 0
         self.last_prune = 0.0
         self.flags: dict[str, object] = {}        # last known state of the things that transition
         self.hwmon = self._hwmon()
@@ -682,6 +693,44 @@ class Daemon:
             st["music_seen"] = sorted((seen | {j["id"] for j in jobs}))[-500:]
             self.rules.save_state()
 
+    def sample_nas(self) -> list[tuple[str, float]]:
+        """The NAS through Unraid's API (agent/nas.py; needs ~/.config/barch/nas.json, `barch nas
+        setup`), every `nas_every_s`: metrics nas.* and cert.days, and the events of nas.changes()
+        (nas.array, nas.disk, nas.containers, nas.alert, cert.expiring) plus nas.down after three
+        misses in a row (retried every 30 s: one miss is a wake-up or a restart) and nas.up when it
+        answers again. What was already reported lives in the rules' state, so a restart of the
+        daemon repeats nothing. Nothing is asked while this machine itself has no network."""
+        now = time.time()
+        if now < self.next_nas or self.flags.get("net") is False:
+            return []
+        self.next_nas = now + float(self.cfg.get("nas_every_s", 300))
+        conf = nas.load_conf()
+        if not conf:
+            return []
+        snap = nas.collect(conf, certs=False)
+        st = self.rules.state.setdefault("nas", {})
+        if not snap["reachable"]:
+            self.nas_fails += 1
+            if self.nas_fails < 3:
+                self.next_nas = now + 30
+            elif st.get("up") is not False:
+                st["up"] = False
+                self.rules.save_state()
+                self.emit("nas.down", {"error": str(snap["error"])[:200]})
+            return [("nas.up", 0.0)]
+        self.nas_fails = 0
+        if st.get("up") is False:
+            self.emit("nas.up", {})
+        st["up"] = True
+        if now - self.last_certs >= float(self.cfg.get("nas_certs_every_s", 21600)):
+            self.last_certs = now
+            snap["certs"] = nas.check_certs(conf)
+        for name, data in nas.changes(snap, st, now, float(self.cfg.get("nas_grace_s", 900)),
+                                      float(self.cfg.get("cert_warn_days", 10))):
+            self.emit(name, data)
+        self.rules.save_state()
+        return [("nas.up", 1.0)] + nas.metrics(snap)
+
     # -- files that grow: failure logs, the Claude cost log, agent reports
     def watch_files(self, first=False):
         st = self.rules.state
@@ -852,7 +901,8 @@ class Daemon:
                 self.rules.maybe_reload()
                 self.cfg = self.rules.cfg
                 rows = []
-                for fn in (self.sample_system, self.sample_gpu, self.sample_net, self.sample_bar, self.sample_pods):
+                for fn in (self.sample_system, self.sample_gpu, self.sample_net, self.sample_bar, self.sample_pods,
+                           self.sample_nas):
                     try:
                         rows += fn()
                     except Exception as e:  # noqa: BLE001

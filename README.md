@@ -41,7 +41,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `audio/` | `~/.config/pipewire`, `~/.config/wireplumber` | PipeWire rates and resampler, onboard output at 32-bit/192 kHz, Bluetooth output-only at AAC (below), fifine mic as input only |
 | `backup/` | — | `barch backup`: what restic saves to the NAS (`include.txt`, `exclude.txt`), see Backup |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
-| `agent/` | — | Scheduled agent tasks (`tasks/`), the reactive rules (`rules.json`) and their daemon (`events.py`), the failure ignore list and the upstream watch list; used by `barch` |
+| `agent/` | — | Scheduled agent tasks (`tasks/`), the reactive rules (`rules.json`) and their daemon (`events.py`), the NAS health collector (`nas.py`), the failure ignore list and the upstream watch list; used by `barch` |
 | `server/` | NAS | `music/`: the music pipeline (its own container, `barch-music`), downloads to `/music` in the library's style with a review queue (`barch music`, see Music); `unraid/`: the SMBus driver OpenRGB needs there, built per Unraid kernel (see NAS); `books/`: the book stack's Unraid templates (Shelfmark requests, Calibre-Web-Automated for ebooks, Audiobookshelf), its README; `video/`: what Radarr and Sonarr accept (2160p HEVC HDR, a 1080p profile for what never came out in 4K, Recyclarr) and the pipeline that muxes the PT-BR dub from another release into each movie and episode, subtitles shifted along (`barch video`, its README); `torrents/`: qBittorrent's counters sampled every five minutes into SQLite (its own container, `barch-torrents`), so ratio, upload and download have a history (`barch torrents`, its README) |
 | `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, sixteen scenes in the colors of each palette), Limine theme (`limine-theme.py`) |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
@@ -367,6 +367,7 @@ barch backup init|run|status|list|restore [SNAPSHOT] <path>...   # restic to the
 barch rules list|test <event> [k=v..]|fire <id>|enable|disable <id>   # agent/rules.json (see Automation)
 barch events status|log [n] [--filter x] [--since 7d]   # the daemon and what happened (windows, VPN, boots, costs…)
 barch metrics list|series <metric> [--since 24h]|summary   # metrics.db: temperatures, load, boots, failures, Claude cost
+barch nas status [--no-certs]|setup   # the NAS now, through Unraid's API: array, disks, pools, containers, Unraid's warnings, certificates
 barch agent ask "why is X slow?"   # Claude in a terminal in ~/BArch (the launcher's "a ")
 barch agent list|run|report|continue <task>   # scheduled tasks (see Agent)
 barch failure <unit> [--system]    # what OnFailure= calls: log + notification (see Agent)
@@ -462,14 +463,19 @@ without any AI:
   hourly averages for a year): CPU and GPU temperature, load and power, every hwmon sensor
   (`temp.<name>`), RAM and zram, the disks (`disk.root.pct`, `disk.home.pct`, free GB), ping and
   VPN latency, whether the VPN is up, AirPods battery per side, the health check's issue count,
-  and the boot time of every boot (`systemd-analyze`, once per boot).
+  and the boot time of every boot (`systemd-analyze`, once per boot). Every five minutes the NAS too
+  (`nas.*`, see NAS health below): array and fullest pool, hottest disk, disks not OK, containers
+  down or with an update, Unraid's unread warnings, its CPU and RAM, and `cert.days`, the days left
+  on the certificate closest to expiring.
 - **Events**, stored and matched as they happen: Hyprland's socket2 (`window.open`,
   `window.close` with class and title, `window.fullscreen`, `window.urgent`, `monitor.added`,
   `monitor.removed`), `vpn.up`, `vpn.down` (the tunnel dropped) and `vpn.off` (turned off: Disconnect, Anonymous Mode off, a voice command; `pia.sh disconnect` leaves the time in `stopped`), both with the tunnel that went away and whether the kill switch is holding the traffic, `anon.on`/`anon.off`, `net.up`/`net.down` (default
   route), `pods.connected`/`pods.disconnected`, `session.locked`/`unlocked`, `failure` (a new
   log from `barch failure`), `boot`, `claude.cost` (every agent task run and voice fallback writes
   a line to `~/.local/state/barch/claude-cost.log`), `music.review` (an album of the NAS music
-  pipeline landed in the review queue, polled every 2 min: id, name, problem, `cover_only`), `startup`.
+  pipeline landed in the review queue, polled every 2 min: id, name, problem, `cover_only`), `startup`,
+  and the NAS: `nas.down` / `nas.up`, `nas.array` (state), `nas.disk`, `nas.containers`, `nas.alert`
+  (Unraid's own warnings and alerts) and `cert.expiring`, each with a one-line `text`.
 - **Rules** in `agent/rules.json`: `when` is an event name plus regexes on its fields
   (`{"event": "window.open", "class": "^steam_app_"}`) or a metric with `above`/`below` and a
   `clear` value for hysteresis (`{"metric": "disk.root.pct", "above": 90, "clear": 85}` fires once
@@ -481,7 +487,9 @@ without any AI:
   dropped (spoken), network down and back, AirPods below 20 % per side, monitor connected or
   removed, a boot over 60 s, a Claude call over a dollar and an album of the music pipeline waiting
   only for a cover (`music.review` with `cover_only`: Claude searches the web for it, `barch music
-  cover-ask`, in a transient unit so the daemon never waits); two disabled ones keep caffeine on
+  cover-ask`, in a transient unit so the daemon never waits), the NAS ones (not answering and back,
+  array not started, a disk with a problem, a container down, an Unraid alert or warning, array or a
+  pool above 85 %, a disk above 50 °C) and a certificate about to expire; two disabled ones keep caffeine on
   while a game window is open (Bruno wants notifications while playing, so no DND there).
 
 ```bash
@@ -568,6 +576,22 @@ waits and is added within the hour once it does (`lidarr-pending`). **The week**
 at 18:00 (`barch music digest`): albums in, the review and why, Lidarr's queue, the sweep, artists waiting.
 
 ## NAS
+
+**Health** (`agent/nas.py`, `barch nas status`): the desktop asks Unraid's own API (GraphQL, the one
+Homepage's Unraid widget uses) every five minutes, read only, and `barch-events` turns the answer
+into the `nas.*` metrics, events and rules of Automation: the NAS not answering (three misses in a
+row, so a reboot of this machine or of the NAS's network says nothing), the array leaving STARTED, a
+disk that is no longer OK or counts errors, a container down for more than 15 minutes (one Unraid
+starts by itself that is not running, any that exited with an error, restarts in a loop or reports
+unhealthy; a clean stop of the ones Nextcloud AIO manages is its own doing), Unraid's unread warnings
+and alerts (SMART, temperature, parity), array or pool filling up, and the TLS certificates of the
+Unraid interface, the reverse proxy, both firewalls and the mail server under ten days (checked
+every six hours). Each is said once, not at every sample. `barch nas setup` writes
+`~/.config/barch/nas.json` (mode 600) with the URL and the API key it finds in Homepage's config on
+the appdata share; `certs` (the endpoints watched) and `ignore_containers` (regexes) are edited
+there, the intervals and thresholds (`nas_every_s`, `nas_grace_s`, `cert_warn_days`) in `rules.json`.
+Unraid's certificate chains to a Let's Encrypt root the system store does not carry yet, so
+`agent/certs/root-yr-by-x1.crt` (its cross-signature by ISRG Root X1) is loaded next to the store.
 
 The NAS (NASfrutuozo) runs Unraid on an ASUS Maximus IX Code (Z270). Its on-board Aura RGB sits
 behind the SMBus of the Nuvoton NCT6793D Super I/O, which only the out-of-tree `i2c-nct6793`

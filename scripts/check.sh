@@ -6,6 +6,7 @@
 # - every JSON file: jq
 # - the user units in systemd/: systemd-analyze --user verify
 # - every agent task in agent/tasks has its timer listed in packages/user-services.txt
+# - the automation code (agent/events.py, agent/nas.py) compiles and its unit tests pass
 # - the music pipeline (server/music): its Python compiles and its unit tests pass
 # - hyprctl configerrors, when Hyprland is running
 # Exit 1 when anything fails. QML is not checked here: Quickshell reloads on save and logs errors.
@@ -56,6 +57,12 @@ for t in agent/tasks/*.md; do
   grep -qx "barch-agent@$name.timer" packages/user-services.txt || problem "agent task $name has no timer in packages/user-services.txt"
 done
 ok "timers listed"
+
+step "Automation (agent/events.py, agent/nas.py)"
+python3 -m py_compile agent/events.py agent/nas.py 2>/dev/null || problem "automation: events.py or nas.py does not compile"
+python3 -m unittest discover -s agent/tests -q >/dev/null 2>&1 || problem "automation: unit tests fail (python3 -m unittest discover -s agent/tests)"
+find agent -name __pycache__ -prune -exec rm -rf {} +
+((fail)) || ok "compiles, tests pass"
 
 step "Music pipeline (server/music)"
 if [ -d server/music ]; then

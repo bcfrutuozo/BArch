@@ -198,6 +198,10 @@ Automation (agent/rules.json + agent/events.py, barch-events.service):
   metrics series <metric> [--since 24h|7d|30d] [--points N]
                               a time series (raw for a week, hourly averages for a year)
   metrics summary             boot time, failures per week, Claude cost, temperatures now
+  nas status [--no-certs]     the NAS now, through Unraid's API (agent/nas.py): array, disks, pools,
+                              containers down or with an update, Unraid's unread warnings, days left
+                              on the certificates; barch-events samples the same (nas.* rules)
+  nas setup                   write ~/.config/barch/nas.json (URL and API key from Homepage's Unraid widget)
 
 Agent:
   agent list                  scheduled tasks, last result and next run
@@ -1695,6 +1699,19 @@ cmd_metrics() {
   return "$rc"
 }
 
+# nas status|setup: agent/nas.py prints the snapshot itself (text, or JSON with --json)
+cmd_nas() {
+  local sub=${1:-status}
+  (($#)) && shift
+  need python3
+  case $sub in
+    status) if [[ $JSON == 1 ]]; then python3 -I "$REPO/agent/nas.py" status --json "$@" | jq .; return "${PIPESTATUS[0]}"
+            else python3 -I "$REPO/agent/nas.py" status "$@"; fi ;;
+    setup) python3 -I "$REPO/agent/nas.py" setup ;;
+    *) usage_error "nas status [--no-certs]|setup" ;;
+  esac
+}
+
 # ---------------------------------------------------------------- agent
 
 # frontmatter field of a task file: task_field <file> <key>
@@ -2177,6 +2194,7 @@ case $cmd in
   rules) cmd_rules "$@" ;;
   events) cmd_events "$@" ;;
   metrics) cmd_metrics "$@" ;;
+  nas) cmd_nas "$@" ;;
   voice) cmd_voice "$@" ;;
   snapshot) cmd_snapshot "$@" ;;
   failure) cmd_failure "$@" ;;
