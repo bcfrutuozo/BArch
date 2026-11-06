@@ -1,4 +1,4 @@
-// Store.qml — what the Center knows and does: systemd units and timers (user and system),
+// Store.qml — what the Center knows and does: the NAS, systemd units and timers (user and system),
 // the failures `barch failure` saved, the agent tasks and their reports, the safety snapshots,
 // the bar's health check and the journal. Actions run the same commands `barch` and systemctl
 // would; system units go through polkit (the bar's agent asks the password).
@@ -33,6 +33,10 @@ Singleton {
     property var rules: []
     property var events: []
     property string eventsService: ""
+    // the NAS (agent/nas.py through `barch --json nas status`): the snapshot, when it was asked
+    property var nas: ({})
+    property real nasAt: 0
+    property bool nasBusy: false
     property string status: ""
     property bool statusBad: false
     property bool ready: false
@@ -125,6 +129,19 @@ Singleton {
         run([barch, "--json", "rules", "list"], out => rules = json(out, {}).rules || [])
         run([barch, "--json", "events", "log", "80"], out => events = json(out, {}).events || [])
     }
+    // full: the certificates too (a TLS handshake per endpoint); the minute timer keeps the last ones
+    function refreshNas(full) {
+        if (nasBusy) return
+        nasBusy = true
+        run([barch, "--json", "nas", "status"].concat(full ? [] : ["--no-certs"]), out => {
+            nasBusy = false
+            const d = json(out, null)
+            if (!d) { say("nas: no answer from barch nas status", true); return }
+            if (!d.certs && nas.certs) d.certs = nas.certs
+            nasAt = Date.now()
+            nas = d
+        })
+    }
     function series(metric, since, cb) {
         run([barch, "--json", "metrics", "series", metric, "--since", since, "--points", "240"], out => cb(json(out, {})))
     }
@@ -135,11 +152,12 @@ Singleton {
     }
     function editPath(path) { Quickshell.execDetached(["sh", "-c", 'exec uwsm app -- foot -e "${EDITOR:-nvim}" "$1"', "sh", path]) }
     function refreshAll() {
-        refreshUnits(); refreshHealth(false); refreshAgent(); refreshSnapshots(); refreshFailures(); refreshAutomation()
+        refreshUnits(); refreshHealth(false); refreshAgent(); refreshSnapshots(); refreshFailures(); refreshAutomation(); refreshNas(true)
         ready = true
     }
     Component.onCompleted: refreshAll()
     Timer { interval: 30000; running: true; repeat: true; onTriggered: { store.refreshUnits(); store.refreshFailures(); store.refreshAutomation() } }
+    Timer { interval: 60000; running: true; repeat: true; onTriggered: store.refreshNas(false) }
 
     // ---------- failure-ignore (a file of the repo) ----------
     FileView {
