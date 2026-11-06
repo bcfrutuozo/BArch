@@ -6,6 +6,7 @@ barch-agent@upstream-watch.timer
 barch-agent@weekly-review.timer
 barch-backup.timer
 barch-events.service
+barch-rgb.service
 barch-voice.service
 cliphist.service
 hyprsunset.service

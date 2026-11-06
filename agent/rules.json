@@ -69,7 +69,10 @@
       "notify": "O túnel {name} caiu. {note}",
       "say": "A VPN caiu.",
       "critical": true,
-      "cooldown": "2m"
+      "cooldown": "2m",
+      "do": [
+        "barch rgb flash red 4"
+      ]
     },
     {
       "id": "net-down",

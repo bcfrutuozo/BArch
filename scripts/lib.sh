@@ -28,7 +28,7 @@ declare -A PACKAGES=(
 USER_SERVICES=(cliphist.service)
 
 # System services and timers to enable on a fresh install (apply-system.sh asks first)
-SYSTEM_SERVICES=(earlyoom.service smartd.service paccache.timer fstrim.timer btrfs-scrub@-.timer setvtrgb.service numlock.service nftables.service rtkit-daemon.service bluetooth.service snapper-timeline.timer snapper-cleanup.timer limine-snapper-sync.service libvirtd.socket docker.socket barch-backup-root.timer)
+SYSTEM_SERVICES=(earlyoom.service smartd.service paccache.timer fstrim.timer btrfs-scrub@-.timer setvtrgb.service numlock.service nftables.service rtkit-daemon.service bluetooth.service snapper-timeline.timer snapper-cleanup.timer limine-snapper-sync.service libvirtd.socket docker.socket barch-backup-root.timer ckb-next-daemon.service)
 
 # System files copied into system/files/ (never symlinked).
 # Globs are allowed. Anything missing is skipped, and so are symlinks.
