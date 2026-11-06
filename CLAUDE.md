@@ -51,7 +51,11 @@ reusing the widget's own functions.
   into `~/.local/state/barch/metrics.db`, turns Hyprland/VPN/network/AirPods/lock/failure changes
   into events and runs `agent/rules.json` (`barch rules|events|metrics`, README "Automation").
   A new automatic reaction is a rule there, not a new timer or script; a new source of events or
-  metrics is a sampler in `events.py` (and its name in the `_doc` of `rules.json`).
+  metrics is a sampler in `events.py` (and its name in the `_doc` of `rules.json`). The NAS is one:
+  `agent/nas.py` (`barch nas status`) reads Unraid's API, read only; `summarize()` and `changes()`
+  are pure and covered by `agent/tests` (run them when either changes). Never probe the NAS's
+  ports 80/443 by address: that is SWAG, and a handful of 403s gets this desktop banned by its
+  fail2ban for ten minutes; Unraid's interface is on the URL in `~/.config/barch/nas.json`.
 
 ## How the repo works
 
