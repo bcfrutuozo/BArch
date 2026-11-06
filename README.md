@@ -362,6 +362,7 @@ barch nightlight on|off|status     barch dnd on|off|status
 barch anon on [region]|off|toggle|status   # Anonymous Mode: VPN + kill switch + Mullvad Browser as default + hostname out of DHCP
 barch vpn on [region]|off|toggle|status|regions|region <id>|auto
 barch health [--refresh]           # .pacnew, failed services, TPM, backup, cleanup
+barch rgb [status]|apply|on|off|color <tone|#hex>|brightness <0-100>|flash [tone] [n]   # Corsair lighting (see Theme)
 barch voice on|off|toggle|status   # always-on voice control (see Voice); pause|resume keep the service
 barch voice match "abre o terminal"  # which command a sentence hits, running nothing · test "..." runs it
 barch voice say "texto"            # speak · reload (commands.json) · log · setup [--install]
@@ -766,7 +767,15 @@ same `palettes.json`, so they are saved with the repo.
 
 From the pinned pair it generates the colors for
 foot, Neovim, the lock screen, the Hyprland borders, GTK 3 (`BArch-dark/light` themes over adw-gtk3),
-GTK 4/libadwaita, qt6ct, fontconfig and MangoHud. Changing the pinned palette of the mode in use
+GTK 4/libadwaita, qt6ct, fontconfig and MangoHud. The Corsair keyboard (K95 RGB Platinum) and mouse (Scimitar RGB Elite)
+follow it too: `barch-rgb.service` (`agent/rgb.py`) paints them in the accent through the pipes of
+`ckb-next-daemon` (system service of `ckb-next`; its GUI is left closed, or its profile would paint
+over this), again when the theme changes, a preview included, when the daemon or a device comes
+back and after a resume (the color is repeated for a second, as the ckb-next GUI's frames would be:
+the Scimitar Elite's side keypad ignores a single write). In that software mode the keyboard's light key only reports itself, so
+the service steps the brightness (100, 66, 33, off) when it is pressed. `barch rgb color green`
+(a tone of the palette or a hex), `brightness`, `on|off`; `barch rgb flash red 4` blinks and goes
+back, which the `vpn-dropped` rule does. Changing the pinned palette of the mode in use
 repaints the bar, the borders, the lock and the open GTK apps at once; terminals, Neovim and Qt
 apps already open keep their colors until reopened. `theme-auto` switches the Hyprland theme,
 the apps (`apps-theme`: GTK theme, Papirus icons, cursor); the wallpapers are drawn in the colors

@@ -1,0 +1,15 @@
+# The Corsair keyboard and mouse in the theme's color (agent/rgb.py, through ckb-next-daemon's
+# pipes): repaints when the theme, the settings or the devices change and after a resume. `barch rgb`.
+[Unit]
+Description=BArch RGB: Corsair lighting follows the theme (barch-rgb)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/python3 -I %h/BArch/agent/rgb.py watch
+Restart=on-failure
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=graphical-session.target

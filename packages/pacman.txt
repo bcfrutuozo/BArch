@@ -16,6 +16,7 @@ bluez-utils
 btop
 btrfs-progs
 chromium
+ckb-next
 cliphist
 cmake
 cryptsetup
