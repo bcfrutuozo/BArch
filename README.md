@@ -596,6 +596,12 @@ there, the intervals and thresholds (`nas_every_s`, `nas_grace_s`, `cert_warn_da
 Unraid's certificate chains to a Let's Encrypt root the system store does not carry yet, so
 `agent/certs/root-yr-by-x1.crt` (its cross-signature by ISRG Root X1) is loaded next to the store.
 
+**Shell:** **Super+Shift+T** opens foot with `ssh nas` (root at `100.100.0.10`, the `nas` host of
+`~/.ssh/config`, which stays out of the repo; key-only, a shared connection kept for 10 min so the
+next one opens at once; `SetEnv TERM=xterm-256color`, since Unraid has no `foot` terminfo and
+with `TERM=foot` readline drops to a dumb line: paste, arrows and every TUI break). The key goes in once with `ssh-copy-id nas`; Unraid keeps root's
+`.ssh` on the flash (`/boot/config/ssh/root`), so it survives reboots.
+
 The NAS (NASfrutuozo) runs Unraid on an ASUS Maximus IX Code (Z270). Its on-board Aura RGB sits
 behind the SMBus of the Nuvoton NCT6793D Super I/O, which only the out-of-tree `i2c-nct6793`
 driver exposes (the `i2c-i801` of the chipset is not enough, and the old ich777 OpenRGB plugin
