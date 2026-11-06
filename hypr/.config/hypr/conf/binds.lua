@@ -14,6 +14,7 @@ local mainMod = "SUPER"
 
 -- Apps e janelas
 hl.bind(mainMod .. " + T", hl.dsp.exec_cmd(terminal), { description = "Apps|Terminal" })
+hl.bind(mainMod .. " + SHIFT + T", hl.dsp.exec_cmd(terminal .. " -T Unraid ssh nas"), { description = "Apps|Unraid Terminal (ssh nas)" })
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager), { description = "Apps|File Manager" })
 hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("qs ipc call launcher toggle"), { release = true, description = "Apps|Launcher" })
 hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("qs ipc call launcher openWith 'c '"), { description = "Apps|Clipboard History" })

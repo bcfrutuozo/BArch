@@ -31,10 +31,12 @@ drm-info
 earlyoom
 edk2-ovmf
 efibootmgr
+evolution
 fastfetch
 fd
 ffmpegthumbnailer
 file-roller
+firefox
 foot
 fwupd
 fzf
