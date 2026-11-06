@@ -160,7 +160,10 @@ The main pieces:
 - **System Center** (`quickshell/center/`, own window: "System Center" in the launcher, `barch center [page]`):
   the agent infrastructure and systemd in one place. **Overview** (the bar's health check with a
   Check now, failed units, failures in the last day, the latest report of every agent task, the
-  next timers), **Services** (user and system units with state and enabled state, journal, start /
+  next timers), **NAS** (what `barch nas status` knows, asked every minute: array, parity check, every
+  disk with status, temperature and usage, the pools, containers down or with an update, Unraid's unread
+  warnings, the days left on each certificate, and the `nas.*` metrics over 24 h, 7 d or 30 d; the
+  sidebar counts its problems in red), **Services** (user and system units with state and enabled state, journal, start /
   stop / restart / reset-failed / enable / disable; system units go through polkit, so the bar's
   agent asks the password), **Timers** (both scopes, next and last run, run the service now),
   **Failures** (the logs `barch failure` saved, grouped by unit: view, Investigate with Claude,
@@ -349,7 +352,7 @@ barch wallpaper list|status        barch wallpaper <scene> [--lock|--desktop]   
 barch wallpaper render [<palette>|all]   # the scenes in a palette's colors (automatic when pinned)
 barch hypr [edit] [<page>]         # Hyprland Settings (every option of the installed version, monitors, binds…)
 barch hypr get|set|reset|list|status [<option>] [<value>]   # the same file from a shell (see The bar)
-barch center [<page>]              # System Center: services, timers, failures, agent, snapshots, journal
+barch center [<page>]              # System Center: the NAS, services, timers, failures, agent, snapshots, journal (barch center nas)
 barch backup browse [<page>]       # Backup Browser: snapshots, files, restore into ~/Restore
 barch packages [<page>]            # Packages: installed, orphans, updates, pacnew, repo lists, history
 barch mixer [<page>]               # Audio Mixer: devices, per-app volume and routing, sample rate
@@ -579,7 +582,7 @@ at 18:00 (`barch music digest`): albums in, the review and why, Lidarr's queue, 
 
 **Health** (`agent/nas.py`, `barch nas status`): the desktop asks Unraid's own API (GraphQL, the one
 Homepage's Unraid widget uses) every five minutes, read only, and `barch-events` turns the answer
-into the `nas.*` metrics, events and rules of Automation: the NAS not answering (three misses in a
+into the `nas.*` metrics, events and rules of Automation (the System Center's **NAS** page, `barch center nas`, shows the same snapshot): the NAS not answering (three misses in a
 row, so a reboot of this machine or of the NAS's network says nothing), the array leaving STARTED, a
 disk that is no longer OK or counts errors, a container down for more than 15 minutes (one Unraid
 starts by itself that is not running, any that exited with an error, restarts in a loop or reports

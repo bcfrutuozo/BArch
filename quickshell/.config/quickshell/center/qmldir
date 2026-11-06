@@ -10,6 +10,7 @@ FailuresPage 1.0 FailuresPage.qml
 HistoryPage 1.0 HistoryPage.qml
 JournalPage 1.0 JournalPage.qml
 LogPanel 1.0 LogPanel.qml
+NasPage 1.0 NasPage.qml
 OverviewPage 1.0 OverviewPage.qml
 ServicesPage 1.0 ServicesPage.qml
 SnapshotsPage 1.0 SnapshotsPage.qml
