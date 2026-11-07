@@ -37,6 +37,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `apps-theme`, `papirus-accent`, `nas-mount`, `keyring-wait`, `gsr-replay-saved` (the notification after a replay or recording is saved) |
 | `claude/` | `~/.claude/settings.json` | Claude Code settings: the hooks that take the safety snapshots (see Agent) |
 | `games/` | `~/Games/battle.net/run.sh`, `~/.config/gamemode.ini`, `~/.local/share/applications/steam.desktop` | Battle.net launcher (umu + Proton-GE), gamemode rules, Steam launcher without `GDK_SCALE` (Steam would scale twice) |
+| `obs/` | `~/.local/share/applications/obs-stream.desktop`, `obs-guitarra.desktop` | OBS launchers: **OBS Stream** (profile "Stream YouTube", scenes "Jogo": screen + BRIO corner, mic, PC audio) and **OBS Guitarra** (BRIO 1080p60, the room through the fifine, HEVC); the profiles and scenes go in the backup, the recordings in `~/Videos/OBS` do not |
 | `calendar/` | `~/.config/khal`, `~/.config/vdirsyncer/config` | iCloud calendar sync (the app password stays out of the repo) |
 | `audio/` | `~/.config/pipewire`, `~/.config/wireplumber` | PipeWire rates and resampler, onboard output at 32-bit/192 kHz, Bluetooth output-only at AAC (below), fifine mic as input only |
 | `backup/` | — | `barch backup`: what restic saves to the NAS (`include.txt`, `exclude.txt`), see Backup |

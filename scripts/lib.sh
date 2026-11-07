@@ -22,6 +22,7 @@ declare -A PACKAGES=(
   [bin]=".local/bin/kernel-update .local/bin/gsr-replay-saved .local/share/kernel-update .local/bin/theme-auto .local/bin/apps-theme .local/bin/papirus-accent .local/bin/barch .local/bin/nas-mount .local/bin/keyring-wait"
   [calendar]=".config/khal .config/vdirsyncer/config"
   [audio]=".config/pipewire .config/wireplumber"
+  [obs]=".local/share/applications/obs-stream.desktop .local/share/applications/obs-guitarra.desktop"
 )
 
 # User services to enable on a fresh install

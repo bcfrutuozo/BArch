@@ -15,6 +15,13 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
                                          "seeding_total": their totals (uploaded, ratio: the homepage card)
     POST /api/seeds/check                the hourly seed check now: deletes what reached its ratio or its time
     GET  /api/status                     counts per state, the job running now
+    GET  /api/catalog[?since=<version>]  the library for the player (quickshell/player): every album with its tracks'
+                                         tags and lengths, gzip when accepted; {"changed": false} when nothing changed
+                                         since that version (catalog.py: albums read again only when their files changed)
+    GET  /api/catalog/status             version, when it was read, how many albums and tracks
+    GET  /api/catalog/cover?folder=A/B   cover.jpg · /api/catalog/stream?folder=A/B&file=X: the audio (Range) ·
+                                         /api/catalog/lyrics?folder=&file=: a .lrc next to the file or a LYRICS tag
+    POST /api/catalog/refresh[?full=1]   read the folders again now (full: every album, not only the changed ones)
     GET  /api/jobs[?state=review]        summaries
     GET  /api/jobs/<id>                  everything: problems, candidates, the proposed tags
     GET  /api/jobs/<id>/cover            the proposed cover (JPEG), or the one chosen by hand
@@ -76,6 +83,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from .catalog import send_file
 from .pipeline import STATES, Pipeline
 
 DEFAULTS = {
@@ -184,6 +192,34 @@ def make_handler(p: Pipeline, token: str):
                 except Exception as e:  # noqa: BLE001
                     out["seeding_error"] = str(e)
                 return self._send(200, {"ok": True, "policy": p.seeding.cfg, **out})
+            if parts == ["api", "catalog"]:
+                since = (q.get("since") or [""])[0]
+                if since.isdigit() and int(since) == p.catalog.version and p.catalog.version > 0:
+                    return self._send(200, {"ok": True, "changed": False, "version": p.catalog.version, "scanned": p.catalog.scanned,
+                                            "scanning": p.catalog.scanning})
+                if not p.catalog.albums and not p.catalog.scanning:
+                    p.catalog.refresh()                     # the first time: read now, the player is waiting
+                gz = "gzip" in (self.headers.get("Accept-Encoding") or "")
+                body = p.catalog.payload(gz)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                if gz:
+                    self.send_header("Content-Encoding", "gzip")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if parts == ["api", "catalog", "status"]:
+                return self._send(200, {"ok": True, **p.catalog.status()})
+            if parts == ["api", "catalog", "cover"]:
+                f = p.catalog.path((q.get("folder") or [""])[0], "cover.jpg")
+                return send_file(self, f, "image/jpeg") if f else self._send(404, {"ok": False, "error": "no cover"})
+            if parts == ["api", "catalog", "stream"]:
+                f = p.catalog.path((q.get("folder") or [""])[0], (q.get("file") or [""])[0])
+                return send_file(self, f, "audio/flac") if f else self._send(404, {"ok": False, "error": "no such file"})
+            if parts == ["api", "catalog", "lyrics"]:
+                out = p.catalog.lyrics((q.get("folder") or [""])[0], (q.get("file") or [""])[0])
+                return self._send(200 if out.get("ok") else 404, out)
             if parts == ["api", "status"]:
                 jobs = p.store.all()
                 return self._send(200, {"ok": True, "running": p.current, "doing": p.doing, "missing": missing_tools(),
@@ -270,6 +306,9 @@ def make_handler(p: Pipeline, token: str):
                 return
             n = int(self.headers.get("Content-Length") or 0)
             parts = [x for x in u.path.split("/") if x]
+            if parts == ["api", "catalog", "refresh"]:
+                p.catalog.refresh_async((q.get("full") or [""])[0] in ("1", "true"))
+                return self._send(200, {"ok": True, "scanning": True})
             if parts == ["api", "covers", "propose"] and (self.headers.get("Content-Type") or "").startswith("image/"):
                 # an image as the body: ?folder=Artist/Album&label=what it is
                 data = self.rfile.read(n)
@@ -433,6 +472,16 @@ def serve(cfg_path: str) -> int:
             time.sleep(float(cfg.get("poll_s", 120)))
     threading.Thread(target=poll, daemon=True).start()
     threading.Thread(target=p.run_forever, daemon=True).start()
+
+    def catalog():              # the player's index: the albums whose files changed, every 15 min
+        time.sleep(5)
+        while True:
+            try:
+                p.catalog.refresh()
+            except Exception as e:  # noqa: BLE001
+                print(f"[catalog] {e}", flush=True)
+            time.sleep(float(cfg.get("catalog_every_s", 900)))
+    threading.Thread(target=catalog, daemon=True).start()
     srv = ThreadingHTTPServer(("0.0.0.0", int(cfg.get("port", 8338))), make_handler(p, cfg.get("token", "")))
     print(f"music pipeline on :{cfg.get('port', 8338)}, jobs in {p.store.root}, music in {p.music}", flush=True)
     if missing_tools():

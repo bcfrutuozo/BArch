@@ -25,3 +25,5 @@
 **/cache2
 **/startupCache
 **/thumbnails
+# OBS recordings: gigabytes per session; keep the ones worth it elsewhere
+**/Videos/OBS

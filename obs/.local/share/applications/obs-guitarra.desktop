@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=OBS Guitarra
+GenericName=Record playing guitar
+Comment=OBS with the "Guitarra" profile and scenes (BRIO 1080p60, the room through the fifine, HEVC)
+Exec=obs --profile "Guitarra" --collection "Guitarra"
+Icon=com.obsproject.Studio
+Terminal=false
+Categories=AudioVideo;Recorder;
+StartupWMClass=obs

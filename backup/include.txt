@@ -18,6 +18,7 @@
 .config/firefly
 .local/state/barch
 .config/Nextcloud
+.config/obs-studio/basic
 .config/BraveSoftware
 .mullvad
 .parsec

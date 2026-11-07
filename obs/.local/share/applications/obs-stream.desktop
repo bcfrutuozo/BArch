@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=OBS Stream
+GenericName=Stream to YouTube
+Comment=OBS with the "Stream YouTube" profile and the "Jogo" scenes (screen + BRIO corner, mic, PC audio)
+Exec=obs --profile "Stream YouTube" --collection "Jogo"
+Icon=com.obsproject.Studio
+Terminal=false
+Categories=AudioVideo;Recorder;
+StartupWMClass=obs

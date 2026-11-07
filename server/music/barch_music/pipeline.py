@@ -22,6 +22,7 @@ from mutagen.flac import FLAC
 from . import album as albummod
 from . import audio, cover, matcher, mb, merge, style, tagger
 from .canon import Canon
+from .catalog import Catalog
 from .library import Library
 from .libcovers import LibraryCovers
 from .seeds import SeedKeeper, SeedLog
@@ -230,6 +231,7 @@ class Pipeline:
         self.covers = LibraryCovers(self.music, self.store.root / "covers", self.plex)
         self.canon = Canon(self.store.root)
         self.library = Library(self.music, self.store.root, self.lidarr)
+        self.catalog = Catalog(self.music, self.store.root)       # what the player reads (catalog.py)
         self.seeds = SeedLog(self.store.root)
         self.seeding = SeedKeeper(self.store.root, cfg, self.qbit, self.seeds)
 
@@ -784,6 +786,7 @@ class Pipeline:
                 done.append(f"{e}")
         job["state"] = "done"
         job["after"] = done
+        self.catalog.refresh_async()
         job.pop("net_retries", None)
         shutil.rmtree(self.store.path(job["id"]) / "work", ignore_errors=True)
         self.store.save(job)
@@ -890,6 +893,7 @@ class Pipeline:
                     done.append(step())
                 except Exception as e:  # noqa: BLE001
                     done.append(f"{e}")
+        self.catalog.refresh_async()
         return {"folder": new, "done": done}
 
     def rescan(self, jid: str) -> list[dict]:
