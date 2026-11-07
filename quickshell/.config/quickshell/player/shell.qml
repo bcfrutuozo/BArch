@@ -29,7 +29,9 @@ ShellRoot {
         { id: "recent", label: "Recent", icon: "󰥔", index: 4, kind: "recent" },
         { id: "lyrics", label: "Lyrics", icon: "󰨖", index: 5 },
         { id: "stats", label: "Statistics", icon: "󰄪", index: 6 },
-        { id: "settings", label: "Settings", icon: "󰒓", index: 7 }
+        { id: "settings", label: "Settings", icon: "󰒓", index: 7 },
+        { id: "viz", label: "Visualizer", icon: "󰺢", index: 8 },
+        { id: "eq", label: "Equalizer", icon: "󰝞", index: 9 }
     ]
     readonly property var pageDef: pages.filter(p => p.id === page)[0] || pages[0]
     readonly property string title: page === "search" ? "Search" : page === "playlist" ? ((Store.playlist(playlistId) || { name: "Playlist" }).name) : pageDef.label
@@ -72,6 +74,7 @@ ShellRoot {
         function like(): void { Player.likeCurrent() }
         function shuffle(on: string): void { Player.setShuffle(on === "" ? !Player.shuffle : on === "on" || on === "1" || on === "true") }
         function repeat(mode: string): void { if (mode === "") Player.cycleRepeat(); else if (["off", "all", "one"].includes(mode)) Player.setRepeat(mode) }
+        function eq(arg: string): string { return JSON.stringify(arg === "" ? { ok: true, eq: Player.eq, presets: Object.keys(Player.eqPresets) } : Player.eqCommand(arg)) }
         function status(): string { return JSON.stringify(Object.assign({ ok: true, albums: Store.albumCount, tracks: Store.trackCount }, Player.status())) }
         // "Artist/Album": open it, play it, or add it to the queue
         function album(folder: string): string { const a = Store.albumByKey[folder]; if (!a) return JSON.stringify({ ok: false, error: "no such album" }); root.goAlbum(folder); win.visible = true; return JSON.stringify({ ok: true }) }
@@ -110,6 +113,8 @@ ShellRoot {
         Shortcut { sequences: ["/", "Ctrl+F"]; onActivated: { search.forceActiveFocus(); search.selectAll() } }
         Shortcut { sequence: "Q"; onActivated: root.open("queue") }
         Shortcut { sequence: "Y"; onActivated: root.open("lyrics") }
+        Shortcut { sequence: "V"; onActivated: root.open("viz") }
+        Shortcut { sequence: "E"; onActivated: root.open("eq") }
         Shortcut { sequence: "Escape"; onActivated: { if (search.activeFocus) search.focus = false; else root.back() } }
         Shortcut { sequence: "Ctrl+W"; onActivated: Qt.quit() }
 
@@ -183,6 +188,8 @@ ShellRoot {
                         Nav { pid: "recent"; label: "Recent"; icon: "󰥔"; onClicked: root.open("recent") }
                         Nav { pid: "lyrics"; label: "Lyrics"; icon: "󰨖"; onClicked: root.open("lyrics") }
                         Nav { pid: "stats"; label: "Statistics"; icon: "󰄪"; onClicked: root.open("stats") }
+                        Nav { pid: "viz"; label: "Visualizer"; icon: "󰺢"; onClicked: root.open("viz") }
+                        Nav { pid: "eq"; label: "Equalizer"; icon: "󰝞"; marks: 0; onClicked: root.open("eq") }
                         RowLayout {
                             Layout.leftMargin: 10; Layout.topMargin: 10; Layout.rightMargin: 2
                             Text { Layout.fillWidth: true; text: "PLAYLISTS"; color: Ui.overlay; font.family: Ui.font; font.pixelSize: Ui.fontSize - 4; font.bold: true }
@@ -252,7 +259,7 @@ ShellRoot {
                         StackLayout {
                             anchors.fill: parent
                             visible: !root.album
-                            currentIndex: root.page === "search" ? 8 : root.page === "playlist" ? 4 : root.pageDef.index
+                            currentIndex: root.page === "search" ? 10 : root.page === "playlist" ? 4 : root.pageDef.index
                             AlbumsPage { menu: menu }
                             ArtistsPage { id: artistsPage; menu: menu }
                             TracksPage { menu: menu }
@@ -261,6 +268,8 @@ ShellRoot {
                             LyricsPage {}
                             StatsPage { menu: menu }
                             SettingsPage {}
+                            VizPage { active: root.page === "viz" && !root.album && win.visible }
+                            EqPage {}
                             SearchPage { menu: menu; query: root.query }
                         }
                         AlbumView { anchors.fill: parent; visible: root.album !== ""; album: Store.albumByKey[root.album] || null; menu: menu }

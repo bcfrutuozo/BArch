@@ -199,6 +199,8 @@ def make_handler(p: Pipeline, token: str):
                                             "scanning": p.catalog.scanning})
                 if not p.catalog.albums and not p.catalog.scanning:
                     p.catalog.refresh()                     # the first time: read now, the player is waiting
+                if not p.catalog.albums:                    # still reading the library: nothing to hand out yet
+                    return self._send(200, {"ok": True, "changed": False, "version": 0, "scanned": 0, "scanning": True})
                 gz = "gzip" in (self.headers.get("Accept-Encoding") or "")
                 body = p.catalog.payload(gz)
                 self.send_response(200)

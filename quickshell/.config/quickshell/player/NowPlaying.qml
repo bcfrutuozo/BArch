@@ -51,6 +51,7 @@ Rectangle {
                     Badge { visible: !!bar.t && bar.t.bits > 0; text: bar.t ? bar.t.bits + "/" + (bar.t.rate / 1000).toFixed(bar.t.rate % 1000 ? 1 : 0) : ""; tint: bar.t && bar.t.bits > 16 ? Ui.accent : Ui.overlay; tip: bar.t ? bar.t.bits + "-bit, " + bar.t.rate + " Hz FLAC" : "" }
                 }
             }
+            MiniViz { visible: Viz.settings.mini && Player.hasTrack; Layout.preferredWidth: 90; Layout.preferredHeight: 26 }
             IconButton {
                 readonly property bool on: !!bar.t && Store.liked(bar.t.key)
                 icon: on ? "󰋑" : "󰋕"; active: on; enabledBtn: !!bar.t
@@ -112,7 +113,7 @@ Rectangle {
                 onMoved: v => Player.setVolume(v)
                 onReleased: v => Player.setVolume(v)
             }
-            Text { text: Math.round(Player.volume); color: Ui.overlay; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3; Layout.preferredWidth: 24 }
+            Text { text: Math.round(Player.volume); color: Ui.overlay; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3; Layout.preferredWidth: 30; horizontalAlignment: Text.AlignRight }
         }
     }
 }

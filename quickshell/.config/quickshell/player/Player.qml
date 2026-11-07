@@ -30,6 +30,9 @@ Singleton {
     readonly property string currentKey: current ? current.key : ""
     property var urlToKey: ({})
     property bool counted: false
+    // the equalizer: { on, preamp, gains[10] } in dB, applied as mpv's af chain (EqPage)
+    readonly property var eqFreqs: [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+    property var eq: Object.assign({ on: false, preamp: 0, gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, Store.state.eq || {})
     property string restoreKey: ""
 
     // ---------- mpv ----------
@@ -76,6 +79,7 @@ Singleton {
         set("volume", volume)
         setRepeat(Store.state.repeat || "off", true)
         shuffle = !!Store.state.shuffle
+        applyEq()
         ready = true
         restoreQueue()
     }
@@ -238,6 +242,55 @@ Singleton {
     }
     function toggleShuffle() { setShuffle(!shuffle) }
     function likeCurrent() { if (current) Store.toggleLike(current.key) }
+
+    // ---------- equalizer ----------
+    readonly property var eqPresets: ({
+        "Flat":         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        "Rock":         [5, 4, 3, 1, -1, -1, 1, 3, 4, 5],
+        "Metal":        [6, 5, 2, 0, -2, 0, 2, 4, 5, 4],
+        "Pop":          [-1, 1, 3, 4, 3, 0, -1, -1, 1, 2],
+        "Jazz":         [4, 3, 1, 2, -2, -2, 0, 1, 3, 4],
+        "Classical":    [5, 4, 3, 2, -1, -1, 0, 2, 3, 4],
+        "Electronic":   [5, 4, 1, 0, -2, 2, 1, 2, 5, 6],
+        "Acoustic":     [5, 4, 3, 1, 2, 2, 3, 4, 3, 2],
+        "Vocal":        [-2, -3, -2, 1, 4, 4, 3, 1, 0, -1],
+        "Bass boost":   [7, 6, 5, 3, 1, 0, 0, 0, 0, 0],
+        "Treble boost": [0, 0, 0, 0, 0, 1, 3, 5, 6, 7],
+        "Loudness":     [6, 4, 0, 0, -2, 0, 0, 2, 5, 6],
+        "Late night":   [-4, -3, -1, 1, 2, 2, 1, 0, -2, -3]
+    })
+    function eqFilter(e) {
+        if (!e || !e.on) return ""
+        const parts = []
+        if (e.preamp) parts.push("volume=" + e.preamp.toFixed(1) + "dB")
+        e.gains.forEach((g, i) => { if (Math.abs(g) >= 0.25) parts.push("equalizer=f=" + eqFreqs[i] + ":t=o:w=1:g=" + g.toFixed(1)) })
+        return parts.length ? "lavfi=[" + parts.join(",") + "]" : ""
+    }
+    // live=true while a slider is dragged: applied (debounced) but saved only on release
+    function setEq(e, live) {
+        eq = e
+        eqApply.restart()
+        if (!live) Store.edit(s => { s.eq = e })
+    }
+    Timer { id: eqApply; interval: 120; onTriggered: pl.applyEq() }
+    function applyEq() { set("af", eqFilter(eq)) }
+    // "on" | "off" | "toggle" | a preset name | "band <i> <dB>" | "preamp <dB>"
+    function eqCommand(arg) {
+        const a = (arg || "").trim(), low = a.toLowerCase()
+        if (low === "on" || low === "off" || low === "toggle") { setEq(Object.assign({}, eq, { on: low === "toggle" ? !eq.on : low === "on" })); return { ok: true, on: eq.on } }
+        const m = /^(band|preamp)\s+(.*)$/.exec(low)
+        if (m) {
+            const nums = m[2].split(/\s+/).map(Number)
+            const e = Object.assign({}, eq, { gains: eq.gains.slice(), on: true })
+            if (m[1] === "preamp") e.preamp = Math.max(-12, Math.min(12, nums[0] || 0))
+            else { const i = nums[0] - 1; if (!(i >= 0 && i < 10) || isNaN(nums[1])) return { ok: false, error: "band 1-10 <dB>" }; e.gains[i] = Math.max(-12, Math.min(12, nums[1])) }
+            setEq(e); return { ok: true, eq: e }
+        }
+        const name = Object.keys(eqPresets).filter(k => k.toLowerCase() === low || k.toLowerCase().replace(/\s+/g, "-") === low)[0]
+        if (!name) return { ok: false, error: "no such preset; one of: " + Object.keys(eqPresets).join(", ") }
+        setEq(Object.assign({}, eq, { on: true, gains: eqPresets[name].slice() }))
+        return { ok: true, preset: name }
+    }
 
     function status() {
         return { playing: playing, paused: paused, idle: idle, track: current ? { key: current.key, title: current.title, artist: current.artist, album: current.album } : null,

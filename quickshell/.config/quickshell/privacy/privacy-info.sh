@@ -9,7 +9,7 @@
 # - tela: compartilhamentos ativos pelo portal do Hyprland (xdg-desktop-portal-hyprland).
 # Depende de: pipewire (pw-dump), jq, psmisc (fuser).
 
-IGNORE='pavucontrol|PulseAudio Volume Control|cava|easyeffects|quickshell|wireplumber|barch-voice'
+IGNORE='pavucontrol|PulseAudio Volume Control|cava|easyeffects|quickshell|wireplumber|barch-voice|barch-player'
 
 pw=$(timeout 3 pw-dump 2>/dev/null || echo '[]')
 

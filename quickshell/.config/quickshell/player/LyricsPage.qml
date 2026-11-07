@@ -29,7 +29,9 @@ Item {
         const out = []
         if (!isSynced) { for (const l of (text || "").split(/\r?\n/)) out.push({ t: -1, text: l }); return out }
         for (const l of (text || "").split(/\r?\n/)) {
-            const stamps = [...l.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)]
+            const stamps = [], re = /\[(\d+):(\d+(?:\.\d+)?)\]/g
+            let m
+            while ((m = re.exec(l)) !== null) stamps.push(m)
             if (!stamps.length) continue
             const body = l.replace(/\[[^\]]*\]/g, "").trim()
             for (const s of stamps) out.push({ t: parseInt(s[1]) * 60 + parseFloat(s[2]), text: body })

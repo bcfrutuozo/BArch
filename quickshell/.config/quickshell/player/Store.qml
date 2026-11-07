@@ -114,7 +114,7 @@ Singleton {
         environment: ({ T: store.token })
         command: ["sh", "-c",
             'mkdir -p "$(dirname "$2")" && curl -sS --compressed --max-time 300 -H "X-Barch-Token: $T" -o "$2.tmp" "$1" || exit 3; ' +
-            'if jq -e \'.ok == true and .changed == true and (.albums | type == "array")\' "$2.tmp" >/dev/null 2>&1; then mv "$2.tmp" "$2" && cat "$2"; else cat "$2.tmp"; rm -f "$2.tmp"; fi',
+            'if jq -e \'.ok == true and .changed == true and (.albums | type == "array") and (.albums | length) > 0\' "$2.tmp" >/dev/null 2>&1; then mv "$2.tmp" "$2" && cat "$2"; else cat "$2.tmp"; rm -f "$2.tmp"; fi',
             "sh", store.url + "/api/catalog?since=" + store.version, store.cacheDir + "/catalog.json"]
         stdout: StdioCollector { onStreamFinished: fetcher.out = text }
         stderr: StdioCollector { onStreamFinished: fetcher.err = text }
@@ -129,7 +129,7 @@ Singleton {
                 return
             }
             store.reachable = true
-            if (d.changed === false) { store.scanning = !!d.scanning; return }
+            if (d.changed === false || !(d.albums || []).length) { store.scanning = !!d.scanning; if (!(d.albums || []).length && d.scanning) store.say("the NAS is reading the library for the first time…"); return }
             store.applyCatalog(d)
             store.say(store.albums.length + " albums, " + store.tracks.length + " tracks")
         }

@@ -247,14 +247,22 @@ The main pieces:
   [LRCLIB](https://lrclib.net); synced lines follow the music, a click seeks), **Statistics** (day / week / month /
   year / all time: plays, hours, the top artists, albums and genres by minutes, a leaderboard's top 100 tracks),
   **Playlists** (hand-made, dragged into order; **smart**: rules on artist, album, genre, title, year, likes, plays,
-  when it was played, sort and limit, evaluated when opened) and **Settings**. Right-click on any row or cover:
+  when it was played, sort and limit, evaluated when opened), **Visualizer** (the spectrum of what plays: bars,
+  mirror, wave, radial around the cover, dots with falling peaks; 24 to 128 bands, sensitivity, the palette's colors
+  or the accent or a heat scale, the cover blurred behind, trails, and a small version in the bottom bar.
+  `player/viz.py` captures the player's own PipeWire stream, the mpv node `barch-player`, never the microphone
+  or the rest of the desktop, as `barch-player-viz`, which the privacy indicator ignores; FFT in numpy, log-spaced
+  bands, 30 frames a second, only while a view wants them), **Equalizer** (ten octave bands from 31 Hz to 16 kHz,
+  ±12 dB, a preamp, thirteen presets, the response curve; applied live as mpv's `af` chain of lavfi `equalizer`
+  filters, so it holds for every output, Bluetooth included) and **Settings**. Right-click on any row or cover:
   play, play next, add to queue, add to playlist, like, go to album / artist, open folder. An album view with
   Play / Shuffle / Play next / Queue and the format badge (`16-bit · 44.1 kHz`). Search across artists, albums and
   tracks (`/`). Keyboard: Space, N / P, ← →, S, R, + −, M, L, Q, Y, Esc. A play counts once a track passes half its
   length (or four minutes). Likes, play counts, the history, the playlists, volume, shuffle, repeat and the last queue
   (restored paused at the next start) live in `~/.local/state/barch/player/state.json`, one JSON like omaTUNES's.
   `barch player play|pause|toggle|next|prev|status|volume|seek|like|shuffle|repeat`, `barch player play-album
-  "Artist/Album"`, `playlist <name>`, `search "text"`, `catalog refresh` talk to the open window over IPC.
+  "Artist/Album"`, `playlist <name>`, `search "text"`, `eq rock|on|off|band 3 +4|preamp -3`, `catalog refresh` talk
+  to the open window over IPC.
 - **Books** (`quickshell/books/`, "Books" in the launcher, `barch books browse [search|shelf|requests|rejected|downloads]`):
   the book stack on the NAS (`server/books`: Shelfmark, Calibre-Web-Automated, Audiobookshelf) through
   Shelfmark's API (`books.py` next to it, the same calls `barch books` makes; Shelfmark's admin key in
@@ -404,9 +412,10 @@ barch failure <unit> [--system]    # what OnFailure= calls: log + notification (
 barch snapshot list                # safety snapshot pairs of the agent sessions
 barch aur review                   # verdict on the pending AUR updates
 barch finance import [--dry-run]   # C6 Bank statements → Firefly (see Finance)
-barch player [browse] [albums|artists|tracks|genres|queue|favorites|recent|lyrics|stats|settings]   # the Player (see The bar)
+barch player [browse] [albums|artists|tracks|genres|queue|favorites|recent|lyrics|stats|viz|eq|settings]   # the Player (see The bar)
 barch player play|pause|toggle|next|prev|stop|status · volume <0-100|±n> · seek <s|±s> · like · shuffle [on|off] · repeat [off|all|one]
 barch player album|play-album|queue-album "<Artist/Album>" · playlist <name> · search "<text>" · catalog [status|refresh [--full]]
+barch player eq [on|off|toggle|<preset>|band <1-10> <dB>|preamp <dB>]   # the equalizer; no argument: its state and the presets
 barch music status|browse|list|show|resolve|retry|reject|scan   # the NAS music pipeline and its review queue (see Music)
 barch music covers check [artist]|list|apply|undo|keep|pick|propose <Artist/Album>   # scans with a frame -> the clean artwork
 barch music covers ask <Artist/Album> "keep the red frame"   # Claude adapts one or finds another, as a proposal

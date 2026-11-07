@@ -154,11 +154,12 @@ Desktop (through the bar):
   video audit [--json]        the library against the rule (HEVC, 2160p, HDR, bitrate, audio, subtitles)
   video install               copy Recyclarr's rules and the pipeline to the NAS (server/video/install.sh)
   player [browse] [page]      the Player (quickshell/player): the /music library played here, in the bar's theme
-                              (albums|artists|tracks|genres|queue|favorites|recent|lyrics|stats|settings)
+                              (albums|artists|tracks|genres|queue|favorites|recent|lyrics|stats|viz|eq|settings)
   player play|pause|toggle|next|prev|stop   transport · status: what plays (--json for the whole state)
   player volume <0-100|±n>|seek <s|±s>|like|shuffle [on|off]|repeat [off|all|one]
   player album|play-album|queue-album "<Artist/Album>"   open, play, or queue an album · playlist <name>
   player search "<text>"      the window on a search · catalog refresh [--full]: the NAS reads /music again
+  player eq [on|off|toggle|<preset>|band <1-10> <dB>|preamp <dB>]   the equalizer (no argument: its state and the presets)
   torrents browse [page]      the Torrents app: qBittorrent over time (overview|sources|torrents)
   torrents status             the statistics service on the NAS (server/torrents): samples, last one, errors
   torrents summary [range]    ratio, upload and download: all time, in the range (24h, 7d, 30d, 12w, 1y, all), now
@@ -1161,7 +1162,7 @@ cmd_player() {
   (($#)) && shift
   case $sub in
     browse | open) app_open player BARCH_PLAYER_PAGE "${1:-}" ;;
-    albums | artists | tracks | genres | queue | favorites | recent | lyrics | stats | settings) app_open player BARCH_PLAYER_PAGE "$sub" ;;
+    albums | artists | tracks | genres | queue | favorites | recent | lyrics | stats | viz | settings) app_open player BARCH_PLAYER_PAGE "$sub" ;;
     play | pause | toggle | next | prev | stop | like)
       player_ipc "$sub"; show "$OUT" '"player: '"$sub"'"' ;;
     volume | seek)
@@ -1183,6 +1184,10 @@ cmd_player() {
       player_ipc playlist "$1"
       jq -e .ok >/dev/null <<<"$OUT" || die 1 "player: $(jq -r .error <<<"$OUT")"
       show "$OUT" '"player: playing the playlist (\(.tracks) tracks)"' ;;
+    eq)
+      player_ipc eq "$*"
+      jq -e .ok >/dev/null <<<"$OUT" || die 1 "player: $(jq -r .error <<<"$OUT")"
+      show "$OUT" '(if .preset then "player: equalizer preset \(.preset)" elif .on != null then "player: equalizer \(if .on then "on" else "off" end)" elif .presets then "equalizer \(if .eq.on then "on" else "off" end) · preamp \(.eq.preamp) dB · bands \(.eq.gains | map(tostring) | join(" ")) dB\npresets: \(.presets | join(", "))" else "player: equalizer set" end)' ;;
     search)
       [[ -n ${1:-} ]] || usage_error "player search <text>"
       if qs -p "$HOME/.config/quickshell/player" ipc show >/dev/null 2>&1; then qs -p "$HOME/.config/quickshell/player" ipc call app search "$1" >/dev/null
@@ -1193,7 +1198,7 @@ cmd_player() {
         status | "") music_api GET /api/catalog/status; show "$OUT" '"catalog: version \(.version), \(.albums) albums, \(.tracks) tracks, read \(.scanned | strflocaltime("%d/%m %H:%M"))" + (if .scanning then " (reading now)" else "" end) + (if .last.read != null then " · last pass: \(.last.read) read, \(.last.removed) removed in \(.last.seconds) s" else "" end)' ;;
         *) usage_error "player catalog [status|refresh [--full]]" ;;
       esac ;;
-    *) usage_error "player [browse] [page]|play|pause|toggle|next|prev|stop|status|volume|seek|like|shuffle|repeat|album|play-album|queue-album|playlist|search|catalog" ;;
+    *) usage_error "player [browse] [page]|play|pause|toggle|next|prev|stop|status|volume|seek|like|shuffle|repeat|album|play-album|queue-album|playlist|search|eq|catalog" ;;
   esac
 }
 

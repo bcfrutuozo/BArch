@@ -1,6 +1,7 @@
 singleton Ui Ui.qml
 singleton Store Store.qml
 singleton Player Player.qml
+singleton Viz Viz.qml
 Badge 1.0 Badge.qml
 Card 1.0 Card.qml
 Tip 1.0 Tip.qml
@@ -26,3 +27,6 @@ StatsPage 1.0 StatsPage.qml
 SettingsPage 1.0 SettingsPage.qml
 PlaylistDialog 1.0 PlaylistDialog.qml
 NowPlaying 1.0 NowPlaying.qml
+VizPage 1.0 VizPage.qml
+EqPage 1.0 EqPage.qml
+MiniViz 1.0 MiniViz.qml

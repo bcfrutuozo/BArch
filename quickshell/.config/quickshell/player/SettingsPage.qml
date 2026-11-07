@@ -92,13 +92,14 @@ Item {
                     Key { keys: "/ · Ctrl+F"; does: "search" }
                     Key { keys: "Q"; does: "the queue" }
                     Key { keys: "Y"; does: "lyrics" }
+                    Key { keys: "V · E"; does: "visualizer · equalizer" }
                     Key { keys: "Esc"; does: "back / close the album" }
                     Key { keys: "Ctrl+W"; does: "close the window (playback stops)" }
                 }
             }
             Card {
                 title: "From a shell"
-                Text { text: "barch player [browse] [albums|artists|tracks|genres|queue|favorites|recent|lyrics|stats|settings]\nbarch player play|pause|toggle|next|prev|stop|status · volume <0-100> · seek <±s> · like\nbarch player album \"Artist/Album\" · queue \"Artist/Album\" · search \"text\"\nplayerctl -p mpv play-pause  (with mpv-mpris)"; color: Ui.subtext; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 2 }
+                Text { text: "barch player [browse] [albums|artists|tracks|genres|queue|favorites|recent|lyrics|stats|viz|eq|settings]\nbarch player play|pause|toggle|next|prev|stop|status · volume <0-100> · seek <±s> · like\nbarch player album \"Artist/Album\" · queue \"Artist/Album\" · search \"text\"\nplayerctl -p mpv play-pause  (with mpv-mpris)"; color: Ui.subtext; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 2 }
             }
         }
     }
