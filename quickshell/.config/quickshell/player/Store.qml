@@ -22,6 +22,7 @@ Singleton {
     property string token: ""
     readonly property bool configured: url !== ""
     property bool mounted: false
+    property bool mountChecked: false     // nothing is asked for before the share was looked at
     property bool reachable: true
     property bool loading: false
     property string statusText: ""
@@ -43,7 +44,7 @@ Singleton {
     readonly property int trackCount: tracks.length
     readonly property real totalLength: albums.reduce((a, x) => a + x.length, 0)
 
-    function fold(s) { return (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "") }
+    function fold(s) { return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") }
     function year(d) { const m = /^(\d{4})/.exec(d || ""); return m ? parseInt(m[1]) : 0 }
     function time(s) {
         s = Math.max(0, Math.floor(s || 0))
@@ -113,7 +114,7 @@ Singleton {
         environment: ({ T: store.token })
         command: ["sh", "-c",
             'mkdir -p "$(dirname "$2")" && curl -sS --compressed --max-time 300 -H "X-Barch-Token: $T" -o "$2.tmp" "$1" || exit 3; ' +
-            'if grep -q \'"changed": false\' "$2.tmp"; then cat "$2.tmp"; rm -f "$2.tmp"; else mv "$2.tmp" "$2" && cat "$2"; fi',
+            'if jq -e \'.ok == true and .changed == true and (.albums | type == "array")\' "$2.tmp" >/dev/null 2>&1; then mv "$2.tmp" "$2" && cat "$2"; else cat "$2.tmp"; rm -f "$2.tmp"; fi',
             "sh", store.url + "/api/catalog?since=" + store.version, store.cacheDir + "/catalog.json"]
         stdout: StdioCollector { onStreamFinished: fetcher.out = text }
         stderr: StdioCollector { onStreamFinished: fetcher.err = text }
@@ -173,7 +174,7 @@ Singleton {
         id: mountCheck
         command: ["sh", "-c", '[ -n "$(ls -A "$1" 2>/dev/null)" ]', "sh", store.mount]
         running: true
-        onExited: (code, status) => store.mounted = code === 0
+        onExited: (code, status) => { store.mounted = code === 0; store.mountChecked = true }
     }
     Timer { interval: 60000; running: true; repeat: true; onTriggered: mountCheck.running = true }
     function enc(s) { return encodeURIComponent(s) }
@@ -183,7 +184,7 @@ Singleton {
                        : url + "/api/catalog/stream?folder=" + enc(t.folder) + "&file=" + enc(t.file)
     }
     function coverUrl(album) {
-        if (!album || !album.cover) return ""
+        if (!album || !album.cover || !mountChecked) return ""
         return mounted ? "file://" + mount + "/" + album.folder + "/cover.jpg"
                        : url + "/api/catalog/cover?folder=" + enc(album.folder) + "&token=" + enc(token)
     }
@@ -209,6 +210,7 @@ Singleton {
     Process { command: ["mkdir", "-p", store.stateDir, store.cacheDir + "/lyrics"]; running: true }
     Timer { id: saveTimer; interval: 800; onTriggered: store.saveNow() }
     function save() { saveTimer.restart() }
+    Component.onDestruction: if (saveTimer.running) saveNow()     // the window closing with a write pending
     function saveNow() {
         const text = JSON.stringify(state) + "\n"
         lastWritten = text
@@ -334,6 +336,15 @@ Singleton {
         const top = m => Object.values(m).sort((a, b) => b.seconds - a.seconds)
         return { plays: plays, seconds: seconds, artists: top(art), albums: top(alb), genres: top(gen), tracks: top(trk) }
     }
+
+    // ---------- navigation (the window listens) ----------
+    signal navigate(string page, var arg)
+    signal askNewPlaylist(var keys)
+    function goPage(p) { navigate(p, null) }
+    function goAlbum(key) { navigate("album", key) }
+    function goArtist(name) { navigate("artists", name) }
+    function goPlaylist(id) { navigate("playlist", id) }
+    function newPlaylistWith(keys) { askNewPlaylist(keys || []) }
 
     function openUrl(u) { if (u) Quickshell.execDetached(["xdg-open", u]) }
     function openFolder(album) { if (album && mounted) Quickshell.execDetached(["xdg-open", mount + "/" + album.folder]) }

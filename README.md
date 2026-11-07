@@ -27,7 +27,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | Folder | Goes to | What it is |
 |---|---|---|
 | `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, `scripts/lock.sh` (locks; starts and supervises the resident lock process); `settings.json` is what the Hyprland Settings app saved (below) |
-| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/`, `mixer/`, `music/`, `books/`, `video/` and `torrents/` the other apps, `voice/` the voice control daemon, `ui/` the controls they all share (linked into each) |
+| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/`, `mixer/`, `music/`, `player/` (the music player), `books/`, `video/` and `torrents/` the other apps, `voice/` the voice control daemon, `ui/` the controls they all share (linked into each) |
 | `foot/` | `~/.config/foot` | Terminal |
 | `ghostty/` | `~/.config/ghostty/config.ghostty` | Ghostty config as cmux reads it (it embeds libghostty): Ctrl+C copies a selection (^C without one), Ctrl+V pastes, Ctrl+Shift+C/V send the originals, like foot |
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
@@ -43,7 +43,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `backup/` | — | `barch backup`: what restic saves to the NAS (`include.txt`, `exclude.txt`), see Backup |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
 | `agent/` | — | Scheduled agent tasks (`tasks/`), the reactive rules (`rules.json`) and their daemon (`events.py`), the NAS health collector (`nas.py`), the failure ignore list and the upstream watch list; used by `barch` |
-| `server/` | NAS | `music/`: the music pipeline (its own container, `barch-music`), downloads to `/music` in the library's style with a review queue (`barch music`, see Music); `unraid/`: the SMBus driver OpenRGB needs there, built per Unraid kernel (see NAS); `books/`: the book stack's Unraid templates (Shelfmark requests, Calibre-Web-Automated for ebooks, Audiobookshelf), its README; `video/`: what Radarr and Sonarr accept (2160p HEVC HDR, a 1080p profile for what never came out in 4K, Recyclarr) and the pipeline that muxes the PT-BR dub from another release into each movie and episode, subtitles shifted along (`barch video`, its README); `torrents/`: qBittorrent's counters sampled every five minutes into SQLite (its own container, `barch-torrents`), so ratio, upload and download have a history (`barch torrents`, its README) |
+| `server/` | NAS | `music/`: the music pipeline (its own container, `barch-music`), downloads to `/music` in the library's style with a review queue (`barch music`, see Music) and the catalog of `/music` the Player reads (`catalog.py`); `unraid/`: the SMBus driver OpenRGB needs there, built per Unraid kernel (see NAS); `books/`: the book stack's Unraid templates (Shelfmark requests, Calibre-Web-Automated for ebooks, Audiobookshelf), its README; `video/`: what Radarr and Sonarr accept (2160p HEVC HDR, a 1080p profile for what never came out in 4K, Recyclarr) and the pipeline that muxes the PT-BR dub from another release into each movie and episode, subtitles shifted along (`barch video`, its README); `torrents/`: qBittorrent's counters sampled every five minutes into SQLite (its own container, `barch-torrents`), so ratio, upload and download have a history (`barch torrents`, its README) |
 | `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, sixteen scenes in the colors of each palette), Limine theme (`limine-theme.py`) |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
 | `packages/` | — | Explicitly installed packages (`pacman.txt`, `aur.txt`, `aur-ignore.txt`) |
@@ -230,6 +230,31 @@ The main pieces:
   it could not settle, each with its candidates; Use one to see it next to the album's files track by
   track, Tag writes its ids, Add to MusicBrainz opens the release editor filled in from the files, Skip.
   **Lidarr & scan**: scan now, FLAC only, monitor / search album ids.
+- **Player** (`quickshell/player/`, "Player" in the launcher, `barch player [page]`): the music library on the
+  NAS played on this desktop, in the bar's theme, in the spirit of [omaTUNES](https://github.com/Balthazzahr/omatunes).
+  The library is never scanned from here: the pipeline on the NAS keeps a **catalog** of `/music`
+  (`server/music/catalog.py`: every album with its tracks' tags, lengths and formats, an album read again only when
+  its files change, every 15 min and right after a delivery; `GET /api/catalog`, gzip), the app fetches it once
+  (`~/.cache/barch/player/catalog.json`) and asks again with `?since=<version>`, so an album the pipeline delivered
+  shows up by itself. The audio comes from the share (`/mnt/nasfrutuozo/media/music`, covers too) or, when it is
+  not mounted, streamed from the API (`/api/catalog/stream`, with Range). Playback is an **mpv** the app starts
+  (`player/mpv.sh`: `--no-config`, audio only, gapless, idle) and drives over its JSON IPC socket; mpv holds the
+  queue, so prev/next and gapless are its own, and with `mpv-mpris` installed (`pacman -S mpv-mpris`) the bar's
+  media island, `playerctl` and the voice commands see it. Pages: **Albums** (covers; sort by artist, title, year,
+  recently added, most played; hover plays), **Artists**, **Tracks** (every track as a table, sortable, grouped by
+  album / artist / genre / year), **Genres**, **Queue** (drag to reorder, remove, save as a playlist), **Favorites**,
+  **Recent**, **Lyrics** (a `.lrc` next to the file or the LYRICS tag through the API, else
+  [LRCLIB](https://lrclib.net); synced lines follow the music, a click seeks), **Statistics** (day / week / month /
+  year / all time: plays, hours, the top artists, albums and genres by minutes, a leaderboard's top 100 tracks),
+  **Playlists** (hand-made, dragged into order; **smart**: rules on artist, album, genre, title, year, likes, plays,
+  when it was played, sort and limit, evaluated when opened) and **Settings**. Right-click on any row or cover:
+  play, play next, add to queue, add to playlist, like, go to album / artist, open folder. An album view with
+  Play / Shuffle / Play next / Queue and the format badge (`16-bit · 44.1 kHz`). Search across artists, albums and
+  tracks (`/`). Keyboard: Space, N / P, ← →, S, R, + −, M, L, Q, Y, Esc. A play counts once a track passes half its
+  length (or four minutes). Likes, play counts, the history, the playlists, volume, shuffle, repeat and the last queue
+  (restored paused at the next start) live in `~/.local/state/barch/player/state.json`, one JSON like omaTUNES's.
+  `barch player play|pause|toggle|next|prev|status|volume|seek|like|shuffle|repeat`, `barch player play-album
+  "Artist/Album"`, `playlist <name>`, `search "text"`, `catalog refresh` talk to the open window over IPC.
 - **Books** (`quickshell/books/`, "Books" in the launcher, `barch books browse [search|shelf|requests|rejected|downloads]`):
   the book stack on the NAS (`server/books`: Shelfmark, Calibre-Web-Automated, Audiobookshelf) through
   Shelfmark's API (`books.py` next to it, the same calls `barch books` makes; Shelfmark's admin key in
@@ -379,6 +404,9 @@ barch failure <unit> [--system]    # what OnFailure= calls: log + notification (
 barch snapshot list                # safety snapshot pairs of the agent sessions
 barch aur review                   # verdict on the pending AUR updates
 barch finance import [--dry-run]   # C6 Bank statements → Firefly (see Finance)
+barch player [browse] [albums|artists|tracks|genres|queue|favorites|recent|lyrics|stats|settings]   # the Player (see The bar)
+barch player play|pause|toggle|next|prev|stop|status · volume <0-100|±n> · seek <s|±s> · like · shuffle [on|off] · repeat [off|all|one]
+barch player album|play-album|queue-album "<Artist/Album>" · playlist <name> · search "<text>" · catalog [status|refresh [--full]]
 barch music status|browse|list|show|resolve|retry|reject|scan   # the NAS music pipeline and its review queue (see Music)
 barch music covers check [artist]|list|apply|undo|keep|pick|propose <Artist/Album>   # scans with a frame -> the clean artwork
 barch music covers ask <Artist/Album> "keep the red frame"   # Claude adapts one or finds another, as a proposal
@@ -569,6 +597,10 @@ lidarr-albums <artist>` shows each verdict). An album already in the library is 
 another album with the same title (the eight "Greatest Hits" of Deep Purple) gets its own folder and ALBUM with its
 year by itself (`Greatest Hits (2008)`). One disc of a box set split per disc ("1975 - Toys In The Attic (CD3 - Box Of
 Fire)") is matched as the album it is, or as that disc of the box when the album does not stand alone.
+
+It also serves the **Player** (see The bar): `/api/catalog` is every album of `/music` with its tracks, kept fresh by
+the files' names, sizes and mtimes (`catalog.py`), `/api/catalog/stream` the audio with Range for a desktop without the
+share, `/api/catalog/lyrics` a `.lrc` or LYRICS tag; `barch player catalog refresh` reads the folders again now.
 
 What it keeps tidy by itself (2026-11-04): **the library tied to MusicBrainz**: while no download waits, it goes over
 every album of `/music` and matches it with the lengths of its own files; a sure match gets `MUSICBRAINZ_ALBUMID` and

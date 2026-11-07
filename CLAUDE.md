@@ -76,10 +76,10 @@ reusing the widget's own functions.
   (`BArch.settings.apply`). To change an option for Bruno, prefer `barch hypr set <opt> <value>`
   over editing the Lua by hand when it is a one-off; hand-written files stay the base.
 - **Apps with their own window** (`quickshell/hypr`, `center`, `backup`, `packages`, `mixer`,
-  `music`, `books`, `video`, `torrents`, `palette`) run as `qs -p <dir>` and cannot import outside their folder: the shared controls live
+  `music`, `player`, `books`, `video`, `torrents`, `palette`) run as `qs -p <dir>` and cannot import outside their folder: the shared controls live
   in `quickshell/ui/` and are symlinked into each app (`ln -s ../ui/X.qml`), and every component
   must be listed in the app's `qmldir`. Closing the window quits the process; `barch hypr|center|
-  packages|mixer`, `barch backup browse`, `barch music|books|video|torrents browse` start a new one. In their shell commands resolve the repo
+  packages|mixer`, `barch backup browse`, `barch music|books|video|torrents browse`, `barch player` start a new one. In their shell commands resolve the repo
   with `readlink -f` (`Quickshell.shellDir/../../../..` only works physically, the shell dir is a
   symlink). `hypridle.conf` and `hyprsunset.conf` are edited by the Hyprland app's Idle and Night
   light pages (hyprlang parser in `hypr/hypr.js`, comments kept).
@@ -89,7 +89,9 @@ reusing the widget's own functions.
   `barch voice match "..."` (prints what would run, runs nothing); `barch voice test "..."` runs it
   for real on the live desktop, so never use it on a list of examples.
 - **Music pipeline** (`server/music/`): runs on the NAS in its own container (`barch-music`), not on this machine;
-  `barch music install` copies it there. The naming rules are in `style.py` and were measured over
+  `barch music install` copies it there. It also serves the **Player's catalog** (`catalog.py`, `/api/catalog`):
+  the Player (`quickshell/player`) never scans `/music` itself and plays the files from the share
+  (`/mnt/nasfrutuozo/media/music`) with an mpv of its own (`player/mpv.sh`, never `~/.config/mpv`). The naming rules are in `style.py` and were measured over
   the whole library: change them only with `tests/test_style.py` passing. Never write to `/music`
   from here (the share is read only for this user); fixes go through scripts run in the container.
 - **Video** (`server/video/`): Recyclarr keeps Radarr/Sonarr's "BArch 4K" profile (2160p HEVC HDR,

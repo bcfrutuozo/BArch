@@ -13,7 +13,6 @@ Singleton {
 
     readonly property string sock: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/barch-player.sock"
     property bool ready: false
-    property bool mpris: false
     property var queue: []           // track keys, in mpv's playlist order
     property int index: -1
     property bool paused: true
@@ -77,8 +76,6 @@ Singleton {
         set("volume", volume)
         setRepeat(Store.state.repeat || "off", true)
         shuffle = !!Store.state.shuffle
-        send(["get_property", "property-list"], d => { pl.mpris = Array.isArray(d) && d.some(p => p === "user-data") && true })
-        send(["script-binding", "ignore"], null)   // nothing: just proves the channel is two-way
         ready = true
         restoreQueue()
     }

@@ -80,6 +80,7 @@ mangohud
 memtest86+-efi
 mono
 mpv
+mpv-mpris
 neovim
 networkmanager
 nextcloud-client

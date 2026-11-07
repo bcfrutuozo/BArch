@@ -107,6 +107,14 @@ hl.window_rule({
     center = true,
     size   = "1360 880",
 })
+-- BArch Player (quickshell/player, `barch player`): grade de capas e a barra de reprodução
+hl.window_rule({
+    name  = "barch-player",
+    match = { title = "^BArch Player$" },
+    float  = true,
+    center = true,
+    size   = "1400 900",
+})
 -- os outros apps do BArch (backup, pacotes, mixer, música): mesmo tratamento
 hl.window_rule({
     name  = "barch-apps",
