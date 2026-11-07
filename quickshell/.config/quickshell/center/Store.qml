@@ -142,6 +142,21 @@ Singleton {
             nas = d
         })
     }
+    // the firewalls (agent/pfsense.py through `barch --json fw status`): {sites: {omni: {...}, chaos: {...}}}
+    property var fw: ({})
+    property real fwAt: 0
+    property bool fwBusy: false
+    function refreshFw() {
+        if (fwBusy) return
+        fwBusy = true
+        run([barch, "--json", "fw", "status"], (out, err, code) => {
+            fwBusy = false
+            const d = json(out, null)
+            if (!d) { fw = { configured: false, sites: {}, error: String(err || "").trim() || "no answer from barch fw status" }; fwAt = Date.now(); return }
+            fwAt = Date.now()
+            fw = d
+        })
+    }
     function series(metric, since, cb) {
         run([barch, "--json", "metrics", "series", metric, "--since", since, "--points", "240"], out => cb(json(out, {})))
     }
@@ -152,12 +167,12 @@ Singleton {
     }
     function editPath(path) { Quickshell.execDetached(["sh", "-c", 'exec uwsm app -- foot -e "${EDITOR:-nvim}" "$1"', "sh", path]) }
     function refreshAll() {
-        refreshUnits(); refreshHealth(false); refreshAgent(); refreshSnapshots(); refreshFailures(); refreshAutomation(); refreshNas(true)
+        refreshUnits(); refreshHealth(false); refreshAgent(); refreshSnapshots(); refreshFailures(); refreshAutomation(); refreshNas(true); refreshFw()
         ready = true
     }
     Component.onCompleted: refreshAll()
     Timer { interval: 30000; running: true; repeat: true; onTriggered: { store.refreshUnits(); store.refreshFailures(); store.refreshAutomation() } }
-    Timer { interval: 60000; running: true; repeat: true; onTriggered: store.refreshNas(false) }
+    Timer { interval: 60000; running: true; repeat: true; onTriggered: { store.refreshNas(false); store.refreshFw() } }
 
     // ---------- failure-ignore (a file of the repo) ----------
     FileView {

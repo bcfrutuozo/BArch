@@ -164,7 +164,9 @@ The main pieces:
   next timers), **NAS** (what `barch nas status` knows, asked every minute: array, parity check, every
   disk with status, temperature and usage, the pools, containers down or with an update, Unraid's unread
   warnings, the days left on each certificate, and the `nas.*` metrics over 24 h, 7 d or 30 d; the
-  sidebar counts its problems in red), **Services** (user and system units with state and enabled state, journal, start /
+  sidebar counts its problems in red), **Firewalls** (what `barch fw status` knows about omni and chaos, asked every
+  minute: WAN latency and loss, interfaces, the IPsec tunnel, the DNSBL check, clients online, what each firewall
+  blocked by interface, the DHCP leases by network with a filter, and the `fw.*` metrics over time), **Services** (user and system units with state and enabled state, journal, start /
   stop / restart / reset-failed / enable / disable; system units go through polkit, so the bar's
   agent asks the password), **Timers** (both scopes, next and last run, run the service now),
   **Failures** (the logs `barch failure` saved, grouped by unit: view, Investigate with Claude,
@@ -421,6 +423,7 @@ barch rules list|test <event> [k=v..]|fire <id>|enable|disable <id>   # agent/ru
 barch events status|log [n] [--filter x] [--since 7d]   # the daemon and what happened (windows, VPN, boots, costs…)
 barch metrics list|series <metric> [--since 24h]|summary   # metrics.db: temperatures, load, boots, failures, Claude cost
 barch nas status [--no-certs]|setup   # the NAS now, through Unraid's API: array, disks, pools, containers, Unraid's warnings, certificates
+barch fw status|clients|blocked [site] [n]|setup   # the pfSense firewalls through their REST API: gateways, IPsec, DNSBL, leases, blocks (see NAS)
 barch agent ask "why is X slow?"   # Claude in a terminal in ~/BArch (the launcher's "a ")
 barch agent list|run|report|continue <task>   # scheduled tasks (see Agent)
 barch failure <unit> [--system]    # what OnFailure= calls: log + notification (see Agent)
@@ -525,7 +528,7 @@ without any AI:
   and the boot time of every boot (`systemd-analyze`, once per boot). Every five minutes the NAS too
   (`nas.*`, see NAS health below): array and fullest pool, hottest disk, disks not OK, containers
   down or with an update, Unraid's unread warnings, its CPU and RAM, and `cert.days`, the days left
-  on the certificate closest to expiring.
+  on the certificate closest to expiring, and the firewalls (`fw.<site>.*`, see NAS → Firewalls).
 - **Events**, stored and matched as they happen: Hyprland's socket2 (`window.open`,
   `window.close` with class and title, `window.fullscreen`, `window.urgent`, `monitor.added`,
   `monitor.removed`), `vpn.up`, `vpn.down` (the tunnel dropped) and `vpn.off` (turned off: Disconnect, Anonymous Mode off, a voice command; `pia.sh disconnect` leaves the time in `stopped`), both with the tunnel that went away and whether the kill switch is holding the traffic, `anon.on`/`anon.off`, `net.up`/`net.down` (default
@@ -534,7 +537,9 @@ without any AI:
   a line to `~/.local/state/barch/claude-cost.log`), `music.review` (an album of the NAS music
   pipeline landed in the review queue, polled every 2 min: id, name, problem, `cover_only`), `startup`,
   and the NAS: `nas.down` / `nas.up`, `nas.array` (state), `nas.disk`, `nas.containers`, `nas.alert`
-  (Unraid's own warnings and alerts) and `cert.expiring`, each with a one-line `text`.
+  (Unraid's own warnings and alerts) and `cert.expiring`, each with a one-line `text`; and the firewalls
+  (`fw.*`, see NAS → Firewalls): `fw.down` / `fw.up`, `fw.auth`, `fw.boot`, `fw.gateway`, `fw.interface`,
+  `fw.ipsec`, `fw.dnsbl` and `fw.client` (a device never seen before took a lease).
 - **Rules** in `agent/rules.json`: `when` is an event name plus regexes on its fields
   (`{"event": "window.open", "class": "^steam_app_"}`) or a metric with `above`/`below` and a
   `clear` value for hysteresis (`{"metric": "disk.root.pct", "above": 90, "clear": 85}` fires once
@@ -548,7 +553,10 @@ without any AI:
   only for a cover (`music.review` with `cover_only`: Claude searches the web for it, `barch music
   cover-ask`, in a transient unit so the daemon never waits), the NAS ones (not answering and back,
   array not started, a disk with a problem, a container down, an Unraid alert or warning, array or a
-  pool above 85 %, a disk above 50 °C) and a certificate about to expire; two disabled ones keep caffeine on
+  pool above 85 %, a disk above 50 °C), a certificate about to expire, the firewall ones (not answering and
+  back, key refused, reboot, gateway or interface down and back, the IPsec tunnel down and back, the DNSBL not
+  blocking, a device never seen before on any network, the omni IoT network with more than 300 blocked
+  connections in five minutes); two disabled ones keep caffeine on
   while a game window is open (Bruno wants notifications while playing, so no DND there).
 
 ```bash
@@ -657,6 +665,21 @@ the appdata share; `certs` (the endpoints watched) and `ignore_containers` (rege
 there, the intervals and thresholds (`nas_every_s`, `nas_grace_s`, `cert_warn_days`) in `rules.json`.
 Unraid's certificate chains to a Let's Encrypt root the system store does not carry yet, so
 `agent/certs/root-yr-by-x1.crt` (its cross-signature by ISRG Root X1) is loaded next to the store.
+
+**Firewalls** (`agent/pfsense.py`, `barch fw status|clients|blocked [site]`): both pfSense (omni and chaos)
+through their REST API package (`~/.config/barch/pfsense.json`: URL, key and resolver address per site, written
+by hand after `barch fw setup`, which says how to make a `barch` user with the seven read-only privileges and
+its key on each firewall), every five minutes, read only: load and temperature, every gateway's latency and
+loss, the enabled interfaces, the IPsec tunnel's child SAs, the DHCP leases and the firewall log. The DNSBL is
+checked for real, not through the API: a DNS query for a domain the lists block (`dnsbl_probe`, doubleclick.net)
+to each firewall's resolver, which has to answer the DNSBL virtual IP (`dnsbl_vip`, 100.99.0.1); chaos's
+resolver answers over the tunnel. `barch-events` turns it into metrics (`fw.<site>.cpu.pct`, `gw.<name>.rtt`,
+`ipsec.up`, `dnsbl`, `clients`, `blocked` and `blocked.<interface>`: connections the firewall blocked since the
+last sample, read from the log) and events, each said once: down after three misses and back, a reboot, a
+gateway or an interface down, the tunnel down, the DNSBL not blocking, and `fw.client`, a MAC never seen on
+that site taking a lease (the first sample learns what is there and says nothing; `ignore_macs` skips
+randomized ones). A key the API refuses is reported once and left alone for an hour: the API's login
+protection bans an address after a few refused keys, so never probe with guessed ones.
 
 **Shell:** **Super+Shift+T** opens foot with `ssh nas` (root at `100.100.0.10`, the `nas` host of
 `~/.ssh/config`, which stays out of the repo; key-only, a shared connection kept for 10 min so the

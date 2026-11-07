@@ -1,9 +1,9 @@
-// shell.qml — BArch Center: the NAS (Unraid's API), services and timers (user and system), the failures `barch failure`
+// shell.qml — BArch Center: the NAS (Unraid's API), the firewalls (pfSense's REST API), services and timers (user and system), the failures `barch failure`
 // saved, the agent tasks and reports, the safety snapshots, the health check and the journal,
 // in one window (own Shell ID, like the palette editor and Hyprland Settings).
 //
 //   qs -p ~/.config/quickshell/center            barch center [page]
-//   BARCH_CENTER_PAGE=<page>                     overview | nas | services | timers | failures | agent | automation | history | snapshots | journal
+//   BARCH_CENTER_PAGE=<page>                     overview | nas | firewalls | services | timers | failures | agent | automation | history | snapshots | journal
 //   qs -p ~/.config/quickshell/center ipc call app open <page> | close
 //
 // Reads what systemctl, journalctl and `barch --json` give; actions are the same commands
@@ -22,6 +22,7 @@ ShellRoot {
     readonly property var pages: [
         { id: "overview",  label: "Overview",  icon: "󰋼" },
         { id: "nas",       label: "NAS",       icon: "󰣳" },
+        { id: "firewalls", label: "Firewalls", icon: "󰒃" },
         { id: "services",  label: "Services",  icon: "󰒓" },
         { id: "timers",    label: "Timers",    icon: "󰔛" },
         { id: "failures",  label: "Failures",  icon: "󰀦" },
@@ -82,6 +83,7 @@ ShellRoot {
                             readonly property bool current: root.page === modelData.id
                             readonly property int marks: modelData.id === "services" ? Store.failedNow.length
                                                        : modelData.id === "nas" ? (Store.nas.problems || []).length
+                                                       : modelData.id === "firewalls" ? Object.values(Store.fw.sites || {}).reduce((n, x) => n + (x.problems || []).length, 0)
                                                        : modelData.id === "failures" ? Store.failures.filter(f => Date.now() - f.time < 86400000).length
                                                        : modelData.id === "agent" ? Store.reports.filter((r, i, a) => a.findIndex(x => x.task === r.task) === i && r.status !== "ok").length
                                                        : 0
@@ -97,7 +99,7 @@ ShellRoot {
                                 Rectangle {
                                     visible: nav.marks > 0
                                     width: mt.implicitWidth + 10; height: 16; radius: 8
-                                    color: nav.modelData.id === "services" || nav.modelData.id === "nas" ? Ui.red : Ui.yellow
+                                    color: nav.modelData.id === "services" || nav.modelData.id === "nas" || nav.modelData.id === "firewalls" ? Ui.red : Ui.yellow
                                     Text { id: mt; anchors.centerIn: parent; text: nav.marks; color: Ui.crust; font.family: Ui.font; font.pixelSize: Ui.fontSize - 4; font.bold: true }
                                 }
                             }
@@ -131,6 +133,7 @@ ShellRoot {
                         sourceComponent: {
                             switch (root.page) {
                             case "nas": return nasC
+                            case "firewalls": return firewallsC
                             case "services": return servicesC
                             case "timers": return timersC
                             case "failures": return failuresC
@@ -147,6 +150,7 @@ ShellRoot {
                 }
                 Component { id: overviewC; OverviewPage { onGo: p => root.page = p } }
                 Component { id: nasC; NasPage {} }
+                Component { id: firewallsC; FirewallPage {} }
                 Component { id: servicesC; ServicesPage {} }
                 Component { id: timersC; TimersPage {} }
                 Component { id: failuresC; FailuresPage {} }

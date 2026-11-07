@@ -70,7 +70,7 @@ Desktop (through the bar):
                               updates, .pacnew, the repo lists, pacman history; page: installed|updates|history
   mixer [<page>]              BArch Mixer (quickshell/mixer): PipeWire devices, per-app volume and
                               routing, sample rate, Bluetooth codec; page: devices|apps|settings
-  center [<page>]             BArch Center (quickshell/center): the NAS (page nas), services and timers (user and
+  center [<page>]             BArch Center (quickshell/center): the NAS (page nas), the firewalls (firewalls), services and timers (user and
                               system), the failures saved by `barch failure`, the agent tasks
                               and reports, the safety snapshots, health, journal; page: overview|
                               services|timers|failures|agent|snapshots|journal
@@ -211,6 +211,11 @@ Automation (agent/rules.json + agent/events.py, barch-events.service):
                               containers down or with an update, Unraid's unread warnings, days left
                               on the certificates; barch-events samples the same (nas.* rules)
   nas setup                   write ~/.config/barch/nas.json (URL and API key from Homepage's Unraid widget)
+  fw status [site]            the pfSense firewalls (omni, chaos) through their REST API (agent/pfsense.py):
+                              load, gateways, interfaces, IPsec tunnel, DNSBL alive, blocked connections;
+                              barch-events samples the same (fw.* rules: down, reboot, gateway, tunnel, new device)
+  fw clients [site]           the DHCP leases by interface, who is online · fw blocked [site] [n]: the last blocks
+  fw setup                    how to make the read-only API users and keys, and what ~/.config/barch/pfsense.json holds
   rgb [status]|apply|on|off   the Corsair keyboard and mouse in the theme's color (agent/rgb.py, ckb-next;
                               barch-rgb.service repaints on theme changes and after a resume)
   rgb color <tone|#hex>       a palette tone (accent, green, red...) or a fixed color
@@ -1792,6 +1797,20 @@ cmd_nas() {
   esac
 }
 
+# fw status|clients|blocked|setup: agent/pfsense.py prints the snapshot itself (text, or JSON with --json)
+cmd_fw() {
+  local sub=${1:-status}
+  (($#)) && shift
+  need python3
+  case $sub in
+    status | clients | blocked)
+      if [[ $JSON == 1 ]]; then python3 -I "$REPO/agent/pfsense.py" "$sub" "$@" --json | jq .; return "${PIPESTATUS[0]}"
+      else python3 -I "$REPO/agent/pfsense.py" "$sub" "$@"; fi ;;
+    setup) python3 -I "$REPO/agent/pfsense.py" setup ;;
+    *) usage_error "fw status|clients|blocked [site]|setup" ;;
+  esac
+}
+
 # rgb: agent/rgb.py drives ckb-next-daemon's pipes (text, or JSON with --json)
 cmd_rgb() {
   need python3
@@ -2283,6 +2302,7 @@ case $cmd in
   events) cmd_events "$@" ;;
   metrics) cmd_metrics "$@" ;;
   nas) cmd_nas "$@" ;;
+  fw | pfsense) cmd_fw "$@" ;;
   rgb) cmd_rgb "$@" ;;
   voice) cmd_voice "$@" ;;
   snapshot) cmd_snapshot "$@" ;;

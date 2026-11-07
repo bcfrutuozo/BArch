@@ -7,8 +7,10 @@ One daemon (barch-events.service) does three things:
   * turns what changes into events: Hyprland's socket2 (windows opened/closed, monitors,
     fullscreen), VPN and Anonymous Mode up/down, network down/up, AirPods connected, session
     locked/unlocked, a new failure log, a boot, what Claude cost (agent tasks, voice), an album of
-    the music pipeline landing in the review queue, and the NAS (agent/nas.py, Unraid's API: down,
-    array, disks, containers, Unraid's own warnings, certificates about to expire);
+    the music pipeline landing in the review queue, the NAS (agent/nas.py, Unraid's API: down,
+    array, disks, containers, Unraid's own warnings, certificates about to expire) and the two
+    pfSense firewalls (agent/pfsense.py, their REST API: down, reboot, gateway, interface, IPsec,
+    DNSBL, a device never seen before taking a lease);
   * runs the rules of agent/rules.json: "when <event or metric threshold>, do <commands>", with
     notification, spoken sentence, cooldown and an optional "ask first" button.
 
@@ -47,6 +49,7 @@ BARCH = HOME / ".local/bin/barch"
 
 sys.path.insert(0, str(HERE))        # python -I (the service, barch) leaves the script's folder out
 import nas  # noqa: E402  agent/nas.py
+import pfsense  # noqa: E402  agent/pfsense.py
 RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
 
 DEFAULTS = {
@@ -60,6 +63,8 @@ DEFAULTS = {
     "nas_certs_every_s": 21600,
     "nas_grace_s": 900,          # a container down for less than this is a restart, not a problem
     "cert_warn_days": 10,
+    "fw_every_s": 300,           # the firewalls (agent/pfsense.py)
+    "fw_auth_backoff_s": 3600,   # a refused key is not tried again for this long (the API bans a burst)
 }
 
 
@@ -446,6 +451,8 @@ class Daemon:
         self.next_nas = 0.0
         self.last_certs = 0.0
         self.nas_fails = 0
+        self.next_fw: dict[str, float] = {}       # per site
+        self.fw_fails: dict[str, int] = {}
         self.last_prune = 0.0
         self.flags: dict[str, object] = {}        # last known state of the things that transition
         self.hwmon = self._hwmon()
@@ -719,6 +726,8 @@ class Daemon:
                 self.emit("nas.down", {"error": str(snap["error"])[:200]})
             return [("nas.up", 0.0)]
         self.nas_fails = 0
+        self.next_fw: dict[str, float] = {}       # per site
+        self.fw_fails: dict[str, int] = {}
         if st.get("up") is False:
             self.emit("nas.up", {})
         st["up"] = True
@@ -730,6 +739,61 @@ class Daemon:
             self.emit(name, data)
         self.rules.save_state()
         return [("nas.up", 1.0)] + nas.metrics(snap)
+
+    def sample_fw(self) -> list[tuple[str, float]]:
+        """The firewalls through their REST API (agent/pfsense.py; needs ~/.config/barch/pfsense.json,
+        `barch fw setup`), each every `fw_every_s`: metrics fw.<site>.* and the events of
+        pfsense.changes() (fw.boot, fw.gateway, fw.interface, fw.ipsec, fw.dnsbl, fw.client), plus
+        fw.down after three misses in a row (retried every 30 s) and fw.up when it answers again. A
+        key the API refuses gives fw.auth once and is left alone for `fw_auth_backoff_s`: a burst of
+        refused keys gets this desktop banned by the API's login protection. What was already
+        reported lives in the rules' state, so a restart of the daemon repeats nothing."""
+        now = time.time()
+        if self.flags.get("net") is False:
+            return []
+        conf = pfsense.load_conf()
+        if not conf:
+            return []
+        rows: list[tuple[str, float]] = []
+        dirty = False
+        probe, vip = conf.get("dnsbl_probe") or pfsense.DEFAULT_PROBE, conf.get("dnsbl_vip") or pfsense.DEFAULT_VIP
+        for site in conf["sites"]:
+            if now < self.next_fw.get(site, 0.0):
+                continue
+            dirty = True
+            self.next_fw[site] = now + float(self.cfg.get("fw_every_s", 300))
+            snap = pfsense.collect_site(site, conf, probe, vip)
+            st = self.rules.state.setdefault("fw", {}).setdefault(site, {})
+            key = pfsense._key(site)
+            if not snap["reachable"]:
+                if not snap["auth"]:
+                    self.next_fw[site] = now + float(self.cfg.get("fw_auth_backoff_s", 3600))
+                    if st.get("auth") is not False:
+                        st["auth"] = False
+                        self.emit("fw.auth", {"site": site, "error": str(snap["error"])[:200],
+                                              "text": f"O pfSense {site} recusou a chave da API ({snap['error'][:80]}); nova tentativa em uma hora."})
+                    continue
+                self.fw_fails[site] = self.fw_fails.get(site, 0) + 1
+                if self.fw_fails[site] < 3:
+                    self.next_fw[site] = now + 30
+                elif st.get("up") is not False:
+                    st["up"] = False
+                    self.emit("fw.down", {"site": site, "error": str(snap["error"])[:200],
+                                          "text": f"O pfSense {site} não responde ({snap['error'][:80]})."})
+                rows.append((f"fw.{key}.up", 0.0))
+                continue
+            self.fw_fails[site] = 0
+            st["auth"] = True
+            if st.get("up") is False:
+                self.emit("fw.up", {"site": site, "text": f"O pfSense {site} voltou a responder."})
+            st["up"] = True
+            events, blocked = pfsense.changes(snap, st, now, conf.get("ignore_macs") or [])
+            for name, data in events:
+                self.emit(name, data)
+            rows += [(f"fw.{key}.up", 1.0)] + pfsense.metrics(snap) + blocked
+        if dirty:
+            self.rules.save_state()
+        return rows
 
     # -- files that grow: failure logs, the Claude cost log, agent reports
     def watch_files(self, first=False):
@@ -902,7 +966,7 @@ class Daemon:
                 self.cfg = self.rules.cfg
                 rows = []
                 for fn in (self.sample_system, self.sample_gpu, self.sample_net, self.sample_bar, self.sample_pods,
-                           self.sample_nas):
+                           self.sample_nas, self.sample_fw):
                     try:
                         rows += fn()
                     except Exception as e:  # noqa: BLE001

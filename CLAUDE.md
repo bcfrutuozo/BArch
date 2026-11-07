@@ -56,6 +56,10 @@ reusing the widget's own functions.
   are pure and covered by `agent/tests` (run them when either changes). Never probe the NAS's
   ports 80/443 by address: that is SWAG, and a handful of 403s gets this desktop banned by its
   fail2ban for ten minutes; Unraid's interface is on the URL in `~/.config/barch/nas.json`.
+  The firewalls are another: `agent/pfsense.py` (`barch fw status`) reads both pfSense through their
+  REST API with the keys in `~/.config/barch/pfsense.json`, read only; `summarize()`, `changes()` and the
+  log parsing are pure and covered by `agent/tests`. Never call that API with a guessed or stale key: its
+  login protection bans this desktop after a few refusals (the daemon backs off for an hour on a 401/403).
 
 ## How the repo works
 

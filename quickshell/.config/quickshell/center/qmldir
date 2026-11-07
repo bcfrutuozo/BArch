@@ -7,6 +7,7 @@ Card 1.0 Card.qml
 Chart 1.0 Chart.qml
 ColorButton 1.0 ColorButton.qml
 FailuresPage 1.0 FailuresPage.qml
+FirewallPage 1.0 FirewallPage.qml
 HistoryPage 1.0 HistoryPage.qml
 JournalPage 1.0 JournalPage.qml
 LogPanel 1.0 LogPanel.qml
