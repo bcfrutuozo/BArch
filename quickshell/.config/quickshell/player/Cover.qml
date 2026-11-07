@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell.Widgets
 
-// an album's cover (cover.jpg from the share or the API), or a note glyph when there is none
+// an album's cover (the folder's image from the share, or the API: also the picture embedded in the tracks), or a note glyph when there is none
 ClippingRectangle {
     id: cover
     property var album: null          // a Store album, or null

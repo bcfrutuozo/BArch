@@ -44,7 +44,7 @@ Item {
                 headerItems: [
                     UiButton { icon: "󰑓"; label: "Reload"; small: true; tooltip: "ask the NAS whether anything changed"; enabledBtn: !Store.loading; onClicked: Store.fetchCatalog() },
                     UiButton { icon: "󰑐"; label: "Rescan on the NAS"; small: true; tooltip: "the pipeline reads the album folders whose files changed (it does this every 15 min anyway)"; onClicked: Store.refreshCatalog(false) },
-                    UiButton { icon: "󰑐"; label: "Full rescan"; small: true; tooltip: "every album read again (a couple of minutes on the NAS)"; onClicked: Store.refreshCatalog(true) }
+                    UiButton { icon: "󰑐"; label: "Full rescan"; small: true; tooltip: "every album read again (some minutes on the NAS; the catalog grows as it goes)"; onClicked: Store.refreshCatalog(true) }
                 ]
                 Row { label: "albums · tracks"; value: Store.albumCount + " · " + Store.trackCount + " · " + Store.hours(Store.totalLength) }
                 Row { label: "artists · genres"; value: Store.artists.length + " · " + Store.genres.length }
@@ -88,6 +88,19 @@ Item {
                 Row { label: "playlists"; value: Store.playlists.length + " (" + Store.playlists.filter(p => p.smart).length + " smart)" }
             }
             Card {
+                title: "Window"
+                subtitle: "the music does not depend on the window: closed (the X, Ctrl+W, Super+W), it keeps playing and a button next to the bar's tray brings it back (middle click pauses, right click quits)"
+                headerItems: [
+                    UiButton { danger: true; small: true; icon: "󰗼"; label: "Quit the player"; tooltip: "stops the music and ends the process (Ctrl+Q)"; onClicked: Qt.quit() }
+                ]
+                RowLayout {
+                    spacing: 10
+                    UiSwitch { checked: Store.state.closeHides !== false; onToggled: v => Store.edit(s => { s.closeHides = v }) }
+                    Text { text: "Closing the window keeps the music playing"; color: Ui.text; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1 }
+                    Text { text: "(with nothing playing it quits; a closed window with nothing playing for a minute quits too)"; color: Ui.overlay; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2 }
+                }
+            }
+            Card {
                 title: "Keyboard"
                 GridLayout {
                     columns: 3
@@ -104,7 +117,8 @@ Item {
                     Key { keys: "Y"; does: "lyrics" }
                     Key { keys: "V · E"; does: "visualizer · equalizer" }
                     Key { keys: "Esc"; does: "back / close the album" }
-                    Key { keys: "Ctrl+W"; does: "close the window (playback stops)" }
+                    Key { keys: "Ctrl+W"; does: "close the window, the music goes on" }
+                    Key { keys: "Ctrl+Q"; does: "quit (stops the music)" }
                 }
             }
             Card {

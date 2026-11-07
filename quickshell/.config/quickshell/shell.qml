@@ -567,6 +567,9 @@ ShellRoot {
           }
         }
 
+        // o BArch Player tocando sem janela (media/PlayerTray.qml): some quando a janela está aberta
+        PlayerTray {}
+
         // Monitor de recursos
         PrivacyWidget {}
         PinWidget {}

@@ -11,13 +11,14 @@ Singleton {
     id: viz
 
     property int wanted: 0
+    property bool shown: true          // the window is on screen (the shell sets it)
     readonly property var settings: Object.assign({ mode: "bars", bands: 64, sensitivity: 60, color: "palette", cover: true, trails: false, mini: true }, Store.state.viz || {})
     readonly property int bandCount: settings.bands
     readonly property real sensitivity: settings.sensitivity        // the dB floor: 40 = loud only, 80 = everything
     property var bands: []                                           // 0..1 per band, the latest frame
     property real level: 0
     property int frame: 0
-    readonly property bool running: wanted > 0 && Player.hasTrack
+    readonly property bool running: wanted > 0 && shown && Player.hasTrack
 
     function set(k, v) { Store.edit(s => { s.viz = Object.assign({}, s.viz || {}, { [k]: v }) }) }
 

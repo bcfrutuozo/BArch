@@ -19,7 +19,7 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
                                          tags and lengths, gzip when accepted; {"changed": false} when nothing changed
                                          since that version (catalog.py: albums read again only when their files changed)
     GET  /api/catalog/status             version, when it was read, how many albums and tracks
-    GET  /api/catalog/cover?folder=A/B   cover.jpg · /api/catalog/stream?folder=A/B&file=X: the audio (Range) ·
+    GET  /api/catalog/cover?folder=A/B   the cover (cover.jpg/.png..., else the track's embedded picture) · /api/catalog/stream?folder=A/B&file=X: the audio (Range) ·
                                          /api/catalog/lyrics?folder=&file=: a .lrc next to the file or a LYRICS tag
     POST /api/catalog/refresh[?full=1]   read the folders again now (full: every album, not only the changed ones)
     POST /api/player/timeline            {"folder", "file", "state", "time", "duration", "session", "device"}: what the desktop
@@ -225,8 +225,10 @@ def make_handler(p: Pipeline, token: str):
             if parts == ["api", "catalog", "status"]:
                 return self._send(200, {"ok": True, **p.catalog.status()})
             if parts == ["api", "catalog", "cover"]:
-                f = p.catalog.path((q.get("folder") or [""])[0], "cover.jpg")
-                return send_file(self, f, "image/jpeg") if f else self._send(404, {"ok": False, "error": "no cover"})
+                c = p.catalog.cover((q.get("folder") or [""])[0])
+                if not c:
+                    return self._send(404, {"ok": False, "error": "no cover"})
+                return send_file(self, c[0], c[1]) if isinstance(c[0], Path) else self._send(200, raw=c[0], ctype=c[1])
             if parts == ["api", "catalog", "stream"]:
                 f = p.catalog.path((q.get("folder") or [""])[0], (q.get("file") or [""])[0])
                 return send_file(self, f, "audio/flac") if f else self._send(404, {"ok": False, "error": "no such file"})

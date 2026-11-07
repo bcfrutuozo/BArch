@@ -161,6 +161,7 @@ Desktop (through the bar):
   player search "<text>"      the window on a search · catalog refresh [--full]: the NAS reads /music again
   player eq [on|off|toggle|<preset>|band <1-10> <dB>|preamp <dB>]   the equalizer (no argument: its state and the presets)
   player plex [status|sessions]   what the pipeline told Plex about the player (Tautulli reads it), Plex's Now Playing
+  player show|hide|quit       the window back · closed with the music on (the bar gets a button) · stop everything
   torrents browse [page]      the Torrents app: qBittorrent over time (overview|sources|torrents)
   torrents status             the statistics service on the NAS (server/torrents): samples, last one, errors
   torrents summary [range]    ratio, upload and download: all time, in the range (24h, 7d, 30d, 12w, 1y, all), now
@@ -1164,8 +1165,9 @@ cmd_player() {
   case $sub in
     browse | open) app_open player BARCH_PLAYER_PAGE "${1:-}" ;;
     albums | artists | tracks | genres | queue | favorites | recent | lyrics | stats | viz | settings) app_open player BARCH_PLAYER_PAGE "$sub" ;;
-    play | pause | toggle | next | prev | stop | like)
+    play | pause | toggle | next | prev | stop | like | hide | quit)
       player_ipc "$sub"; show "$OUT" '"player: '"$sub"'"' ;;
+    show) player_ipc window; show "$OUT" '"player: window shown"' ;;
     volume | seek)
       [[ -n ${1:-} ]] || usage_error "player $sub <value>"
       player_ipc "$sub" "$1"; show "$OUT" '"player: '"$sub $1"'"' ;;
@@ -1208,10 +1210,12 @@ cmd_player() {
     catalog)
       case ${1:-} in
         refresh) music_api POST "/api/catalog/refresh$([[ ${2:-} == --full ]] && echo '?full=1')"; show "$OUT" '"player: the NAS is reading the library again"' ;;
-        status | "") music_api GET /api/catalog/status; show "$OUT" '"catalog: version \(.version), \(.albums) albums, \(.tracks) tracks, read \(.scanned | strflocaltime("%d/%m %H:%M"))" + (if .scanning then " (reading now)" else "" end) + (if .last.read != null then " · last pass: \(.last.read) read, \(.last.removed) removed in \(.last.seconds) s" else "" end)' ;;
+        status | "") music_api GET /api/catalog/status; show "$OUT" '"catalog: version \(.version), \(.albums) albums, \(.tracks) tracks, read \(.scanned | strflocaltime("%d/%m %H:%M"))"
+          + (if .scanning then " · reading now" + (if .progress.total then ": \(.progress.done) of \(.progress.total) albums looked at, \(.progress.read) read, \(((now - .progress.started) / 60) | floor) min" else "" end) else "" end)
+          + (if .last.read != null then " · last pass: \(.last.read) read, \(.last.removed) removed in \(.last.seconds) s" else "" end)' ;;
         *) usage_error "player catalog [status|refresh [--full]]" ;;
       esac ;;
-    *) usage_error "player [browse] [page]|play|pause|toggle|next|prev|stop|status|volume|seek|like|shuffle|repeat|album|play-album|queue-album|playlist|search|eq|plex|catalog" ;;
+    *) usage_error "player [browse] [page]|play|pause|toggle|next|prev|stop|status|volume|seek|like|shuffle|repeat|album|play-album|queue-album|playlist|search|eq|plex|catalog|show|hide|quit" ;;
   esac
 }
 

@@ -236,7 +236,8 @@ The main pieces:
   (`server/music/catalog.py`: every album with its tracks' tags, lengths and formats, an album read again only when
   its files change, every 15 min and right after a delivery; `GET /api/catalog`, gzip), the app fetches it once
   (`~/.cache/barch/player/catalog.json`) and asks again with `?since=<version>`, so an album the pipeline delivered
-  shows up by itself. The audio comes from the share (`/mnt/nasfrutuozo/media/music`, covers too) or, when it is
+  shows up by itself. The audio comes from the share (`/mnt/nasfrutuozo/media/music`; the covers too: `cover.jpg`, `cover.png`, `folder.jpg`...,
+  and an album with only the picture embedded in its tracks gets it from the API) or, when it is
   not mounted, streamed from the API (`/api/catalog/stream`, with Range). Playback is an **mpv** the app starts
   (`player/mpv.sh`: `--no-config`, audio only, gapless, idle) and drives over its JSON IPC socket; mpv holds the
   queue, so prev/next and gapless are its own, and with `mpv-mpris` installed (`pacman -S mpv-mpris`) the bar's
@@ -262,7 +263,13 @@ The main pieces:
   product "BArch Player", client `barch-player-<hostname>`, a session per track, playing every 10 s, paused,
   stopped), so Plex counts the play, shows it in Now Playing and Tautulli writes it in its history like a Plexamp
   play; the Plex token never leaves the NAS. A switch in Settings turns it off; `barch player plex` shows the last
-  report and what Plex's Now Playing has. Right-click on any row or cover:
+  report and what Plex's Now Playing has. The music does not depend on the window: closing it (Ctrl+W, Super+W,
+  the X) keeps the process and the music, and a note button shows up next to the tray in the bar's right island
+  (`media/PlayerTray.qml`, from `~/.local/state/barch/player/window.json`; accent while playing, the track in its
+  tooltip; click brings the window back, middle click pauses, right click quits) until the window is open again;
+  Ctrl+Q quits; a closed window with nothing playing quits by itself after a minute. Closed from the player itself
+  the window is only hidden, so it is back at once; closed by the compositor it is rebuilt (its pages load on first
+  visit, so that is quick too). Right-click on any row or cover:
   play, play next, add to queue, add to playlist, like, go to album / artist, open folder. An album view with
   Play / Shuffle / Play next / Queue and the format badge (`16-bit · 44.1 kHz`). Search across artists, albums and
   tracks (`/`). Keyboard: Space, N / P, ← →, S, R, + −, M, L, Q, Y, Esc. A play counts once a track passes half its
@@ -425,6 +432,7 @@ barch player play|pause|toggle|next|prev|stop|status · volume <0-100|±n> · se
 barch player album|play-album|queue-album "<Artist/Album>" · playlist <name> · search "<text>" · catalog [status|refresh [--full]]
 barch player eq [on|off|toggle|<preset>|band <1-10> <dB>|preamp <dB>]   # the equalizer; no argument: its state and the presets
 barch player plex [status|sessions]   # what was told to Plex (Tautulli's source) and Plex's Now Playing
+barch player show|hide|quit            # the window back · closed with the music on (the bar gets a button) · stop everything
 barch music status|browse|list|show|resolve|retry|reject|scan   # the NAS music pipeline and its review queue (see Music)
 barch music covers check [artist]|list|apply|undo|keep|pick|propose <Artist/Album>   # scans with a frame -> the clean artwork
 barch music covers ask <Artist/Album> "keep the red frame"   # Claude adapts one or finds another, as a proposal

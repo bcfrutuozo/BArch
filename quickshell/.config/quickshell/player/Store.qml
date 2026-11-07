@@ -59,7 +59,7 @@ Singleton {
         const albs = [], trs = [], bk = {}, ak = {}, art = {}, gen = {}
         for (const a of d.albums || []) {
             const alb = { key: a.folder, folder: a.folder, artist: a.artist, album: a.album, date: a.date || "", year: year(a.date),
-                          genre: a.genre || "", cover: !!a.cover, length: a.length || 0, discs: a.discs || 1, added: a.added || 0, tracks: [] }
+                          genre: a.genre || "", cover: a.cover === true ? "cover.jpg" : (a.cover || ""), length: a.length || 0, discs: a.discs || 1, added: a.added || 0, tracks: [] }
             alb.s = fold(alb.artist + " " + alb.album)
             alb.sortKey = sortName(alb.artist) + "\u0001" + String(alb.year).padStart(4, "0") + "\u0001" + fold(alb.album)
             for (const t of a.tracks || []) {
@@ -191,10 +191,12 @@ Singleton {
         return mounted ? mount + "/" + t.folder + "/" + t.file
                        : url + "/api/catalog/stream?folder=" + enc(t.folder) + "&file=" + enc(t.file)
     }
+    // cover: the image file's name in the album's folder, or "embedded" (the picture inside the tracks, which only
+    // the API can hand out as an image)
     function coverUrl(album) {
         if (!album || !album.cover || !mountChecked) return ""
-        return mounted ? "file://" + mount + "/" + album.folder + "/cover.jpg"
-                       : url + "/api/catalog/cover?folder=" + enc(album.folder) + "&token=" + enc(token)
+        return mounted && album.cover !== "embedded" ? "file://" + mount + "/" + album.folder + "/" + album.cover
+                                                     : url + "/api/catalog/cover?folder=" + enc(album.folder) + "&token=" + enc(token)
     }
     function coverOf(t) { return t ? coverUrl(albumByKey[t.albumKey]) : "" }
 
