@@ -247,14 +247,22 @@ The main pieces:
   [LRCLIB](https://lrclib.net); synced lines follow the music, a click seeks), **Statistics** (day / week / month /
   year / all time: plays, hours, the top artists, albums and genres by minutes, a leaderboard's top 100 tracks),
   **Playlists** (hand-made, dragged into order; **smart**: rules on artist, album, genre, title, year, likes, plays,
-  when it was played, sort and limit, evaluated when opened), **Visualizer** (the spectrum of what plays: bars,
-  mirror, wave, radial around the cover, dots with falling peaks; 24 to 128 bands, sensitivity, the palette's colors
-  or the accent or a heat scale, the cover blurred behind, trails, and a small version in the bottom bar.
-  `player/viz.py` captures the player's own PipeWire stream, the mpv node `barch-player`, never the microphone
+  when it was played, sort and limit, evaluated when opened), **Visualizer** (the spectrum of what plays, drawn on
+  the GPU: `viz.frag` (a ShaderEffect; `make-shaders.sh` compiles it with qsb) draws bars, mirror, wave, radial
+  around the cover or dots from a one-pixel-high texture of the bands that the scene graph eases between frames, so
+  it moves at the display's rate; 24 to 128 bands, sensitivity, the palette's colors or the accent or a heat scale,
+  the cover blurred behind, trails (the previous frame fed back into the shader), and a small version in the bottom
+  bar. `player/viz.py` captures the player's own PipeWire stream, the mpv node `barch-player`, never the microphone
   or the rest of the desktop, as `barch-player-viz`, which the privacy indicator ignores; FFT in numpy, log-spaced
-  bands, 30 frames a second, only while a view wants them), **Equalizer** (ten octave bands from 31 Hz to 16 kHz,
+  bands, 60 frames a second, only while a view wants them), **Equalizer** (ten octave bands from 31 Hz to 16 kHz,
   ±12 dB, a preamp, thirteen presets, the response curve; applied live as mpv's `af` chain of lavfi `equalizer`
-  filters, so it holds for every output, Bluetooth included) and **Settings**. Right-click on any row or cover:
+  filters, so it holds for every output, Bluetooth included) and **Settings**. **Plex and Tautulli** see what plays
+  here: the player reports each track to the pipeline (`POST /api/player/timeline`, `server/music/plexplay.py`),
+  which finds the track in Plex by its file path (cached) and sends Plex a client's timeline (`/:/timeline`,
+  product "BArch Player", client `barch-player-<hostname>`, a session per track, playing every 10 s, paused,
+  stopped), so Plex counts the play, shows it in Now Playing and Tautulli writes it in its history like a Plexamp
+  play; the Plex token never leaves the NAS. A switch in Settings turns it off; `barch player plex` shows the last
+  report and what Plex's Now Playing has. Right-click on any row or cover:
   play, play next, add to queue, add to playlist, like, go to album / artist, open folder. An album view with
   Play / Shuffle / Play next / Queue and the format badge (`16-bit · 44.1 kHz`). Search across artists, albums and
   tracks (`/`). Keyboard: Space, N / P, ← →, S, R, + −, M, L, Q, Y, Esc. A play counts once a track passes half its
@@ -416,6 +424,7 @@ barch player [browse] [albums|artists|tracks|genres|queue|favorites|recent|lyric
 barch player play|pause|toggle|next|prev|stop|status · volume <0-100|±n> · seek <s|±s> · like · shuffle [on|off] · repeat [off|all|one]
 barch player album|play-album|queue-album "<Artist/Album>" · playlist <name> · search "<text>" · catalog [status|refresh [--full]]
 barch player eq [on|off|toggle|<preset>|band <1-10> <dB>|preamp <dB>]   # the equalizer; no argument: its state and the presets
+barch player plex [status|sessions]   # what was told to Plex (Tautulli's source) and Plex's Now Playing
 barch music status|browse|list|show|resolve|retry|reject|scan   # the NAS music pipeline and its review queue (see Music)
 barch music covers check [artist]|list|apply|undo|keep|pick|propose <Artist/Album>   # scans with a frame -> the clean artwork
 barch music covers ask <Artist/Album> "keep the red frame"   # Claude adapts one or finds another, as a proposal
@@ -609,7 +618,9 @@ Fire)") is matched as the album it is, or as that disc of the box when the album
 
 It also serves the **Player** (see The bar): `/api/catalog` is every album of `/music` with its tracks, kept fresh by
 the files' names, sizes and mtimes (`catalog.py`), `/api/catalog/stream` the audio with Range for a desktop without the
-share, `/api/catalog/lyrics` a `.lrc` or LYRICS tag; `barch player catalog refresh` reads the folders again now.
+share, `/api/catalog/lyrics` a `.lrc` or LYRICS tag; `barch player catalog refresh` reads the folders again now. `/api/player/timeline`
+(`plexplay.py`) turns what the player plays into a Plex client's timeline, so Plex and Tautulli count it (Plex over https:
+"Secure connections: Required" refuses plain HTTP, the client moves to https by itself).
 
 What it keeps tidy by itself (2026-11-04): **the library tied to MusicBrainz**: while no download waits, it goes over
 every album of `/music` and matches it with the lengths of its own files; a sure match gets `MUSICBRAINZ_ALBUMID` and

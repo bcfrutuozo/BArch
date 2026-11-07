@@ -160,6 +160,7 @@ Desktop (through the bar):
   player album|play-album|queue-album "<Artist/Album>"   open, play, or queue an album · playlist <name>
   player search "<text>"      the window on a search · catalog refresh [--full]: the NAS reads /music again
   player eq [on|off|toggle|<preset>|band <1-10> <dB>|preamp <dB>]   the equalizer (no argument: its state and the presets)
+  player plex [status|sessions]   what the pipeline told Plex about the player (Tautulli reads it), Plex's Now Playing
   torrents browse [page]      the Torrents app: qBittorrent over time (overview|sources|torrents)
   torrents status             the statistics service on the NAS (server/torrents): samples, last one, errors
   torrents summary [range]    ratio, upload and download: all time, in the range (24h, 7d, 30d, 12w, 1y, all), now
@@ -1192,13 +1193,25 @@ cmd_player() {
       [[ -n ${1:-} ]] || usage_error "player search <text>"
       if qs -p "$HOME/.config/quickshell/player" ipc show >/dev/null 2>&1; then qs -p "$HOME/.config/quickshell/player" ipc call app search "$1" >/dev/null
       else BARCH_PLAYER_PAGE=search setsid -f qs -p "$HOME/.config/quickshell/player" >/dev/null 2>&1; fi ;;
+    plex)
+      case ${1:-status} in
+        status)
+          music_api GET /api/player/status
+          show "$OUT" '(if .enabled then "Plex \(.url): \(.albums_cached) albums mapped" else "Plex: no token in the pipeline\x27s secrets.json" end)
+            + (if .last.t then "\nlast: \(.last.state) \(.last.folder)/\(.last.file)" + (if .last.error then " — \(.last.error)" else " → Plex #\(.last.key) at \(.last.time / 1000 | floor) s of \(.last.duration / 1000 | floor)" end) else "\nnothing reported yet" end)
+            + (if (.sessions | length) > 0 then "\nsessions: " + ([.sessions[] | "\(.device): \(.file) (\(.state))"] | join(", ")) else "" end)' ;;
+        sessions)
+          music_api GET /api/player/sessions
+          show "$OUT" 'if (.sessions | length) == 0 then "Plex: nothing playing" else .sessions[] | "\(.grandparentTitle // .parentTitle // "") · \(.title) — \(.Player.product // "?") on \(.Player.title // .Player.device // "?") (\(.Player.state // "?")), user \(.User.title // "?")" end' ;;
+        *) usage_error "player plex [status|sessions]" ;;
+      esac ;;
     catalog)
       case ${1:-} in
         refresh) music_api POST "/api/catalog/refresh$([[ ${2:-} == --full ]] && echo '?full=1')"; show "$OUT" '"player: the NAS is reading the library again"' ;;
         status | "") music_api GET /api/catalog/status; show "$OUT" '"catalog: version \(.version), \(.albums) albums, \(.tracks) tracks, read \(.scanned | strflocaltime("%d/%m %H:%M"))" + (if .scanning then " (reading now)" else "" end) + (if .last.read != null then " · last pass: \(.last.read) read, \(.last.removed) removed in \(.last.seconds) s" else "" end)' ;;
         *) usage_error "player catalog [status|refresh [--full]]" ;;
       esac ;;
-    *) usage_error "player [browse] [page]|play|pause|toggle|next|prev|stop|status|volume|seek|like|shuffle|repeat|album|play-album|queue-album|playlist|search|eq|catalog" ;;
+    *) usage_error "player [browse] [page]|play|pause|toggle|next|prev|stop|status|volume|seek|like|shuffle|repeat|album|play-album|queue-album|playlist|search|eq|plex|catalog" ;;
   esac
 }
 

@@ -1,6 +1,6 @@
 import QtQuick
 
-// a few spectrum bars for the bottom bar (Viz.settings.mini)
+// a few spectrum bars for the bottom bar (Viz.settings.mini): plain rectangles the scene graph animates
 Item {
     id: mini
     property int bars: 20
@@ -10,25 +10,33 @@ Item {
     Component.onCompleted: if (visible) Viz.wanted++
     Component.onDestruction: if (visible) Viz.wanted--
 
-    Canvas {
-        id: c
+    Row {
         anchors.fill: parent
-        renderStrategy: Canvas.Cooperative
-        Connections { target: Viz; function onFrameChanged() { c.requestPaint() } }
-        onPaint: {
-            const ctx = getContext("2d")
-            ctx.clearRect(0, 0, width, height)
-            const b = Viz.bands, n = b.length
-            if (!n) return
-            const bw = width / mini.bars
-            ctx.fillStyle = "rgba(" + Math.round(Ui.accent.r * 255) + "," + Math.round(Ui.accent.g * 255) + "," + Math.round(Ui.accent.b * 255) + ",0.9)"
-            for (let i = 0; i < mini.bars; i++) {
+        spacing: 2
+        Repeater {
+            model: mini.bars
+            Item {
+                required property int index
+                width: (mini.width - (mini.bars - 1) * 2) / mini.bars
+                height: mini.height
                 // each bar takes the loudest of its share of the bands
-                const from = Math.floor(i * n / mini.bars), to = Math.max(from + 1, Math.floor((i + 1) * n / mini.bars))
-                let v = 0
-                for (let k = from; k < to; k++) v = Math.max(v, b[k])
-                const h = Math.max(2, v * height)
-                ctx.fillRect(i * bw + 1, height - h, bw - 2, h)
+                readonly property real v: {
+                    const b = Viz.bands, n = b.length
+                    if (!n) return 0
+                    const from = Math.floor(index * n / mini.bars), to = Math.max(from + 1, Math.floor((index + 1) * n / mini.bars))
+                    let m = 0
+                    for (let k = from; k < to; k++) m = Math.max(m, b[k])
+                    return m
+                }
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: Math.max(2, parent.v * parent.height)
+                    radius: 1
+                    color: Ui.accent
+                    opacity: 0.9
+                    Behavior on height { NumberAnimation { duration: 70 } }
+                }
             }
         }
     }

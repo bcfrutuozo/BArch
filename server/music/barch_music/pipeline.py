@@ -23,6 +23,7 @@ from . import album as albummod
 from . import audio, cover, matcher, mb, merge, style, tagger
 from .canon import Canon
 from .catalog import Catalog
+from .plexplay import PlexPlay
 from .library import Library
 from .libcovers import LibraryCovers
 from .seeds import SeedKeeper, SeedLog
@@ -232,6 +233,7 @@ class Pipeline:
         self.canon = Canon(self.store.root)
         self.library = Library(self.music, self.store.root, self.lidarr)
         self.catalog = Catalog(self.music, self.store.root)       # what the player reads (catalog.py)
+        self.plexplay = PlexPlay(self.plex, self.store.root)       # what the player plays, told to Plex (plexplay.py)
         self.seeds = SeedLog(self.store.root)
         self.seeding = SeedKeeper(self.store.root, cfg, self.qbit, self.seeds)
 

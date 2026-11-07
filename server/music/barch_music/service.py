@@ -22,6 +22,10 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
     GET  /api/catalog/cover?folder=A/B   cover.jpg · /api/catalog/stream?folder=A/B&file=X: the audio (Range) ·
                                          /api/catalog/lyrics?folder=&file=: a .lrc next to the file or a LYRICS tag
     POST /api/catalog/refresh[?full=1]   read the folders again now (full: every album, not only the changed ones)
+    POST /api/player/timeline            {"folder", "file", "state", "time", "duration", "session", "device"}: what the desktop
+                                         player plays, sent to Plex as a client's timeline (plexplay.py): Plex counts the
+                                         play, Tautulli logs it · GET /api/player/status: the last report, the sessions
+                                         · GET /api/player/sessions: Plex's Now Playing (to check it shows up)
     GET  /api/jobs[?state=review]        summaries
     GET  /api/jobs/<id>                  everything: problems, candidates, the proposed tags
     GET  /api/jobs/<id>/cover            the proposed cover (JPEG), or the one chosen by hand
@@ -211,6 +215,13 @@ def make_handler(p: Pipeline, token: str):
                 self.end_headers()
                 self.wfile.write(body)
                 return
+            if parts == ["api", "player", "status"]:
+                return self._send(200, {"ok": True, **p.plexplay.status()})
+            if parts == ["api", "player", "sessions"]:
+                try:
+                    return self._send(200, {"ok": True, "sessions": p.plex.sessions()})
+                except Exception as e:  # noqa: BLE001
+                    return self._send(502, {"ok": False, "error": f"Plex: {e}"})
             if parts == ["api", "catalog", "status"]:
                 return self._send(200, {"ok": True, **p.catalog.status()})
             if parts == ["api", "catalog", "cover"]:
@@ -311,6 +322,13 @@ def make_handler(p: Pipeline, token: str):
             if parts == ["api", "catalog", "refresh"]:
                 p.catalog.refresh_async((q.get("full") or [""])[0] in ("1", "true"))
                 return self._send(200, {"ok": True, "scanning": True})
+            if parts == ["api", "player", "timeline"]:
+                try:
+                    body = json.loads(self.rfile.read(n) or b"{}")
+                except ValueError:
+                    return self._send(400, {"ok": False, "error": "bad json"})
+                out = p.plexplay.report(body if isinstance(body, dict) else {})
+                return self._send(200 if out.get("ok") else 404 if "not found" in str(out.get("error")) else 502, out)
             if parts == ["api", "covers", "propose"] and (self.headers.get("Content-Type") or "").startswith("image/"):
                 # an image as the body: ?folder=Artist/Album&label=what it is
                 data = self.rfile.read(n)

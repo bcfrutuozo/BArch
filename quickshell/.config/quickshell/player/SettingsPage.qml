@@ -62,6 +62,16 @@ Item {
                 Row { label: "volume · shuffle · repeat"; value: Math.round(Player.volume) + "% · " + (Player.shuffle ? "on" : "off") + " · " + Player.repeat }
             }
             Card {
+                title: "Plex & Tautulli"
+                subtitle: "what plays here is reported to Plex as a Plex client's timeline, through the pipeline on the NAS (the token stays there): Plex counts the play, Now Playing shows it, Tautulli writes it in its history as the player \"BArch Player\" on this machine"
+                headerItems: [
+                    UiSwitch { checked: Player.plexOn; onToggled: v => Store.edit(s => { s.plex = v }) }
+                ]
+                Row { label: "last report"; value: Player.plexOn ? (Player.plexStatus || "nothing reported yet") : "off"; tint: Player.plexBad ? Ui.yellow : Ui.text }
+                Row { label: "this machine"; value: Player.device + " · client barch-player-" + Player.device }
+                Row { label: "check"; value: "barch player plex (the last report, the sessions Plex shows)" }
+            }
+            Card {
                 title: "What the player keeps"
                 subtitle: Store.stateDir + "/state.json: likes, play counts, the history, playlists, the last queue (in the daily backup with the rest of ~/.local/state)"
                 headerItems: [

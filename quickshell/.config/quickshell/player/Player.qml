@@ -292,8 +292,50 @@ Singleton {
         return { ok: true, preset: name }
     }
 
+    // ---------- Plex / Tautulli: what plays here, reported as a Plex client's timeline ----------
+    // (through the pipeline, POST /api/player/timeline: the Plex token stays on the NAS). A session per track
+    // start; playing every 10 s, paused/resumed at once, stopped at the end, on a change, and when the window closes.
+    readonly property bool plexOn: Store.state.plex !== false
+    property string plexSession: ""
+    property string plexKey: ""
+    property string plexStatus: ""
+    property bool plexBad: false
+    property string device: "desktop"
+    FileView { path: "/etc/hostname"; blockLoading: true; printErrors: false; onLoaded: { const h = text().trim(); if (h) pl.device = h } }
+    function plexReport(state, key, session, time, duration, detached) {
+        if (!plexOn || !key || !Store.configured) return
+        const t = Store.byKey[key]
+        if (!t) return
+        const body = { folder: t.folder, file: t.file, state: state, time: Math.max(0, Math.floor(time || 0)), duration: Math.floor(duration || t.length || 0), session: session, device: device }
+        if (detached) {   // the window is closing: nothing waits for the answer
+            Quickshell.execDetached(["curl", "-sS", "--max-time", "10", "-X", "POST", "-H", "X-Barch-Token: " + Store.token, "-H", "Content-Type: application/json", "--data", JSON.stringify(body), Store.url + "/api/player/timeline"])
+            return
+        }
+        Store.post("/api/player/timeline", body, (d, err) => {
+            if (!d) { plexStatus = "pipeline not reachable"; plexBad = true; return }
+            plexBad = !d.ok
+            plexStatus = d.ok ? state + " · " + t.title + " → Plex #" + d.key : (d.error || "refused") + " (" + t.title + ")"
+        })
+    }
+    function plexStart() {
+        if (!current) return
+        plexSession = device + "-" + Date.now().toString(36)
+        plexKey = current.key
+        plexReport("playing", plexKey, plexSession, 0, current.length)
+    }
+    function plexStop(detached) {
+        if (!plexKey) return
+        plexReport("stopped", plexKey, plexSession, position, duration, detached)
+        plexKey = ""; plexSession = ""
+    }
+    onCurrentKeyChanged: { if (plexKey && plexKey !== currentKey) plexStop(); if (current && !idle && plexKey !== currentKey) plexStart() }
+    onIdleChanged: { if (idle) plexStop(); else if (current && !plexKey) plexStart() }
+    onPausedChanged: if (plexKey && !idle) plexReport(paused ? "paused" : "playing", plexKey, plexSession, position, duration)
+    Timer { interval: 10000; running: pl.playing && pl.plexKey !== "" && pl.plexOn; repeat: true; onTriggered: pl.plexReport("playing", pl.plexKey, pl.plexSession, pl.position, pl.duration) }
+    Component.onDestruction: plexStop(true)
+
     function status() {
-        return { playing: playing, paused: paused, idle: idle, track: current ? { key: current.key, title: current.title, artist: current.artist, album: current.album } : null,
+        return { playing: playing, paused: paused, idle: idle, plex: plexOn ? plexStatus : "off", track: current ? { key: current.key, title: current.title, artist: current.artist, album: current.album } : null,
                  position: Math.floor(position), duration: Math.floor(duration), volume: volume, shuffle: shuffle, repeat: repeat, queue: queue.length, index: index }
     }
 }

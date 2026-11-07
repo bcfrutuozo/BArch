@@ -164,6 +164,14 @@ Singleton {
             if (cb) cb(code === 0 ? d : null)
         })
     }
+    function post(path, body, cb) {
+        if (!configured) { if (cb) cb(null); return }
+        run(["curl", "-sS", "--max-time", "20", "-X", "POST", "-H", "X-Barch-Token: " + token, "-H", "Content-Type: application/json", "--data", JSON.stringify(body), url + path], (out, err, code) => {
+            let d = null
+            try { d = JSON.parse(out) } catch (e) {}
+            if (cb) cb(code === 0 ? d : null, err)
+        })
+    }
     function refreshCatalog(full) {
         api("POST", "/api/catalog/refresh" + (full ? "?full=1" : ""), d => { say(d && d.ok ? "the NAS is reading the library again" : "could not ask the NAS", !(d && d.ok)); scanning = true; retry.start() })
     }

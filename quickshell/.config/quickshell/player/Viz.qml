@@ -1,6 +1,6 @@
 // Viz.qml — the spectrum of what plays, for the Visualizer page and the small bars of the bottom bar:
 // viz.py captures the player's own PipeWire stream (never the microphone) and prints one line of band
-// levels per frame; it only runs while something wants the frames (`wanted` > 0) and a track is loaded.
+// levels per frame (60 a second); it only runs while something wants the frames (`wanted` > 0) and a track is loaded.
 // Settings live in Store.state.viz: { mode, bands, sensitivity, color, cover, trails, mini }.
 pragma Singleton
 import QtQuick
@@ -23,7 +23,7 @@ Singleton {
 
     Process {
         id: proc
-        command: ["python3", "-u", Quickshell.shellDir + "/viz.py", "--bands", String(viz.bandCount), "--fps", "30", "--floor", String(viz.sensitivity)]
+        command: ["python3", "-u", Quickshell.shellDir + "/viz.py", "--bands", String(viz.bandCount), "--fps", "60", "--floor", String(viz.sensitivity)]
         running: viz.running
         stdinEnabled: true
         stdout: SplitParser {

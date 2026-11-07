@@ -1,21 +1,27 @@
 """qBittorrent, Lidarr, Plex and Telegram: the few calls the pipeline needs, standard library only."""
 from __future__ import annotations
 
+import http.client
 import http.cookiejar
 import json
 import time
 import unicodedata
 from pathlib import Path
 import urllib.parse
+import urllib.error
 import urllib.request
 
 
 class Http:
-    def __init__(self, base: str, headers: dict | None = None, timeout: int = 30):
+    def __init__(self, base: str, headers: dict | None = None, timeout: int = 30, insecure: bool = False):
         self.base = base.rstrip("/")
         self.headers = headers or {}
         self.timeout = timeout
-        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        handlers = [urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())]
+        if insecure:          # Plex by IP: its certificate is for its plex.direct name
+            import ssl
+            handlers.append(urllib.request.HTTPSHandler(context=ssl._create_unverified_context()))  # noqa: SLF001
+        self.opener = urllib.request.build_opener(*handlers)
 
     def call(self, method: str, path: str, params: dict | None = None, body=None, form: dict | None = None,
              raw: bytes | None = None, ctype: str = ""):
@@ -562,10 +568,23 @@ class Lidarr:
 
 class Plex:
     def __init__(self, cfg: dict):
-        self.h = Http(cfg.get("url", "http://100.100.0.10:32400"), {"X-Plex-Token": cfg.get("token", ""), "Accept": "application/json"})
+        self.token = cfg.get("token", "")
+        self.h = Http(cfg.get("url", "http://100.100.0.10:32400"), {"X-Plex-Token": self.token, "Accept": "application/json"}, insecure=True)
         self.section = cfg.get("section", "")
         self.path_prefix = cfg.get("path_prefix", "/data/music")       # /music as Plex sees it
         self.enabled = bool(cfg.get("token"))
+        # "Secure connections: Required" refuses plain HTTP: the first refused call moves the base to https for good
+        call = self.h.call
+
+        def call_https_fallback(method, path, **kw):
+            try:
+                return call(method, path, **kw)
+            except (http.client.RemoteDisconnected, ConnectionResetError, urllib.error.URLError) as e:
+                if self.h.base.startswith("http://") and not isinstance(getattr(e, "reason", None), str) and "refused" not in str(e).lower():
+                    self.h.base = "https://" + self.h.base[len("http://"):]
+                    return call(method, path, **kw)
+                raise
+        self.h.call = call_https_fallback
 
     def scan(self, folder: str) -> str:
         if not self.enabled:
@@ -600,6 +619,20 @@ class Plex:
                     if any((pt.get("file") or "").startswith(want) for pt in m.get("Part", [])):
                         return str(a["ratingKey"])
         return ""
+
+    def timeline(self, rating_key: str, state: str, time_ms: int, duration_ms: int, session: str, device: str) -> None:
+        """What a Plex client sends while it plays: the server shows it in Now Playing, counts the play when the
+        track gets near its end, and Tautulli writes it in its history as the player "BArch Player"."""
+        self.h.call("GET", "/:/timeline", params={
+            "ratingKey": rating_key, "key": f"/library/metadata/{rating_key}", "state": state, "time": time_ms, "duration": duration_ms,
+            "playbackTime": time_ms, "context": "library", "hasMDE": 1, "identifier": "com.plexapp.plugins.library",
+            "X-Plex-Session-Identifier": session, "X-Plex-Client-Identifier": f"barch-player-{device}", "X-Plex-Product": "BArch Player",
+            "X-Plex-Version": "1.0", "X-Plex-Platform": "Linux", "X-Plex-Platform-Version": "Arch", "X-Plex-Device": "PC",
+            "X-Plex-Device-Name": device, "X-Plex-Provides": "player", "X-Plex-Model": "desktop"})
+
+    def sessions(self) -> list[dict]:
+        r = self.h.call("GET", "/status/sessions") or {}
+        return (r.get("MediaContainer") or {}).get("Metadata", []) or []
 
     def set_poster(self, folder: str, jpeg: bytes) -> str:
         """Upload the cover as the album's poster (a scan alone keeps Plex's cached one)."""
