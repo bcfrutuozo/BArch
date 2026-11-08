@@ -141,6 +141,9 @@ def summarize(data: dict, conf: dict | None = None) -> dict:
         problems.insert(0, f"array {state}")
     if par.get("errors"):
         problems.append(f"parity check: {par['errors']} errors")
+    par_status = str(par.get("status") or "")
+    if par_status == "RUNNING" and not par.get("running"):
+        par_status = "ENDED"                       # the API keeps RUNNING after a sync/rebuild finishes (7.3.4)
 
     down, updates, running, total = [], [], 0, 0
     for c in (data.get("docker") or {}).get("containers") or []:
@@ -172,7 +175,7 @@ def summarize(data: dict, conf: dict | None = None) -> dict:
         "ram_pct": round(_num((metrics.get("memory") or {}).get("percentTotal")), 1),
         "array": {"state": state, "pct": _pct(kb.get("used"), kb.get("total")),
                   "free_gb": round(_num(kb.get("free")) / 1e6, 1), "total_gb": round(_num(kb.get("total")) / 1e6, 1)},
-        "parity": {"status": par.get("status") or "", "errors": int(_num(par.get("errors"))), "date": par.get("date") or "",
+        "parity": {"status": par_status, "errors": int(_num(par.get("errors"))), "date": par.get("date") or "",
                    "running": bool(par.get("running")), "progress": int(_num(par.get("progress")))},
         "disks": disks,
         "disk_temp": max(temps) if temps else None,

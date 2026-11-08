@@ -49,6 +49,13 @@ class Summarize(unittest.TestCase):
         self.assertEqual(s["pool_pct"], 90.0)
         self.assertEqual(s["containers"], {"total": 2, "running": 2, "down": [], "updates": ["plex"]})
 
+    def test_parity_stale_running(self):
+        a = answer()
+        a["array"]["parityCheckStatus"] = {"status": "RUNNING", "progress": 98, "errors": 0, "running": False, "date": "2026-11-07T23:06:22.000Z"}
+        self.assertEqual(nas.summarize(a)["parity"]["status"], "ENDED")
+        a["array"]["parityCheckStatus"]["running"] = True
+        self.assertEqual(nas.summarize(a)["parity"]["status"], "RUNNING")
+
     def test_disk_and_array(self):
         a = answer()
         a["array"]["state"] = "STOPPED"
