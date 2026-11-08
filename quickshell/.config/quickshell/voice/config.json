@@ -1,6 +1,7 @@
 {
   "_doc": "Settings of barch-voice (voice.py); every key here overrides DEFAULTS in voice.py. Restart the service after a change: systemctl --user restart barch-voice.",
   "wake": ["barch", "bartch", "bark", "barque", "bach", "barche", "bart", "bash", "march", "parch", "barg", "barsh", "baarch"],
+  "wake_min_ratio": 0.85,
   "wake_window_s": 8,
   "head_s": 2.2,
   "vad_floor_mult": 4.0,

@@ -435,9 +435,10 @@ barch claude [--refresh]           # the Claude plan's usage: 5-hour session, we
 barch rgb [status]|apply|on|off|color <tone|#hex>|brightness <0-100>|flash [tone] [n]   # Corsair lighting (see Theme)
 barch voice on|off|toggle|status   # always-on voice control (see Voice); pause|resume keep the service
 barch voice match "abre o terminal"  # which command a sentence hits, running nothing · test "..." runs it
+barch voice wake "Bartch, liga o HDR"  # would it wake the daemon · misses: near misses of the wake word, to tune it
 barch voice say "texto"            # speak · reload (commands.json) · log · setup [--install]
 barch voice lang [<code>|list]     # the language it listens and answers in (pt, en, es, auto…)
-barch backup init|run|status|list|restore [SNAPSHOT] <path>...   # restic to the NAS (see Backup)
+barch backup init|run|check [--full]|status|list|restore [SNAPSHOT] <path>...   # restic to the NAS, verified weekly (see Backup)
 barch rules list|test <event> [k=v..]|fire <id>|enable|disable <id>   # agent/rules.json (see Automation)
 barch events status|log [n] [--filter x] [--since 7d]   # the daemon and what happened (windows, VPN, boots, costs…)
 barch metrics list|series <metric> [--since 24h]|summary   # metrics.db: temperatures, load, boots, failures, Claude cost
@@ -737,9 +738,13 @@ generates it, prints it once, and it belongs in Bitwarden too, because a reinsta
 needs it before anything can be restored.
 
 `barch-backup.timer` runs it daily at 13:00 (`Persistent`, so a machine that was off catches
-up), keeping 14 daily, 8 weekly and 12 monthly snapshots (pruned on Sundays). The health widget
-turns yellow when the last run failed or is more than two days old, and a failed run also goes
-through `barch failure` like any other service. `barch backup restore latest ~/.ssh` puts the
+up), keeping 14 daily, 8 weekly and 12 monthly snapshots (pruned on Sundays). The Sunday run then
+verifies the repository (`restic check`): its structure, and a tenth of the data read back and
+hashed, a different tenth each week (ISO week mod 10), so every pack is verified within ten weeks
+without reading the whole repository over the share every time; `barch backup check [--full]`
+does it now. The health widget turns yellow when the last run failed or is more than two days
+old and red when the check found something wrong (the card says when it was last verified), and
+a failed run or check also goes through `barch failure` like any other service. `barch backup restore latest ~/.ssh` puts the
 files under `~/Restore/<snapshot>/` with their full paths, never in place.
 
 What only root can read goes in through `barch-backup-root.timer` (system unit, daily at 12:30,
@@ -783,8 +788,11 @@ sentences are logged in `~/.local/state/barch/voice/unmatched.log`, which is whe
 from. It keeps a short memory, so it works like a conversation: after every answer the microphone
 stays open for a few seconds (`followup_s`, 8 by default; the bar's mic pulses slowly) and the next
 sentence needs no "barch", but in that window only sentences the table knows are acted on, so talk
-in the room is dropped instead of reaching Claude (a follow-up to a Claude answer does reach him,
-with the previous exchanges as context: "como está o tempo" … "e amanhã?"). "Ele", "ela", "essa
+in the room is dropped instead of reaching Claude (a follow-up to an answer Claude *understood*
+does reach him, with the previous exchanges as context: "como está o tempo" … "e amanhã?"; after a
+"não entendi" the window only takes the table, so one false wake cannot chain a conversation in
+the room into six answers, as happened on 2026-11-07). A lone "sim" or "não" with nothing to
+confirm is dropped too. "Ele", "ela", "essa
 janela", "isso" are the window it opened or acted on last ("abre o spotify" … "coloca ele no
 workspace dois" … "fecha ele"; the window of an app just launched is found by watching for the
 new client), and windows can be named ("fecha o spotify", "volta pro brave", "cadê o terminal":
@@ -827,9 +835,14 @@ BARCH_VOICE_DEBUG=1 python3 quickshell/.config/quickshell/voice/voice.py   # in 
 
 Packages: `whisper-cpp` and `ggml-cuda` (extra), `whisper.cpp-model-large-v3-turbo-q5_0` and
 `piper-tts` (AUR); another ggml model works with `whisper_model` in `config.json`. Thresholds of the
-VAD (`vad_min_rms`, `vad_floor_mult`, `vad_end_ms`), the wake variants whisper tends to write
-("bartch", "bark", "barque"…), the microphone (`mic_target`, empty = default source) and the Claude
-fallback (`claude: false` turns it off) are in `config.json`. `whisper_prompt` must stay a bare
+VAD (`vad_min_rms`, `vad_floor_mult`, `vad_end_ms`), the wake spellings whisper tends to write
+("bartch", "bark", "barque"…; matched exactly, plus the shapes `bar(ch|tch|k|que|sh…)` and a
+first word within `wake_min_ratio` of "barch" itself, 0.85: the looser match of before woke on
+"parece", "para que", "base", "parque"), the microphone (`mic_target`, empty = default source)
+and the Claude fallback (`claude: false` turns it off) are in `config.json`. A first word that came
+close to the wake word without waking it goes to `~/.local/state/barch/voice/wake-misses.log`
+(`barch voice misses`): if "barch" ever fails to wake it, that is where whisper's spelling of it
+shows up, to add to `wake`; `voice/tests/test_wake.py` keeps the spellings and the room talk apart. `whisper_prompt` must stay a bare
 "Barch.": whisper writes the prompt back word for word when it hears only noise, so a prompt
 with example commands in it runs them (that is how a keyboard click once closed a window); what
 it writes to silence ("Obrigado", the prompt, subtitle credits) is dropped before matching. A new

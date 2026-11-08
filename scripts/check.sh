@@ -72,6 +72,12 @@ if [ -d server/music ]; then
   ((fail)) || ok "compiles, tests pass"
 fi
 
+step "Voice control (quickshell/voice)"
+python3 -m py_compile quickshell/.config/quickshell/voice/voice.py 2>/dev/null || problem "voice: voice.py does not compile"
+python3 -m unittest discover -s quickshell/.config/quickshell/voice/tests -q >/dev/null 2>&1 || problem "voice: unit tests fail (python3 -m unittest discover -s quickshell/.config/quickshell/voice/tests)"
+find quickshell/.config/quickshell/voice -name __pycache__ -prune -exec rm -rf {} +
+((fail)) || ok "compiles, tests pass"
+
 step "Book templates (server/books)"
 python3 -m py_compile quickshell/.config/quickshell/books/books.py 2>/dev/null || problem "books: books.py does not compile"
 for f in server/books/templates/*.xml; do

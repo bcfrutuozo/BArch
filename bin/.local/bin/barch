@@ -98,6 +98,9 @@ Desktop (through the bar):
                               the rest goes to Claude; the Piper voice is downloaded when picked)
   voice say <text>            speak TEXT (piper)
   voice match <text>          which command TEXT would run, running nothing (to test commands.json)
+  voice wake <text>           would TEXT (as whisper might write it) wake the daemon, and with what left
+  voice misses [n]            first words that came close to "barch" without waking it (to tune the
+                              spellings in config.json)
   voice test <text>           run TEXT as if it had been heard (no wake word; it does act)
   voice reload                reload commands.json and the app/project lists
   voice log                   the daemon's journal
@@ -247,7 +250,11 @@ Backup (restic, encrypted, to the NAS; list: backup/include.txt in the repo):
   backup init                 create the repository and the password (printed once: keep it in
                               Bitwarden; without it the backup cannot be read)
   backup run [--prune]        back up now (barch-backup.timer does it daily at 13:00; old
-                              snapshots are pruned on Sundays, or with --prune)
+                              snapshots are pruned on Sundays, or with --prune, and a tenth of the
+                              data is read back and verified: the whole repository every ten weeks)
+  backup check [--full|--read-data <subset>]
+                              verify the repository now: structure, and the data (10% by default,
+                              --full reads everything; restic's n/t, x% or a size)
   backup status               last run and the timer's next run
   backup list                 snapshots
   backup restore [SNAPSHOT] <path>... [--target DIR]
@@ -1793,9 +1800,19 @@ cmd_voice() {
       out=$(python3 -I "$py" match "$*" 2>/dev/null) || rc=$?
       show "$out" 'if .matched then "\(.intent) (\(.kind))" + (if .run then ": \(.run | join(" "))" elif .dispatch then ": hyprctl dispatch \(.dispatch)" elif .app then ": app \(.app)" elif .project then ": \(.with // "terminal") in \(.project)" elif .palette then ": palette \(.palette)" elif .scene then ": scene \(.scene)" elif .region then ": \(.what) region \(.region)" elif .window then ": \(.action) window \(.window)" elif .repeats then ": \(.how) → \(.repeats)" else "" end) + (if .say != "" then "  → \"\(.say)\"" else "" end) else "no command: " + (if .intent == "claude" then "would ask Claude" else "would say it did not understand" end) + " (\(.normalized))" end'
       return "$rc" ;;
+    wake)
+      [[ -n ${1:-} ]] || usage_error "voice wake <text>"
+      local out rc=0
+      out=$(python3 -I "$py" wake "$*" 2>/dev/null) || rc=$?
+      show "$out" 'if .wake then "wakes" + (if .rest != "" then ", command: \(.rest)" else " (alone: chime, waits for the sentence)" end) else "does not wake (score \(.score) against barch)" end'
+      return "$rc" ;;
+    misses)
+      local f=$STATE/voice/wake-misses.log
+      [[ -s $f ]] || { echo "nothing came close to the wake word yet ($f)"; return 0; }
+      tail -n "${1:-30}" "$f" ;;
     log) journalctl --user -u "$unit" -n "${1:-60}" --no-pager -o short ;;
     setup) bash "$REPO/quickshell/.config/quickshell/voice/setup.sh" "$@" ;;
-    *) usage_error "voice on|off|toggle|status|pause|resume|say|match|test|reload|log|setup" ;;
+    *) usage_error "voice on|off|toggle|status|pause|resume|say|match|wake|misses|test|reload|log|setup" ;;
   esac
 }
 
@@ -2257,6 +2274,28 @@ backup_state() {   # backup_state <ok: true|false> <error> [summary json]
   jq -n --argjson ok "$1" --arg error "$2" --argjson at "$(date +%s)" --argjson summary "${3:-null}"     --arg repo "$RESTIC_REPOSITORY" '{at: $at, ok: $ok, error: $error, repo: $repo, summary: $summary}'     > "$BACKUP_STATE/last.json.tmp" && mv "$BACKUP_STATE/last.json.tmp" "$BACKUP_STATE/last.json"
 }
 backup_fail() { backup_state false "$1"; logger -t barch-backup -- "failed: $1"; die 1 "$1"; }
+# backup_check <read-data subset>: restic check, structure plus that part of the data read back and
+# hashed (a backup never read is not known to be good). Result in check.json for status and the
+# health widget; a failure fails the run (so the service's OnFailure reaches `barch failure`).
+backup_check() {
+  local subset=$1 start err rc=0
+  start=$(date +%s)
+  err=$(restic check --with-cache --read-data-subset="$subset" 2>&1 >/dev/null) || rc=$?
+  if ((rc)); then
+    err=$(grep -vE '^(load indexes|check all packs|check snapshots|\[.*\]|$)' <<<"$err" | head -3 | paste -sd ' ' | cut -c1-300)
+  else
+    err=""
+  fi
+  jq -n --argjson ok "$([[ $rc == 0 ]] && echo true || echo false)" --arg error "$err" --arg subset "$subset" \
+     --argjson at "$(date +%s)" --argjson took "$(( $(date +%s) - start ))" \
+     '{at: $at, ok: $ok, error: $error, subset: $subset, took: $took}' > "$BACKUP_STATE/check.json.tmp" \
+    && mv "$BACKUP_STATE/check.json.tmp" "$BACKUP_STATE/check.json"
+  if ((rc)); then
+    logger -t barch-backup -- "check failed ($subset): $err"
+    return 1
+  fi
+  logger -t barch-backup -- "check ok ($subset of the data read, $(( $(date +%s) - start )) s)"
+}
 
 cmd_backup() {
   local sub=${1:-status}
@@ -2310,25 +2349,49 @@ cmd_backup() {
           || backup_fail "restic forget/prune failed: $(tail -n +"$((mark + 1))" "$BACKUP_STATE/last.err" | grep -v '^$' | head -2 | paste -sd ' ')"
       fi
       backup_state true "" "${summary:-null}"
+      if [[ ${1:-} == --prune || $(date +%u) == 7 ]]; then
+        # the snapshot is in (last.json says ok); now a tenth of the data is read back, a different
+        # tenth each week (ISO week mod 10), so every pack is verified within ten weeks
+        backup_check "$(( $(date +%-V) % 10 + 1 ))/10" || die 1 "backup ok, but restic check failed: $(jq -r .error "$BACKUP_STATE/check.json")"
+      fi
       logger -t barch-backup -- "ok: $(jq -r '"\(.files_new + .files_changed) files changed, \(.data_added) bytes added, snapshot \(.snapshot_id[0:8])"' <<<"${summary:-{}}" 2>/dev/null)"
       show "$(jq -c --argjson took "$(( $(date +%s) - start ))" '. + {took: $took}' "$BACKUP_STATE/last.json")" \
         '"backup ok: \(.summary.files_new + .summary.files_changed) files changed, \(.summary.data_added / 1048576 | floor) MB added, \(.summary.total_files_processed) files in \(.took) s, snapshot \(.summary.snapshot_id[0:8])"'
       ;;
     status)
       backup_env
-      local last next
+      local last next check
       last=$(cat "$BACKUP_STATE/last.json" 2>/dev/null || echo '{"at":0,"ok":false,"error":"","summary":null}')
+      check=$(cat "$BACKUP_STATE/check.json" 2>/dev/null || echo null)
       next=$(systemctl --user show barch-backup.timer -p NextElapseUSecRealtime --value 2>/dev/null)
       show "$(jq -c --arg next "${next:-}" --argjson configured "$([[ -s $BACKUP_PASS ]] && echo true || echo false)" \
-              --arg repo "$RESTIC_REPOSITORY" '. + {next: $next, configured: $configured, repo: $repo}' <<<"$last")" '
+              --arg repo "$RESTIC_REPOSITORY" --argjson check "$check" '. + {next: $next, configured: $configured, repo: $repo, check: $check}' <<<"$last")" '
         if .configured | not then "backup: not initialised (barch backup init); repository would be \(.repo)"
         elif .at == 0 then "backup: never ran (barch backup run); repository \(.repo)"
         else "backup: " + (if .ok then "ok" else "FAILED: \(.error)" end)
           + " · last \(.at | strflocaltime("%Y-%m-%d %H:%M"))"
           + (if .summary then " · \(.summary.total_files_processed) files, \(.summary.data_added / 1048576 | floor) MB added, snapshot \(.summary.snapshot_id[0:8])" else "" end)
           + "\n  repository \(.repo)"
+          + (if .check then "\n  check: " + (if .check.ok then "ok" else "FAILED: \(.check.error)" end)
+               + " · \(.check.at | strflocaltime("%Y-%m-%d %H:%M")) · \(.check.subset) of the data read in \(.check.took) s"
+             else "\n  check: never ran (barch backup check; the Sunday run does it)" end)
           + (if .next != "" then "\n  next run \(.next)" else "\n  timer not enabled (systemctl --user enable --now barch-backup.timer)" end)
         end'
+      ;;
+    check)
+      need restic; backup_env
+      [[ -s $BACKUP_PASS ]] || die 1 "not initialised: run 'barch backup init'"
+      backup_mounted || die 1 "the NAS share for $RESTIC_REPOSITORY is not mounted"
+      local subset=10%
+      case ${1:-} in
+        --full) subset=100% ;;
+        --read-data) [[ -n ${2:-} ]] || usage_error "backup check --read-data <n/t|x%|size>"; subset=$2 ;;
+        "") ;;
+        *) usage_error "backup check [--full|--read-data <subset>]" ;;
+      esac
+      echo "checking $RESTIC_REPOSITORY ($subset of the data read back)…" >&2
+      backup_check "$subset" || die 1 "restic check failed: $(jq -r .error "$BACKUP_STATE/check.json")"
+      show "$(cat "$BACKUP_STATE/check.json")" '"check ok: \(.subset) of the data read and verified in \(.took) s"'
       ;;
     list)
       need restic; backup_env
@@ -2354,7 +2417,7 @@ cmd_backup() {
       restic restore "$snap" --target "$target" "${inc[@]}" && echo "restored into $target (paths keep their full names below it)"
       ;;
     browse) app_open backup BARCH_BACKUP_PAGE "${1:-}" ;;
-    *) usage_error "backup init|run [--prune]|status|list|restore [SNAPSHOT] <path>... [--target DIR]|browse [<page>]" ;;
+    *) usage_error "backup init|run [--prune]|check [--full|--read-data <subset>]|status|list|restore [SNAPSHOT] <path>... [--target DIR]|browse [<page>]" ;;
   esac
 }
 

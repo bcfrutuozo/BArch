@@ -32,7 +32,8 @@ journal=$(journalctl --disk-usage 2>/dev/null | sed -nE 's/.*take up ([0-9.]+ ?[
 # backup: o que o `barch backup run` deixou; configured = a senha do restic existe (barch backup init)
 bk_last="${XDG_STATE_HOME:-$HOME/.local/state}/barch/backup/last.json"
 bk_configured=$([[ -s "${XDG_CONFIG_HOME:-$HOME/.config}/barch/backup/password" ]] && echo true || echo false)
-backup=$(jq -c --argjson c "$bk_configured" '{at, ok, error, summary, configured: $c}' "$bk_last" 2>/dev/null \
+bk_check=$(cat "${bk_last%/*}/check.json" 2>/dev/null || echo null)   # the last `restic check` (Sundays)
+backup=$(jq -c --argjson c "$bk_configured" --argjson check "$bk_check" '{at, ok, error, summary, configured: $c, check: $check}' "$bk_last" 2>/dev/null \
   || jq -nc --argjson c "$bk_configured" '{at: 0, ok: false, error: "", summary: null, configured: $c}')
 
 jq -n --argjson pacnew "$pacnew" --argjson fs "$failed_sys" --argjson fu "$failed_usr" \

@@ -36,7 +36,7 @@ Item {
     property var failedUsr: []
     property string tpm: "ok"
     property var clean: ({ orphans: 0, cache: "?", journal: "?" })
-    property var backup: ({ configured: false, at: 0, ok: false, error: "", summary: null })
+    property var backup: ({ configured: false, at: 0, ok: false, error: "", summary: null, check: null })
     property real lastCleanup: 0
     property bool loaded: false
     property real checkedAt: 0              // fim da última verificação (ms)
@@ -48,8 +48,10 @@ Item {
     // backup configurado mas falhou ou está atrasado (o timer roda todo dia)
     readonly property bool backupLate: loaded && backup.configured
         && (!backup.ok || (Date.now() / 1000 - backup.at) > backupDays * 86400)
+    // the Sunday `restic check` (a tenth of the data read back) found something wrong in the repository
+    readonly property bool backupCheckFailed: loaded && backup.configured && !!backup.check && !backup.check.ok
     readonly property int issues: pacnew.length + failedSys.length + failedUsr.length + (tpm === "failed" ? 1 : 0)
-        + (backupLate ? 1 : 0)
+        + (backupLate ? 1 : 0) + (backupCheckFailed ? 1 : 0)
     function backupLine() {
         if (!backup.configured) return "Not set up: barch backup init"
         if (backup.at === 0) return "Never ran"
@@ -58,6 +60,13 @@ Item {
         const s = backup.summary
         return "Last: " + when + (s ? "   ·   " + s.total_files_processed + " files, "
             + Math.round(s.data_added / 1048576) + " MB added" : "")
+    }
+    function checkLine() {
+        const c = root.backup.check
+        if (!c) return "Never verified: barch backup check"
+        const when = new Date(c.at * 1000).toLocaleString(Qt.locale("en_US"), "MMM d")
+        if (!c.ok) return "Check failed " + when + (c.error ? ": " + c.error : "")
+        return "Verified " + when + " (" + c.subset + " of the data read back)"
     }
     readonly property bool shown: issues > 0 || cleanupDue
 
@@ -329,13 +338,16 @@ Item {
                 // --- backup (restic → NAS) ---
                 Section {
                     visible: root.backup.configured
-                    title: !root.backupLate ? "Backup" : root.backup.ok ? "Backup Overdue" : "Backup Failed"
+                    title: root.backupCheckFailed ? "Backup Check Failed"
+                         : !root.backupLate ? "Backup" : root.backup.ok ? "Backup Overdue" : "Backup Failed"
                     icon: 0xF0193                                    // cloud_upload
-                    tint: root.backupLate ? Theme.yellow : Theme.dim
+                    tint: root.backupCheckFailed ? Theme.red : root.backupLate ? Theme.yellow : Theme.dim
                     Line { text: root.backupLine(); wrapMode: Text.Wrap; elide: Text.ElideNone }
+                    Line { text: root.checkLine(); wrapMode: Text.Wrap; elide: Text.ElideNone; opacity: root.backupCheckFailed ? 1 : 0.7 }
                     RowLayout {
                         spacing: 6
                         Btn { label: "Run Now"; onClicked: root.run("barch backup run") }
+                        Btn { label: "Check"; onClicked: root.run("barch backup check") }
                         Btn { label: "Snapshots"; onClicked: root.run("barch backup list") }
                     }
                 }

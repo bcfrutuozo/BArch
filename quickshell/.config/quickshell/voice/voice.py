@@ -108,6 +108,7 @@ def yes_no(text: str) -> bool | None:
         return True
     return None
 HISTORY = STATE_DIR / "history.log"
+WAKE_MISSES = STATE_DIR / "wake-misses.log"
 BARCH = HOME / ".local/bin/barch"
 RATE = 16000
 FRAME = 320                      # 20 ms at 16 kHz
@@ -115,7 +116,7 @@ BYTES_PER_FRAME = FRAME * 2      # s16
 
 DEFAULTS = {
     "wake": ["barch", "bartch", "bark", "barque", "bach", "barche", "bart", "bash", "march", "parch", "barg"],
-    "wake_min_ratio": 0.72,
+    "wake_min_ratio": 0.85,      # fuzzy match of the first word against "barch" only (see wake_match)
     "wake_window_s": 8,          # after "barch" alone, how long the next sentence counts as the command
     "followup_s": 8,             # after an answer, how long the next sentence needs no "barch" (0 = off)
     "context_s": 90,             # how long the last command counts for "mais", "menos", "de novo"
@@ -218,6 +219,42 @@ def normalize(text: str) -> str:
     t = "".join(c for c in t if unicodedata.category(c) != "Mn")
     t = re.sub(r"[^a-z0-9%+\- ]+", " ", t)
     return re.sub(r"\s+", " ", t).strip()
+
+
+# The shapes whisper gives the wake word: barch, bartch, barque, bark, barsh, barche, baarch, barrch...
+# (a lone "c" takes no vowel: "barco" is a boat). Real words that only sound alike must not match.
+WAKE_RE = re.compile(r"^ba{1,2}r{1,2}(?:(?:ch|tch|tsch|sh|k|q|que|j|g|gh|x)[aeiouy]?|c)$")
+WAKE_LEAD = ("e", "ai", "o", "oi", "ei", "hey", "ola", "oh")      # "e aí barch", "ô barch"
+NEAR_MISS = 0.6                                                     # logged, so the spellings can be tuned
+
+
+def wake_match(text: str, cfg: dict) -> tuple[bool, str, float]:
+    """Does the sentence start with the wake word? Returns (yes, the rest, how close the first word came).
+
+    A match is an exact spelling from cfg["wake"], a shape of WAKE_RE (also two words run together:
+    "bar que"), or a first word within cfg["wake_min_ratio"] of "barch" itself. The previous rule
+    (ratio 0.72 against every variant, plus any word starting with "bar") woke on "parece",
+    "para que", "base", "parque", "mar", "marca": room talk reached Claude, and each of his answers
+    opened a follow-up window that kept the conversation going (2026-11-08).
+    """
+    t = normalize(text)
+    if not t:
+        return False, "", 0.0
+    words = t.split()
+    wake = {normalize(w) for w in cfg["wake"]}
+    ratio = float(cfg["wake_min_ratio"])
+    score = difflib.SequenceMatcher(None, words[0], "barch").ratio()
+    for n in (1, 2):
+        if len(words) < n:
+            break
+        head = "".join(words[:n])
+        if head in wake or WAKE_RE.match(head) or (n == 1 and score >= ratio):
+            return True, " ".join(words[n:]), 1.0
+    if len(words) >= 2 and words[0] in WAKE_LEAD:
+        yes, rest, _ = wake_match(" ".join(words[1:]), cfg)
+        if yes:
+            return True, rest, 1.0
+    return False, "", score
 
 
 def fix_names(t: str) -> str:
@@ -1322,25 +1359,17 @@ class Voice:
     # -- one sentence
     def wake_in(self, text: str) -> tuple[bool, str]:
         """Does the sentence start with the wake word? Returns (yes, the rest)."""
-        t = normalize(text)
-        if not t:
-            return False, ""
-        words = t.split()
-        wake = self.cfg["wake"]
-        ratio = float(self.cfg["wake_min_ratio"])
-        for n in (1, 2):
-            if len(words) < n:
-                break
-            head = "".join(words[:n])
-            best = max((difflib.SequenceMatcher(None, head, w).ratio() for w in wake), default=0)
-            if head in wake or best >= ratio or (n == 1 and head.startswith("bar") and len(head) <= 6):
-                return True, " ".join(words[n:])
-        # "e aí barch", "ô barch": the wake word as the second word
-        if len(words) >= 2 and words[0] in ("e", "ai", "o", "oi", "ei", "hey", "ola", "oh"):
-            yes, rest = self.wake_in(" ".join(words[1:]))
-            if yes:
-                return True, rest
-        return False, ""
+        yes, rest, _ = wake_match(text, self.cfg)
+        return yes, rest
+
+    def note_miss(self, head: str, score: float):
+        """A first word close to "barch" that did not wake: what whisper wrote, to tune the spellings
+        (`barch voice misses`). Only the head of the sentence is kept, never the room's talk."""
+        try:
+            with WAKE_MISSES.open("a") as f:
+                f.write(f"{datetime.now():%Y-%m-%d %H:%M:%S} | {score:.2f} | {head.strip()[:60]}\n")
+        except OSError:
+            pass
 
     def process(self, pcm: bytes):
         with self.worklock:
@@ -1391,10 +1420,12 @@ class Voice:
             head = self.whisper.transcribe(pcm[:head_bytes], head_lang)
             if chosen == "auto":
                 lang = self.whisper.detected
-            yes, rest = self.wake_in(head)
+            yes, rest, score = wake_match(head, self.cfg)
             if self.cfg["debug"]:
-                log(f"heard ({time.time() - t0:.2f}s, {head_lang}→{lang}): {head!r} wake={yes}")
+                log(f"heard ({time.time() - t0:.2f}s, {head_lang}→{lang}): {head!r} wake={yes} score={score:.2f}")
             if not yes or self.hallucinated(head):
+                if not yes and score >= NEAR_MISS:
+                    self.note_miss(head, score)
                 return
             alone = len(pcm) <= head_bytes and not rest.strip(" ,.!?")   # "barch" and nothing else
             self.write_state("processing", heard="…")
@@ -1460,6 +1491,11 @@ class Voice:
         else:
             res = self.intents.answer_pending(command, lang) or {"matched": False}
         if not res.get("matched"):
+            if len(command.split()) <= 2 and yes_no(command) is not None:
+                # a stray "sim" or "não" with nothing pending: an answer to someone in the room, not to us
+                log("ignored (yes/no with nothing pending):", command)
+                self.write_state("listening", heard="")
+                return {"matched": False, "say": "", "ignored": True}
             talking_to_claude = time.time() - self.last_claude < 60 and (len(command.split()) >= 2 or lang != "pt")
             if followup and not talking_to_claude:
                 # a follow-up window catches whatever is said in the room: without a command in it, drop it
@@ -1476,8 +1512,14 @@ class Voice:
             f.write(f"{datetime.now():%Y-%m-%d %H:%M:%S} | {command} | {res.get('intent', '-')} | {res.get('say', '')[:160]}\n")
         say = (res.get("say") or "").strip()
         self.intents.note(command, say)
-        if res.get("intent") in ("claude", "confirm") and "cost" in res:
-            self.last_claude = time.time()
+        if res.get("intent") == "confirm" or (res.get("intent") == "claude" and res.get("matched") and res.get("ok", True)):
+            if "cost" in res:
+                self.last_claude = time.time()
+        elif res.get("intent") == "claude":
+            # he did not understand, or could not do it: the follow-up window stays open for the command
+            # table only, so the next sentence in the room does not go back to him (a false wake once
+            # chained six answers to a conversation that was not with us)
+            self.last_claude = 0.0
         if res.get("action") == "pause":
             self.set_paused(True)
         if say:
@@ -1706,6 +1748,21 @@ def match(argv: list[str]) -> int:
     return 0 if res.get("matched") else 1
 
 
+def wake(argv: list[str]) -> int:
+    """voice.py wake "sentence": would it wake the daemon (as whisper might write it), and with what left?"""
+    if not argv:
+        print("usage: voice.py wake <text>", file=sys.stderr)
+        return 2
+    cfg = dict(DEFAULTS)
+    try:
+        cfg.update(json.loads((HERE / "config.json").read_text()))
+    except (OSError, json.JSONDecodeError):
+        pass
+    yes, rest, score = wake_match(" ".join(argv), cfg)
+    print(json.dumps({"wake": yes, "rest": rest, "score": round(score, 2)}, ensure_ascii=False))
+    return 0 if yes else 1
+
+
 def languages() -> int:
     """voice.py languages: every language with its voice and whether that voice is downloaded."""
     cfg = dict(DEFAULTS)
@@ -1757,6 +1814,8 @@ if __name__ == "__main__":
         sys.exit(languages())
     if len(sys.argv) > 1 and sys.argv[1] == "match":
         sys.exit(match(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] == "wake":
+        sys.exit(wake(sys.argv[2:]))
     if len(sys.argv) > 1 and sys.argv[1] not in ("daemon",):
         print(__doc__)
         sys.exit(2)
