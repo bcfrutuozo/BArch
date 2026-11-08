@@ -69,6 +69,16 @@ for pkg in "${pkgs[@]}"; do
   ok "$pkg"
 done
 
+step "Default apps"
+# clip/ registers BArch Clip for the video types (Thunar's "Open with"); without an explicit default
+# GIO would pick it over mpv by name, so mpv is pinned (writes ~/.config/mimeapps.list)
+if command -v xdg-mime >/dev/null && [[ -e /usr/share/applications/mpv.desktop ]]; then
+  for t in video/mp4 video/quicktime video/x-matroska video/webm video/x-msvideo video/mpeg video/mp2t video/3gpp video/x-m4v; do
+    xdg-mime default mpv.desktop "$t"
+  done
+  ok "mpv stays the player of videos (BArch Clip only in Open with)"
+fi
+
 step "PATH"
 # os scripts do BArch ficam em ~/.local/bin: no terminal (bash) e na sessão (uwsm → Hyprland, barra)
 line='export PATH="$HOME/.local/bin:$PATH"'

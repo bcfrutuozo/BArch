@@ -54,6 +54,9 @@
     "mixer de audio": "barch mixer",
     "mixer de som": "barch mixer",
     "volume dos aplicativos": "barch mixer",
+    "editor de video": "barch clip",
+    "editor de videos": "barch clip",
+    "clip": "barch clip",
     "pacotes": "barch packages",
     "packages": "barch packages",
     "backup": "barch backup browse",
@@ -484,7 +487,7 @@
       "with": "nvim",
       "patterns": [
         "(abre|abra|abrir|edita|editar) (o )?(projeto|repositorio|repo|codigo|codigo do|codigo de) (?P<proj>.+?)( no (neovim|vim|editor))?",
-        "(abre|abra|abrir) (o |um )?(neovim|vim|editor) (no|na|em|do|da|de) (projeto |pasta |repo )?(?P<proj>.+)"
+        "(abre|abra|abrir) (o |um )?(neovim|vim|editor) (no|na|em|do|da|de) (projeto |pasta |repo )?(?P<proj>(?!videos?$).+)"
       ]
     },
     {

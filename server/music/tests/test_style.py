@@ -112,3 +112,12 @@ class WikipediaDates(unittest.TestCase):
                  "1981 (Europe)<br />May 1982 (UK)": []}            # no day: not a date
         for text, want in cases.items():
             self.assertEqual(mb._dates_in(text), want, text)
+
+
+class Hidden(unittest.TestCase):
+    def test_dotfiles_are_hidden_ellipsis_albums_are_not(self):
+        self.assertTrue(style.hidden(".stfolder"))
+        self.assertTrue(style.hidden(".DS_Store"))
+        self.assertFalse(style.hidden("...And Then, The Light of Consciousness Became Hell"))
+        self.assertFalse(style.hidden("...And Death Said Live"))
+        self.assertFalse(style.hidden("Paranoid"))

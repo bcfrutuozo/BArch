@@ -23,6 +23,7 @@ declare -A PACKAGES=(
   [calendar]=".config/khal .config/vdirsyncer/config"
   [audio]=".config/pipewire .config/wireplumber"
   [obs]=".local/share/applications/obs-stream.desktop .local/share/applications/obs-guitarra.desktop"
+  [clip]=".local/share/applications/barch-clip.desktop"
 )
 
 # User services to enable on a fresh install

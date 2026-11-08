@@ -115,6 +115,14 @@ hl.window_rule({
     center = true,
     size   = "1400 900",
 })
+-- BArch Clip (quickshell/clip, `barch clip`): o vídeo com o recorte pede área
+hl.window_rule({
+    name  = "barch-clip",
+    match = { title = "^BArch Clip$" },
+    float  = true,
+    center = true,
+    size   = "1360 900",
+})
 -- os outros apps do BArch (backup, pacotes, mixer, música): mesmo tratamento
 hl.window_rule({
     name  = "barch-apps",

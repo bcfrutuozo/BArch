@@ -4,6 +4,7 @@ from __future__ import annotations
 import http.client
 import http.cookiejar
 import json
+import re
 import time
 import unicodedata
 from pathlib import Path
@@ -91,6 +92,22 @@ class QBit:
 
     def delete(self, h: str, files: bool = True):
         self._api("POST", "/torrents/delete", form={"hashes": h, "deleteFiles": "true" if files else "false"})
+
+
+def norm_name(s: str) -> str:
+    """A folder or title as the library's style would write it, flattened: accents off, lower case,
+    "&" = "and", a trailing "(2008)" of a same-title album dropped, punctuation and spacing ignored."""
+    s = (s or "").replace("’", "'").replace("'", "")           # won't / won’t: the same word
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower().replace("&", " and ")
+    s = re.sub(r"\s*\((?:19|20)\d{2}\)\s*$", "", s)
+    return re.sub(r"[^a-z0-9]+", " ", s).strip()
+
+
+def in_library(folders: dict[str, set[str]], artist_dir: str, title: str) -> bool:
+    """Does /music hold an album folder for this Lidarr album? `folders` is norm(artist folder) ->
+    {norm(album folder)} (Library.folder_map()); `artist_dir` the basename of the artist's path in Lidarr."""
+    albums = folders.get(norm_name(artist_dir))
+    return bool(albums) and norm_name(title) in albums
 
 
 class Lidarr:
@@ -245,10 +262,23 @@ class Lidarr:
         self.h.call("PUT", "/api/v1/album/monitor", body={"albumIds": [alb["id"]], "monitored": False})
         return f"Lidarr: {alb.get('title')!r} unmonitored" + (f" ({why})" if why else "")
 
-    def enforce(self, profile: str, seen_file: Path | None = None, canon=None, budget: float = 300) -> str:
+    def enforce(self, profile: str, seen_file: Path | None = None, canon=None, budget: float = 300,
+                has_folder=None, sweep_done=None) -> str:
         """The library's rule on every artist, now and for the ones added later: the metadata profile
         `profile` (every distinct album: studio, EP, live, compilation) and every album listed without a
         single file monitored and searched (once: an album Bruno unmonitors afterwards stays so).
+
+        "Without a file" is Lidarr's count, not the library's: Lidarr never mapped most of the hand-made
+        library, and on 2026-11-04 this monitored and searched albums Bruno had for years (Soularr and
+        Lidarr's own search then downloaded 66 of them again). So, with `has_folder(artist_dir, title)`
+        (Library.has_folder), an album whose folder exists in /music is never monitored or searched here
+        and is unmonitored whenever it is (every run, not once: a RefreshArtist after the sweep's rescan
+        writes the old "monitored" back), partial ones too (Lidarr's release with more tracks than the
+        album's edition, a bonus track: Soularr downloads the whole album for it). Lidarr cannot map
+        such an album (no MusicBrainz ids yet, or a release its metadata lacks), and tying it is the
+        Library tab's job, not a download's; `lidarr-search` fetches one by hand, monitored or not. With
+        `sweep_done(artist_dir)` (Library.artist_done), the albums of an artist the library sweep has not
+        finished yet wait for it, since Lidarr learns the files from the sweep's rescan.
 
         With `canon` (canon.Canon) only the canonical albums: an EP, live album or compilation Wikipedia
         does not know is never monitored, and one monitored before is unmonitored (once too: monitored
@@ -301,10 +331,23 @@ class Lidarr:
             if judged:
                 out.append(f"{judged} artist(s) judged against Wikipedia")
         albums = self.h.call("GET", "/api/v1/album") or []
-        add, drop = [], []
+        dir_of = {a["id"]: Path(a.get("path") or "").name or a.get("artistName", "") for a in artists}
+        add, drop, shadow, waiting = [], [], [], 0
         for al in albums:
-            if (al.get("statistics") or {}).get("trackFileCount", 0) > 0:
-                continue
+            st = al.get("statistics") or {}
+            files, tracks = st.get("trackFileCount", 0), st.get("trackCount", 0)
+            if files and files >= tracks:
+                continue                                   # complete: nothing to monitor or to drop
+            adir = dir_of.get(al.get("artistId"), "")
+            if has_folder and has_folder(adir, al.get("title", "")):
+                if al.get("monitored"):
+                    shadow.append(al["id"])            # every run: a RefreshArtist writes "monitored" back
+                continue                                   # in the library already, whatever Lidarr counts
+            if files:
+                continue                                   # a partial album without a folder: Lidarr's own business
+            if sweep_done and not sweep_done(adir):
+                waiting += 1
+                continue                                   # the sweep has not shown Lidarr this artist's files yet
             v = canon.verdict(mbid_of.get(al.get("artistId"), ""), al.get("foreignAlbumId", "")) if canon else "any"
             if v is None:
                 continue                                   # its artist is not judged yet
@@ -312,6 +355,11 @@ class Lidarr:
                 add.append(al["id"])
             elif not v and al.get("monitored") and al["id"] not in dropped:
                 drop.append(al["id"])
+        if shadow:
+            self.h.call("PUT", "/api/v1/album/monitor", body={"albumIds": shadow, "monitored": False})
+            out.append(f"{len(shadow)} album(s) Lidarr lists as missing but /music already has: unmonitored (a tie or a bonus track is the Library tab's job)")
+        if waiting:
+            out.append(f"{waiting} album(s) wait for the library sweep to finish their artist")
         if drop:
             self.h.call("PUT", "/api/v1/album/monitor", body={"albumIds": drop, "monitored": False})
             out.append(f"{len(drop)} album(s) Wikipedia does not know unmonitored (unofficial EPs, live albums, compilations)")
@@ -321,7 +369,7 @@ class Lidarr:
             out.append(f"{len(add)} album(s) without a file monitored and searched")
         if seen_file:
             seen = (seen | set(add) | {al["id"] for al in albums if al.get("monitored")}) - set(drop)
-            dropped |= set(drop)           # monitored again by hand, it stays; Wikipedia learning it later monitors it
+            dropped |= set(drop) | set(shadow)   # monitored again by hand, it stays; Wikipedia learning it later monitors it
             seen_file.write_text(json.dumps({"seen": sorted(seen), "dropped": sorted(dropped)}))
         return "Lidarr: " + ("; ".join(out) if out else f"every artist on {profile!r}, nothing to change")
 

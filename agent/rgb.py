@@ -196,10 +196,13 @@ def step_brightness(presses: int) -> int:
 
 def open_notify(devs: list[Path]) -> dict[int, Path]:
     """In software mode the light key does nothing on the keyboard: the daemon only reports it
-    (`notify light` → "key +light" on notifyN), and the brightness is ours to change."""
+    (`notify light` → "key +light" on notifyN), and the brightness is ours to change.
+    The device has to be `active` first: in hardware mode ckb-next-daemon drops every command but
+    `active` (and a few queries), so a `notify` sent before it is lost and the key stays dead
+    until the next time the pipes are opened (that is what happened at every boot)."""
     fds = {}
     for d in devs:
-        if not send(d, "notify light"):
+        if not (send(d, "active") and send(d, "notify light")):
             continue
         try:
             fd = os.open(d / "notify0", os.O_RDONLY | os.O_NONBLOCK)
@@ -236,12 +239,12 @@ def watch():
         if sig != seen or resumed:
             if seen is not None and sig[3] != seen[3]:
                 time.sleep(1)           # a device that just appeared answers after a moment
+            color = target()
+            n = sum(send(d, "active") for d in devices())
             if seen is None or sig[2:] != seen[2:] or resumed:
                 for fd in fds:
                     os.close(fd)
-                fds = open_notify(devices())
-            color = target()
-            n = sum(send(d, "active") for d in devices())
+                fds = open_notify(devices())    # after `active`, or the daemon ignores the notify
             until = time.monotonic() + 0.3 + STREAM_S
             log(f"rgb: {color} on {n} device(s)" + (" after resume" if resumed else ""))
             seen = sig

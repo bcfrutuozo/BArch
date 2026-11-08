@@ -267,6 +267,7 @@ Scope {
         { title: "Torrents", alias: "torrents", sub: "qBittorrent over time: ratio, upload and download per day, by indexer, every torrent", glyph: 0xF01DA, keywords: "torrents qbittorrent ratio upload download seeding statistics stats trackers indexers history nas", cmd: ["barch", "torrents", "browse"] },
         { title: "Packages", alias: "pkg", sub: "Installed, orphans, updates, pacnew, history", glyph: 0xF03D7, keywords: "packages pacman aur paru installed orphans updates pacnew history", cmd: ["barch", "packages"] },
         { title: "Audio Mixer", alias: "mixer", sub: "Per-app volume and routing, devices, sample rate", glyph: 0xF057E, keywords: "audio mixer volume pipewire routing bluetooth codec sample rate", cmd: ["barch", "mixer"] },
+        { title: "Clip", alias: "clip", sub: "Crop, turn and trim a video, then save it (like the iPhone's editor)", glyph: 0xF0567, keywords: "clip video editor crop trim cut borders rotate recortar cortar video edit", cmd: ["barch", "clip"] },
         // ferramentas de tela (launcher/tools.sh): digite o atalho (ocr, pick, qr)
         { title: "Copy Text from Screen", alias: "ocr",  sub: "Select an area · OCR",          glyph: 0xF113A, keywords: "ocr text extract recognize read", cmd: ["bash", Quickshell.shellDir + "/launcher/tools.sh", "ocr"] },
         { title: "Pick Color",            alias: "pick", sub: "Click any pixel · copies hex",  glyph: 0xF020A, keywords: "color picker eyedropper hex colour", cmd: ["bash", Quickshell.shellDir + "/launcher/tools.sh", "pick"] },

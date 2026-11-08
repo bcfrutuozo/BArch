@@ -1,0 +1,12 @@
+# BArch Clip (quickshell/clip): "Open with" in Thunar and the like. Hidden from menus: the bar's
+# launcher has its own entry ("Clip"), this one only registers the video types.
+[Desktop Entry]
+Type=Application
+Name=BArch Clip
+Comment=Crop, turn and trim a video, then save it
+Exec=barch clip %f
+Icon=video-x-generic
+Terminal=false
+NoDisplay=true
+Categories=AudioVideo;Video;
+MimeType=video/mp4;video/quicktime;video/x-matroska;video/webm;video/x-msvideo;video/mpeg;video/mp2t;video/3gpp;video/x-m4v;

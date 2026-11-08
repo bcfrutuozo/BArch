@@ -27,7 +27,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | Folder | Goes to | What it is |
 |---|---|---|
 | `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, `scripts/lock.sh` (locks; starts and supervises the resident lock process); `settings.json` is what the Hyprland Settings app saved (below) |
-| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/`, `mixer/`, `music/`, `player/` (the music player), `books/`, `video/` and `torrents/` the other apps, `voice/` the voice control daemon, `ui/` the controls they all share (linked into each) |
+| `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/`, `mixer/`, `music/`, `player/` (the music player), `books/`, `video/`, `torrents/` and `clip/` (the video editor) the other apps, `voice/` the voice control daemon, `ui/` the controls they all share (linked into each) |
 | `foot/` | `~/.config/foot` | Terminal |
 | `ghostty/` | `~/.config/ghostty/config.ghostty` | Ghostty config as cmux reads it (it embeds libghostty): Ctrl+C copies a selection (^C without one), Ctrl+V pastes, Ctrl+Shift+C/V send the originals, like foot |
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
@@ -37,6 +37,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `apps-theme`, `papirus-accent`, `nas-mount`, `keyring-wait`, `gsr-replay-saved` (the notification after a replay or recording is saved) |
 | `claude/` | `~/.claude/settings.json` | Claude Code settings: the hooks that take the safety snapshots (see Agent) |
 | `games/` | `~/Games/battle.net/run.sh`, `~/.config/gamemode.ini`, `~/.local/share/applications/steam.desktop` | Battle.net launcher (umu + Proton-GE), gamemode rules, Steam launcher without `GDK_SCALE` (Steam would scale twice) |
+| `clip/` | `~/.local/share/applications/barch-clip.desktop` | "Open with → BArch Clip" on any video in Thunar (hidden from menus; the launcher has its own entry); `install.sh` pins mpv as the player, or GIO would pick this entry by name |
 | `obs/` | `~/.local/share/applications/obs-stream.desktop`, `obs-guitarra.desktop` | OBS launchers: **OBS Stream** (profile "Stream YouTube", scenes "Jogo": screen + BRIO corner, mic, PC audio) and **OBS Guitarra** (BRIO 1080p60, the room through the fifine, HEVC); the profiles and scenes go in the backup, the recordings in `~/Videos/OBS` do not |
 | `calendar/` | `~/.config/khal`, `~/.config/vdirsyncer/config` | iCloud calendar sync (the app password stays out of the repo) |
 | `audio/` | `~/.config/pipewire`, `~/.config/wireplumber` | PipeWire rates and resampler, onboard output at 32-bit/192 kHz, Bluetooth output-only at AAC (below), fifine mic as input only |
@@ -231,6 +232,16 @@ The main pieces:
   **Library**: the library tied to MusicBrainz (see Music): how far the sweep is, Pause, and the albums
   it could not settle, each with its candidates; Use one to see it next to the album's files track by
   track, Tag writes its ids, Add to MusicBrainz opens the release editor filled in from the files, Skip.
+  The same from a shell: `barch music library [list|show|compare|tag|skip|retry]`, and **`barch music library
+  fix "<Artist/Album>"`** hands one album to Claude (prompt `quickshell/music/library-fix.md`): it reads the
+  files' lengths and titles, compares the candidates and what MusicBrainz, Discogs and the web say about the
+  edition, tags the release that fits (never skips; an edition MusicBrainz lacks is left for `mb-add`).
+  `barch music agent-sweep [library|review|all] [--parallel N]` runs that over every Library album and
+  `music fix` over every Review job as a detached user unit (one JSON line per album in
+  `~/.local/state/barch/music-agent/sweep-<stamp>/log.jsonl`, `status` and `stop`), stopping by itself at 90 % of
+  the Claude plan's week. A sweep over 308 albums ran on 2026-11-08. The sweep also puts MusicBrainz ids an old
+  tagger wrote in title case (`B15d9a20-…-Ad58`, 15 albums of Taylor Swift, Maroon 5, Tina Turner, Jeremy Soule)
+  back in lower case, since Lidarr compares them exactly and never mapped those files.
   **Lidarr & scan**: scan now, FLAC only, monitor / search album ids.
 - **Player** (`quickshell/player/`, "Player" in the launcher, `barch player [page]`): the music library on the
   NAS played on this desktop, in the bar's theme, in the spirit of [omaTUNES](https://github.com/Balthazzahr/omatunes).
@@ -343,6 +354,26 @@ The main pieces:
   **Settings**: the graph rate and a forced sample rate or quantum (`pw-metadata` settings,
   live, until PipeWire restarts; the permanent values stay in `audio/`), the Bluetooth codec and
   profile of a connected headset, pavucontrol / qpwgraph if installed.
+- **Clip** (`quickshell/clip/`, "Clip" in the launcher, `barch clip [file]`, "Open with" in Thunar, or a video dropped
+  on the window): a video editor in the spirit of the iPhone's. The frame with a crop rectangle over it (corners
+  and edges to drag, the inside to move it, a rule-of-thirds grid, the rest dimmed), aspect chips (free, the
+  original, square, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3), turn left / right and mirror, and a filmstrip of the video
+  below with a grip at each end to trim and a playhead to scrub (the frame follows; `I`/`O` mark the start and
+  end at the playhead, arrows step one frame, Shift+arrows one second, `R` turns, `0` resets). Nothing plays
+  inside the window (no Qt Multimedia here): **Preview** (Space) runs the edit through the same ffmpeg command
+  the export uses, as fast as the GPU can, piped into an mpv window, so what it shows is what will be saved,
+  HDR included. **Save** (Ctrl+S) asks for a new file next to the original (`<name>-clip.<ext>`, `-2`, `-3` when
+  taken) or **Replace original** (the old file goes to the trash, or stays as `<name>.orig.<ext>` where there is no
+  trash), with a progress bar, speed and the encoder in the footer, Cancel, then Play / Show in folder / Open the
+  result. `clip.py` next to it is the ffmpeg side, shared with `barch clip export`: `ffprobe` for what the file
+  is (size as displayed, since a phone's video carries its rotation as a tag and ffmpeg turns it by itself),
+  frames and the filmstrip as JPEGs in `~/.cache/barch/clip/` (HDR tone mapped for the screen), and the
+  export: the crop is measured on the frame as displayed (after the file's rotation, the turn and the mirror),
+  rounded to even numbers; the video is re-encoded with NVENC (H.264 stays H.264, AV1 stays AV1, everything
+  else becomes HEVC, 10-bit kept 10-bit, the color tags and the HDR10 metadata kept; `libx264`/`libx265`
+  where there is no NVENC), decoded on the GPU, audio and subtitles copied, the container kept, chapters
+  dropped. `barch clip info <file>` shows what it sees; `tests/test_clip.py` covers the crop math, the filter
+  chains, the encoder choice, the probe summary and the progress lines.
 - **Voice control** (`quickshell/voice/`, `barch voice`, tile **Voice** in the Control Center): the
   microphone is always open, like in a car, and nothing happens until a sentence starts with
   "barch" (see Voice below). A microphone shows in the bar while the service runs: dim while it
@@ -433,6 +464,9 @@ barch center [<page>]              # System Center: the NAS, services, timers, f
 barch backup browse [<page>]       # Backup Browser: snapshots, files, restore into ~/Restore
 barch packages [<page>]            # Packages: installed, orphans, updates, pacnew, repo lists, history
 barch mixer [<page>]               # Audio Mixer: devices, per-app volume and routing, sample rate
+barch clip [<file>]                # Clip: crop, turn, mirror and trim a video, preview it, save it (see The bar)
+barch clip info <file>             # size as displayed, fps, codec, HDR, rotation, audio
+barch clip export <file> [--crop W:H:X:Y] [--rotate 90|180|270] [--flip h|v|hv] [--from T] [--to T] [-o OUT] [--replace]
 barch hdr on|off|status            barch sdr <nits>|status
 barch monitor side on|off|status   barch caffeine on|off|status
 barch nightlight on|off|status     barch dnd on|off|status
@@ -468,6 +502,9 @@ barch player plex [status|sessions]   # what was told to Plex (Tautulli's source
 barch player show|hide|quit            # the window back · closed with the music on (the bar gets a button) · stop everything
 barch music status|browse|list|show|resolve|retry|reject|scan   # the NAS music pipeline and its review queue (see Music)
 barch music accept-year [--dry-run] [--older-than DAYS]   # the review albums waiting only on a year-only date: all resolved as YYYY-01-01
+barch music library [list|show|compare|tag|skip|retry] "<Artist/Album>" [<release>]   # the Library tab from a shell (see Music)
+barch music library fix "<Artist/Album>" ["hint"]   # Claude ties one library album to MusicBrainz (compare, then tag)
+barch music agent-sweep [library|review|all] [--parallel N] [--limit N] · status · stop   # Claude over everything waiting, detached
 barch music covers check [artist]|list|apply|undo|keep|pick|propose <Artist/Album>   # scans with a frame -> the clean artwork
 barch music covers ask <Artist/Album> "keep the red frame"   # Claude adapts one or finds another, as a proposal
 barch music cover <id> <file|URL> [label]   # the cover you found for an album waiting on it: checked, then the album runs
@@ -675,7 +712,16 @@ cover) waits in a review queue with the reason and the candidates:
 all of it in the **Music** app (`barch music browse`), or from the phone: the pipeline serves the same
 review queue and resolve form as a page at `http://<nas>:8338/` (asks for the `barch music` token once). On the Lidarr side it enforces the library's rule every
 hour: every artist on the `BArch` metadata profile (every distinct album: studio, EP, live, compilation), and every
-official album without a file monitored once, new ones too. Official is not MusicBrainz's status (it calls hundreds of
+official album without a file monitored once, new ones too. "Without a file" is checked against `/music`, not only
+against Lidarr's count: an album whose folder exists in the library is never monitored or searched (and is unmonitored
+at every run if it is, partial ones too: Lidarr counting 24 of 137 tracks of a box-set release is still Bruno's "On Air";
+a bonus track or a tie is the Library tab's job, `lidarr-search` fetches one by hand), and the albums of an artist the
+MusicBrainz sweep has not finished wait for it. Only dotfiles are skipped when `/music` is listed: an album whose title
+starts with "..." counts (the sweep, the enforce and the Player's catalog all skipped those until 2026-11-08). Lidarr had mapped
+only 4 % of the hand-made library until 2026-11-03, so its "missing" list was mostly albums Bruno had; on 2026-11-04
+the enforce searched 122 of them and Soularr (which downloads Lidarr's missing list from Soulseek) fetched dozens
+more, 66 of which the pipeline then merged into albums already there with nothing to change. Tying an album Lidarr
+cannot map (no ids yet, or a release its metadata lacks) is the Library tab's job, never a download's. Official is not MusicBrainz's status (it calls hundreds of
 regional EPs and budget compilations of a big artist Official): an EP, live album or compilation counts only when
 Wikidata or the artist's Wikipedia (English and the artist's own language) knows it, so Deep Purple goes from 297
 missing albums to 70; an artist without Wikipedia is not filtered (`server/music/canon.py`, `barch music

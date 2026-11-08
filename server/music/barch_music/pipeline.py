@@ -438,7 +438,8 @@ class Pipeline:
         try:
             r = self.lidarr.enforce(profile, self.store.root / "lidarr-seen.json",
                                     canon=self.canon if self.cfg.get("lidarr", {}).get("canon", True) else None,
-                                    budget=40 if force else 300)
+                                    budget=40 if force else 300,
+                                    has_folder=self.library.has_folder, sweep_done=self.library.artist_done)
         except Exception as e:  # noqa: BLE001
             r = f"Lidarr: profile check failed: {e}"
         if not r.endswith(("nothing to change", "nothing changed", "nothing else changed")) or "release profile" in r:
@@ -831,9 +832,9 @@ class Pipeline:
         out = []
         if self.music.is_dir():
             for d in sorted(self.music.iterdir(), key=lambda x: x.name.casefold()):
-                if d.is_dir() and not d.name.startswith("."):
+                if d.is_dir() and not style.hidden(d.name):
                     try:
-                        n = sum(1 for a in d.iterdir() if a.is_dir())
+                        n = sum(1 for a in d.iterdir() if a.is_dir() and not style.hidden(a.name))
                     except OSError:
                         n = 0
                     out.append({"name": d.name, "albums": n})

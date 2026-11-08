@@ -23,7 +23,7 @@ from pathlib import Path
 
 from mutagen.flac import FLAC
 
-from . import matcher
+from . import matcher, style
 from .audio import Track
 
 RETRY = 30 * 86400
@@ -98,11 +98,39 @@ class Library:
     def folders(self) -> list[str]:
         out = []
         for a in sorted(self.music.iterdir(), key=lambda p: p.name.casefold()):
-            if a.is_dir() and not a.name.startswith("."):
+            if a.is_dir() and not style.hidden(a.name):
                 for b in sorted(a.iterdir(), key=lambda p: p.name.casefold()):
-                    if b.is_dir() and not b.name.startswith("."):
+                    if b.is_dir() and not style.hidden(b.name):
                         out.append(f"{a.name}/{b.name}")
         return out
+
+    # ---------------------------------------------------------------- what Lidarr's enforce asks
+    def folder_map(self) -> dict[str, set[str]]:
+        """norm(artist folder) -> {norm(album folder)}, read again at most every 10 minutes."""
+        now = time.time()
+        if now - getattr(self, "_fm_t", 0) > 600:
+            from .integrations import norm_name
+            m: dict[str, set[str]] = {}
+            by_artist: dict[str, list[str]] = {}
+            for f in self.folders():
+                a, _, b = f.partition("/")
+                m.setdefault(norm_name(a), set()).add(norm_name(b))
+                by_artist.setdefault(norm_name(a), []).append(f)
+            self._fm, self._fm_by_artist, self._fm_t = m, by_artist, now
+        return self._fm
+
+    def has_folder(self, artist_dir: str, title: str) -> bool:
+        from .integrations import in_library
+        return in_library(self.folder_map(), artist_dir, title)
+
+    def artist_done(self, artist_dir: str) -> bool:
+        """Has the sweep judged every album folder of this artist (so Lidarr was shown its files)?"""
+        from .integrations import norm_name
+        key = norm_name(artist_dir)
+        folders = self.folder_map() and self._fm_by_artist.get(key)
+        if not folders:
+            return True                                    # nothing of this artist in /music: nothing to wait for
+        return all(f in self.state for f in folders)
 
     def next_folder(self) -> str:
         now = time.time()
@@ -147,7 +175,13 @@ class Library:
             return {"state": "empty", "why": "no FLAC files"}
         ids = {t.hints.get("album_id") for t in tracks}
         if len(ids) == 1 and "" not in ids and all(t.hints.get("track_id") for t in tracks):
-            return {"state": "had", "mbid": ids.pop()}
+            mbid = ids.pop()
+            if any(t.hints.get("album_id") != t.hints["album_id"].lower() or t.hints.get("track_id") != t.hints["track_id"].lower() for t in tracks):
+                # ids written in title case by an old tagger ("B15d9a20-...-Ad58"): Lidarr compares them
+                # exactly and never maps the album; the same ids, lower case
+                n = self.lowercase_ids(folder, tracks)
+                return {"state": "had", "mbid": mbid.lower(), "why": f"{n} files: MusicBrainz ids put in lower case"}
+            return {"state": "had", "mbid": mbid}
         hints = hints_for(folder, tracks)
         best, cands, reason = matcher.find(tracks, hints)
         summary = [c.summary() for c in cands[:6]]
@@ -179,6 +213,26 @@ class Library:
             self.undo_dir.mkdir(parents=True, exist_ok=True)
             (self.undo_dir / f"{time.strftime('%Y%m%d-%H%M%S')}-{re.sub(r'[^A-Za-z0-9]+', '_', folder)[:80]}.json").write_text(
                 json.dumps({"folder": folder, "release": cand.mbid, "by": who, "files": undo}, ensure_ascii=False))
+        return n
+
+    def lowercase_ids(self, folder: str, tracks: list[Track]) -> int:
+        """MUSICBRAINZ_* ids of the album's files in lower case (undo log kept); Lidarr rescans the artist."""
+        n, log = 0, []
+        for t in tracks:
+            x = FLAC(t.path)
+            changed = {}
+            for k in list(x.keys()):
+                if k.upper().startswith("MUSICBRAINZ_") and any(v != v.lower() for v in x[k]):
+                    changed[k] = list(x[k])
+                    x[k] = [v.lower() for v in x[k]]
+            if changed:
+                x.save()
+                n += 1
+                log.append({"file": str(t.path), "old": changed})
+        if log:
+            self.undo_dir.mkdir(parents=True, exist_ok=True)
+            (self.undo_dir / f"{time.strftime('%Y%m%d-%H%M%S')}-{re.sub(r'[^A-Za-z0-9]+', '_', folder)[:80]}-case.json").write_text(json.dumps(log))
+            self.rescan.add(folder.split("/")[0])
         return n
 
     def flush_rescan(self) -> None:

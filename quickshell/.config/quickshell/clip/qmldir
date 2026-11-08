@@ -1,0 +1,7 @@
+singleton Ui Ui.qml
+singleton Store Store.qml
+CropView 1.0 CropView.qml
+Filmstrip 1.0 Filmstrip.qml
+Tip 1.0 Tip.qml
+UiButton 1.0 UiButton.qml
+UiSwitch 1.0 UiSwitch.qml

@@ -78,6 +78,12 @@ python3 -m unittest discover -s quickshell/.config/quickshell/voice/tests -q >/d
 find quickshell/.config/quickshell/voice -name __pycache__ -prune -exec rm -rf {} +
 ((fail)) || ok "compiles, tests pass"
 
+step "Clip (quickshell/clip)"
+python3 -m py_compile quickshell/.config/quickshell/clip/clip.py 2>/dev/null || problem "clip: clip.py does not compile"
+python3 -m unittest discover -s quickshell/.config/quickshell/clip/tests -q >/dev/null 2>&1 || problem "clip: unit tests fail (python3 -m unittest discover -s quickshell/.config/quickshell/clip/tests)"
+find quickshell/.config/quickshell/clip -name __pycache__ -prune -exec rm -rf {} +
+((fail)) || ok "compiles, tests pass"
+
 step "Book templates (server/books)"
 python3 -m py_compile quickshell/.config/quickshell/books/books.py 2>/dev/null || problem "books: books.py does not compile"
 for f in server/books/templates/*.xml; do

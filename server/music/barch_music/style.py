@@ -27,6 +27,13 @@ SMALL = {"a", "an", "and", "as", "at", "but", "by", "for", "from", "in", "into",
 
 # ---------------------------------------------------------------- file system
 
+def hidden(name: str) -> bool:
+    """A folder of /music to skip: a dotfile (".stfolder", ".DS_Store"), not an album whose title starts
+    with an ellipsis ("...And Then, the Light of Consciousness Became Hell": the sweep, the enforce and
+    the Player's catalog all missed those until 2026-11-08, and Lidarr downloaded them again)."""
+    return name.startswith(".") and not name.startswith("..")
+
+
 def file_title(title: str) -> str:
     """TITLE tag -> the title part of the file name ("1.01 - <this>.flac")."""
     t = title.replace("/", ",").replace("?", "!").replace(":", "-").replace('"', "'").replace("*", "-")

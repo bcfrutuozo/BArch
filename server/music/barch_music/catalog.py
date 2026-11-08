@@ -29,6 +29,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from . import style
+
 NUMBERED = re.compile(r"^(\d+)\.(\d+)\s+-\s+(.*)\.flac$", re.I)
 AUDIO = (".flac",)
 IMAGES = (".jpg", ".jpeg", ".png", ".webp")
@@ -236,14 +238,14 @@ class Catalog:
         except OSError:
             return out
         for a in artists:
-            if a.name.startswith(".") or not a.is_dir():
+            if style.hidden(a.name) or not a.is_dir():
                 continue
             try:
                 albums = sorted(a.iterdir(), key=lambda p: p.name.casefold())
             except OSError:
                 continue
             for b in albums:
-                if b.is_dir() and not b.name.startswith("."):
+                if b.is_dir() and not style.hidden(b.name):
                     out.append((f"{a.name}/{b.name}", b))
         return out
 
