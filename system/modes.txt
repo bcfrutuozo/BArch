@@ -46,6 +46,7 @@
 644 /etc/systemd/system/paccache.service.d/override.conf
 644 /etc/systemd/system/service.d/barch-onfailure.conf
 644 /etc/systemd/system/setvtrgb.service
+644 /etc/systemd/system/systemd-vconsole-setup.service.d/retry.conf
 644 /etc/systemd/zram-generator.conf
 644 /etc/vconsole.conf
 644 /etc/vtrgb-dracula
