@@ -30,6 +30,7 @@ import "vms"
 import "updates"
 import "health"
 import "claude"
+import "inbox"
 import "launcher"
 import "keys"
 import "switcher"
@@ -609,6 +610,9 @@ ShellRoot {
 
         // Notificações (central + não perturbe)
         NotificationCenter {}
+
+        // O que espera uma decisão do Bruno (review de música e vídeo, livros, falhas, saúde, agentes)
+        InboxWidget { ipcEnabled: bar.primary }
 
         // Uso do plano do Claude (sessão de 5 h na barra; semana, Fable, plano e agentes no painel)
         ClaudeUsage { ipcEnabled: bar.primary }

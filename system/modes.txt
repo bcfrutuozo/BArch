@@ -35,6 +35,8 @@
 644 /etc/systemd/system/barch-agent-snapshot@.service
 644 /etc/systemd/system/barch-backup-root.service
 644 /etc/systemd/system/barch-backup-root.timer
+644 /etc/systemd/system/barch-disk-health.service
+644 /etc/systemd/system/barch-disk-health.timer
 644 /etc/systemd/system/barch-failure@.service
 644 /etc/systemd/system/barch-failure@.service.d/zz-no-onfailure.conf
 644 /etc/systemd/system/barch-killswitch@.service
@@ -53,6 +55,7 @@
 755 /usr/local/bin/archnews
 755 /usr/local/bin/barch-agent-snapshot
 755 /usr/local/bin/barch-backup-root
+755 /usr/local/bin/barch-disk-health
 755 /usr/local/bin/barch-failure-relay
 755 /usr/local/bin/barch-killswitch
 755 /usr/local/bin/btrfs-scrub-report

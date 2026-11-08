@@ -1,0 +1,11 @@
+[Unit]
+Description=Local disk health for the BArch agent, hourly
+
+[Timer]
+OnStartupSec=3min
+OnCalendar=hourly
+RandomizedDelaySec=5m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

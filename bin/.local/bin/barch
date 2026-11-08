@@ -88,6 +88,9 @@ Desktop (through the bar):
                               the VPN alone: PIA over WireGuard (what Anonymous Mode uses)
   vpn regions                 regions, fastest first; vpn region <id>|auto picks the one to use
   health [--refresh]          system health summary (.pacnew, failed services, TPM, cleanup)
+  inbox [--refresh]           what waits for a decision: music and video review, library albums to tie,
+                              book requests, failures of the day, health issues, agent reports (the bar's
+                              tray icon with the total; quickshell/inbox)
   claude [--refresh]          the Claude plan's usage as /usage shows it: 5-hour session, week, the top model's
                               share (Fable), resets, plan (Max 5x), and what this machine's agents spent today
   voice on|off|toggle|status  always-on voice control (quickshell/voice, barch-voice.service):
@@ -109,6 +112,9 @@ Desktop (through the bar):
   music browse [<page>]       BArch Music (quickshell/music): the review queue with the resolve inputs
                               as a form, every album handled (undo), Lidarr [review|albums|covers|lidarr]
   music show <id>             one album: problems, MusicBrainz candidates, the proposed tags
+  music accept-year [--dry-run] [--older-than DAYS]
+                              the review albums whose only problem is a year-only date (nothing on earth has
+                              the day): resolve them all with --date-year-only; --dry-run lists them
   music resolve <id> [--release MBID|URL] [--cover URL|file] [--date YYYY-MM-DD] [--genre G]
         [--album A] [--artist A] [--title D.TT=Title]... [--replace-tracks 1.15,2.03] [--replace]
         [--date-year-only]    (only when no source on earth has the day: the date becomes YYYY-01-01)
@@ -220,6 +226,10 @@ Automation (agent/rules.json + agent/events.py, barch-events.service):
                               containers down or with an update, Unraid's unread warnings, days left
                               on the certificates; barch-events samples the same (nas.* rules)
   nas setup                   write ~/.config/barch/nas.json (URL and API key from Homepage's Unraid widget)
+  disk status                 the local disks (agent/disk.py): SMART of each (temperature, wear, spare, media
+                              errors, self-test), the btrfs error counters and the last scrub, from the hourly
+                              dump of barch-disk-health (root, system/); barch-events samples the same
+                              (smart.* and btrfs.* metrics, disk.* and btrfs.* rules); exit 1 with problems
   fw status [site]            the pfSense firewalls (omni, chaos) through their REST API (agent/pfsense.py):
                               load, gateways, interfaces, IPsec tunnel, DNSBL alive, blocked connections;
                               barch-events samples the same (fw.* rules: down, reboot, gateway, tunnel, new device)
@@ -794,6 +804,34 @@ cmd_music() {
       music_api POST "/api/jobs/$1/rescan" '{}'
       show "$OUT" '.result + ": " + (.jobs | map(.id + "  " + .name) | join(", "))' ;;
     fix) music_fix_job "$@" ;;
+    accept-year)                                     # the 29 "only the year exists" albums in one go (2026-11-08)
+      local dry=0 days=0 ids
+      while (($#)); do
+        case $1 in
+          --dry-run) dry=1 ;;
+          --older-than) [[ ${2:-} =~ ^[0-9]+$ ]] || usage_error "music accept-year --older-than DAYS"; days=$2; shift ;;
+          *) usage_error "music accept-year [--dry-run] [--older-than DAYS]" ;;
+        esac
+        shift
+      done
+      music_api GET "/api/jobs?state=review"
+      ids=$(jq -r --argjson before "$(( $(date +%s) - days * 86400 ))" '.jobs[]
+        | select(.state == "review" and (.problems | length) == 1 and (.problems[0] | test("^no full original release date")))
+        | select((.updated // .created // 0) <= $before) | "\(.id)\t\(.name)"' <<<"$OUT")
+      if [[ -z $ids ]]; then show '{"ok": true, "count": 0, "albums": []}' '"no album waits only on a year-only date"'; return 0; fi
+      if ((dry)); then
+        show "$(jq -Rn '[inputs | split("\t") | {id: .[0], name: .[1]}] | {ok: true, dry_run: true, count: length, albums: .}' <<<"$ids")" \
+          '"\(.count) album(s) would get the year as YYYY-01-01:\n" + (.albums | map("  \(.id)  \(.name)") | join("\n"))'
+        return 0
+      fi
+      local done=() id name
+      while IFS=$'\t' read -r id name; do
+        music_api POST "/api/jobs/$id" '{"action": "resolve", "overrides": {"date_year_only": true}}'
+        done+=("$id")
+        [[ $JSON == 1 ]] || echo "$id  $name: $(jq -r .job.state <<<"$OUT") (queued again)"
+      done <<<"$ids"
+      show "$(jq -n --argjson n "${#done[@]}" --argjson ids "$(printf '%s\n' "${done[@]}" | jq -R . | jq -s .)" '{ok: true, count: $n, resolved: $ids}')" \
+        '"\(.count) album(s) queued again with the year as YYYY-01-01"' ;;
     resolve)
       [[ -n ${1:-} ]] || usage_error "music resolve <id> [--release ..] [--cover URL|file] [--date ..] [--genre ..] [--album ..] [--artist ..] [--title D.TT=..] [--replace]"
       local id=$1 body='{"action": "resolve"}'
@@ -1407,6 +1445,31 @@ cmd_claude() {
     end'
 }
 
+cmd_inbox() {
+  case ${1:-} in
+    '') ;;
+    --refresh)
+      local before i
+      ipc inbox refresh
+      before=$(jq -r '.checkedAt' <<<"$OUT")
+      for ((i = 0; i < 60; i++)); do          # every source is asked with a timeout (the NAS, the bar)
+        sleep 0.5
+        ipc inbox status
+        [[ $(jq -r '.checkedAt' <<<"$OUT") != "$before" ]] && break
+      done
+      ((i < 60)) || die 1 "the inbox read did not finish in 30 s"
+      ;;
+    *) usage_error "inbox [--refresh]" ;;
+  esac
+  ipc inbox status
+  show "$OUT" '
+    if .loaded | not then "Inbox: not read yet (the bar reads it ~20 s after start; use --refresh)"
+    else "Waiting for you: " + (if .total == 0 then "nothing" else "\(.total)" end)
+      + (.items | map("\n  \(.count | tostring | . + " " * (5 - length))\(.label): \(.text)\n        \(.cmd | join(" "))") | join(""))
+      + (if (.errors | length) > 0 then "\n  not reachable: " + (.errors | join(" · ")) else "" end)
+    end'
+}
+
 cmd_health() {
   case ${1:-} in
     '') ;;
@@ -1910,6 +1973,17 @@ cmd_nas() {
             else python3 -I "$REPO/agent/nas.py" status "$@"; fi ;;
     setup) python3 -I "$REPO/agent/nas.py" setup ;;
     *) usage_error "nas status [--no-certs]|setup" ;;
+  esac
+}
+
+# disk status: agent/disk.py parses what barch-disk-health (root, hourly) dumped
+cmd_disk() {
+  local sub=${1:-status}
+  (($#)) && shift
+  need python3
+  case $sub in
+    status) if [[ $JSON == 1 ]]; then python3 -I "$REPO/agent/disk.py" status --json; else python3 -I "$REPO/agent/disk.py" status; fi ;;
+    *) usage_error "disk status" ;;
   esac
 }
 
@@ -2464,11 +2538,13 @@ case $cmd in
   video) cmd_video "$@" ;;
   torrents) cmd_torrents "$@" ;;
   health) cmd_health "$@" ;;
+  inbox) cmd_inbox "$@" ;;
   claude) cmd_claude "$@" ;;
   rules) cmd_rules "$@" ;;
   events) cmd_events "$@" ;;
   metrics) cmd_metrics "$@" ;;
   nas) cmd_nas "$@" ;;
+  disk) cmd_disk "$@" ;;
   fw | pfsense) cmd_fw "$@" ;;
   rgb) cmd_rgb "$@" ;;
   voice) cmd_voice "$@" ;;

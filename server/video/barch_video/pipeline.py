@@ -508,7 +508,7 @@ class Pipeline:
         best = max(fresh, key=lambda c: c["score"])
         tag = f"bv-{j['id']}-{len([c for c in cands if c['status'] != 'new'])}"
         try:
-            self.qbit.add(best["url"], self.category, tag)
+            best["hash"] = self.qbit.add(best["url"], self.category, tag)
         except Exception as e:  # noqa: BLE001
             best["status"], best["reason"] = "failed", f"qBittorrent: {e}"
             log(j, f"could not add {best['title']}: {e}")
@@ -552,13 +552,16 @@ class Pipeline:
             self.store.save(j)
             return
         try:
-            t = self.qbit.by_tag(c["tag"])
+            t = self.qbit.by_tag(c["tag"]) or self.qbit.by_hash(c.get("hash", ""))
         except Exception as e:  # noqa: BLE001
             log(j, f"qBittorrent: {e}")
             return
         if not t:
-            if now() - c.get("started", now()) > 600:
-                self.fail_candidate(j, "the torrent is not in qBittorrent (removed, or the link was dead)", delete=False)
+            # a magnet or a file shows up at once (we know its hash); only a link qBittorrent fetched itself needs time
+            if now() - c.get("started", now()) > (120 if c.get("hash") else 600):
+                why = self.qbit.failure(c.get("hash", ""), c.get("url", ""))
+                self.fail_candidate(j, f"qBittorrent did not keep the torrent: {why}" if why
+                                    else "the torrent is not in qBittorrent (removed by hand, or the link was dead)", delete=False)
             return
         c["hash"] = t["hash"]
         prog = float(t.get("progress", 0))

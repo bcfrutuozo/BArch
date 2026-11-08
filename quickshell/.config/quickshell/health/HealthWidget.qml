@@ -37,6 +37,7 @@ Item {
     property string tpm: "ok"
     property var clean: ({ orphans: 0, cache: "?", journal: "?" })
     property var backup: ({ configured: false, at: 0, ok: false, error: "", summary: null, check: null })
+    property var diskProblems: []           // agent/disk.py: SMART, btrfs counters, scrub (barch disk status)
     property real lastCleanup: 0
     property bool loaded: false
     property real checkedAt: 0              // fim da última verificação (ms)
@@ -51,7 +52,7 @@ Item {
     // the Sunday `restic check` (a tenth of the data read back) found something wrong in the repository
     readonly property bool backupCheckFailed: loaded && backup.configured && !!backup.check && !backup.check.ok
     readonly property int issues: pacnew.length + failedSys.length + failedUsr.length + (tpm === "failed" ? 1 : 0)
-        + (backupLate ? 1 : 0) + (backupCheckFailed ? 1 : 0)
+        + (backupLate ? 1 : 0) + (backupCheckFailed ? 1 : 0) + diskProblems.length
     function backupLine() {
         if (!backup.configured) return "Not set up: barch backup init"
         if (backup.at === 0) return "Never ran"
@@ -91,6 +92,7 @@ Item {
                 root.tpm = d.tpm
                 root.clean = d.clean
                 if (d.backup) root.backup = d.backup
+                root.diskProblems = (d.disk && d.disk.problems) || []
                 root.loaded = true
                 root.checkedAt = Date.now()
                 if (root.tpm === "failed") tpmNotice.running = true
@@ -332,6 +334,22 @@ Item {
                             label: "Reset"
                             onClicked: root.run("sudo systemctl reset-failed; systemctl --user reset-failed; echo Cleared.")
                         }
+                    }
+                }
+
+                // --- discos locais (SMART, btrfs) ---
+                Section {
+                    visible: root.diskProblems.length > 0
+                    title: "Disk Health"
+                    icon: 0xF02CA                                    // harddisk
+                    tint: Theme.red
+                    Repeater {
+                        model: root.diskProblems
+                        Line { required property string modelData; text: modelData; wrapMode: Text.Wrap; elide: Text.ElideNone }
+                    }
+                    RowLayout {
+                        spacing: 6
+                        Btn { label: "Details"; onClicked: root.run("barch disk status") }
                     }
                 }
 

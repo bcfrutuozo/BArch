@@ -69,7 +69,7 @@ One job per movie Radarr has a file for (`m<radarr id>`), in `/data/video-pipeli
 | State | What |
 |---|---|
 | `search` | the file has no Portuguese audio: Prowlarr is searched by the original title and the Brazilian one (Wikidata, from the IMDb id) for a dubbed release. Candidates must say `Dublado`/`DUAL`/`Nacional`/`PT-BR`, match the title and year (±1), have seeders, not be cam/TS, subtitled-only or a pack; `DUAL` ranks first (it brings the original audio), then 1080p, Blu-ray, a surround dub, seeders |
-| `downloading` | the best one in qBittorrent, category `barch-dub` (`/data/completed/videos/barch-dub`, Radarr never sees it); no progress for 24 h drops it |
+| `downloading` | the best one in qBittorrent, category `barch-dub` (`/data/completed/videos/barch-dub`, Radarr never sees it). The pipeline follows the indexer link itself (Prowlarr's links to the public indexers 301 to a magnet; a `.torrent` is uploaded as a file) and hands qBittorrent the magnet or the file, never a URL to fetch: qBittorrent runs in a VPN container whose DNS is the tunnel's, so `http://prowlarr:9696/...` was "remote host name not found" there and eight jobs went to review on 2026-11-08 with a guessed reason. The hash is kept, so the download is found even without its tag, and a torrent qBittorrent did not keep is dropped after two minutes with qBittorrent's own reason (its log); no progress for 24 h drops it too |
 | `aligning` | `sync.py`: the donor's timeline mapped onto the 4K file's (below); then the mux, the check, the replacement |
 | `done` | the file has PT-BR: muxed, or it came with it |
 | `waiting` | no candidate today: searched again every 24 h |

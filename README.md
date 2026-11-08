@@ -390,8 +390,16 @@ The main pieces:
   books and video agents), with buttons to the Center's History and Agent pages. Every 5 minutes and on open;
   `barch-events` keeps `claude.session.pct`, `claude.week.pct` and `claude.fable.pct` in the metrics and warns at
   90 % of the window, 85 % of the week or of the Fable share (rules `claude-*`).
+- **Inbox** (`quickshell/inbox/`, `barch inbox`): what waits for a decision of yours, in one place: the music
+  pipeline's review queue (and how many of those wait only on a year-only date, which one button in the
+  Music app settles: **Accept the year for N albums**, `barch music accept-year [--dry-run]`), the library
+  albums the MusicBrainz sweep could not tie, the video dub jobs in review, the book requests pending a
+  pick, the failure logs of the last day, the health check's issues and the agent reports that ask for
+  attention. A tray icon with the total, only while there is something; the panel lists each source with
+  an **Open** to the right app or Center page. `inbox.sh` asks every source with a timeout every 2 minutes,
+  so the NAS asleep only hides its lines (the panel says what was not reachable).
 - **System health:** `.pacnew` files, failed services, TPM fallback warning, the daily backup (failed
-  or more than two days old) and a monthly cleanup. **Automation** (`barch-events`, see below):
+  or more than two days old), the local disks (below) and a monthly cleanup. **Automation** (`barch-events`, see below):
   metrics history, the event log and the rules of `agent/rules.json` (disk full, VPN dropped,
   game opened, monitor plugged…), shown in the System Center.
 - **Bluetooth audio** (`audio/`): headsets are output only, AAC first (then SBC-XQ, SBC); the
@@ -431,6 +439,7 @@ barch nightlight on|off|status     barch dnd on|off|status
 barch anon on [region]|off|toggle|status   # Anonymous Mode: VPN + kill switch + Mullvad Browser as default + hostname out of DHCP
 barch vpn on [region]|off|toggle|status|regions|region <id>|auto
 barch health [--refresh]           # .pacnew, failed services, TPM, backup, cleanup
+barch inbox [--refresh]            # what waits for a decision: music/video review, library, books, failures, health, agents
 barch claude [--refresh]           # the Claude plan's usage: 5-hour session, week, Fable share, resets, plan, agents' spend
 barch rgb [status]|apply|on|off|color <tone|#hex>|brightness <0-100>|flash [tone] [n]   # Corsair lighting (see Theme)
 barch voice on|off|toggle|status   # always-on voice control (see Voice); pause|resume keep the service
@@ -443,6 +452,7 @@ barch rules list|test <event> [k=v..]|fire <id>|enable|disable <id>   # agent/ru
 barch events status|log [n] [--filter x] [--since 7d]   # the daemon and what happened (windows, VPN, boots, costs…)
 barch metrics list|series <metric> [--since 24h]|summary   # metrics.db: temperatures, load, boots, failures, Claude cost
 barch nas status [--no-certs]|setup   # the NAS now, through Unraid's API: array, disks, pools, containers, Unraid's warnings, certificates
+barch disk status                  # the local disks: SMART (temperature, wear, spare, media errors, self-test), btrfs counters, last scrub
 barch fw status|clients|blocked [site] [n]|setup   # the pfSense firewalls through their REST API: gateways, IPsec, DNSBL, leases, blocks (see NAS)
 barch agent ask "why is X slow?"   # Claude in a terminal in ~/BArch (the launcher's "a ")
 barch agent list|run|report|continue <task>   # scheduled tasks (see Agent)
@@ -457,6 +467,7 @@ barch player eq [on|off|toggle|<preset>|band <1-10> <dB>|preamp <dB>]   # the eq
 barch player plex [status|sessions]   # what was told to Plex (Tautulli's source) and Plex's Now Playing
 barch player show|hide|quit            # the window back · closed with the music on (the bar gets a button) · stop everything
 barch music status|browse|list|show|resolve|retry|reject|scan   # the NAS music pipeline and its review queue (see Music)
+barch music accept-year [--dry-run] [--older-than DAYS]   # the review albums waiting only on a year-only date: all resolved as YYYY-01-01
 barch music covers check [artist]|list|apply|undo|keep|pick|propose <Artist/Album>   # scans with a frame -> the clean artwork
 barch music covers ask <Artist/Album> "keep the red frame"   # Claude adapts one or finds another, as a proposal
 barch music cover <id> <file|URL> [label]   # the cover you found for an album waiting on it: checked, then the album runs
@@ -488,7 +499,7 @@ barch replay share [file] [--from 12 --to 40]
 ```
 
 Every command takes `--json`. Exit codes: `0` ok, `1` the bar refused, `2` usage, `3` bar not reachable.
-On the QML side these are the `IpcHandler`s `control`, `theme`, `wallpaper`, `notifs`, `health`, `claude`, `vpn`, `anon` and `voice` (`qs ipc show`).
+On the QML side these are the `IpcHandler`s `control`, `theme`, `wallpaper`, `notifs`, `health`, `inbox`, `claude`, `vpn`, `anon` and `voice` (`qs ipc show`).
 
 ## Agent
 
@@ -551,6 +562,17 @@ without any AI:
   (`nas.*`, see NAS health below): array and fullest pool, hottest disk, disks not OK, containers
   down or with an update, Unraid's unread warnings, its CPU and RAM, and `cert.days`, the days left
   on the certificate closest to expiring, and the firewalls (`fw.<site>.*`, see NAS → Firewalls).
+  The **local disks** too (`agent/disk.py`, `barch disk status`): `smartd` only speaks when the SSD fails and
+  `btrfs-scrub-report` when the monthly scrub finds errors, so nothing kept the numbers in between.
+  `/usr/local/bin/barch-disk-health` (root, `barch-disk-health.timer`, hourly, both in `system/`) dumps
+  `smartctl -j` of every disk and `btrfs device stats` and `btrfs scrub status` of every btrfs into
+  `~/.local/state/barch/disk/health.json` (no serial numbers), and the daemon turns it into
+  `smart.<disk>.temp|wear.pct|spare.pct|media_errors|err_log|unsafe_shutdowns|written_tb` and
+  `btrfs.<fs>.errors|scrub.age_d|scrub.errors`, with their history in the Center; the health widget
+  shows a red **Disk Health** card with whatever `barch disk status` lists as a problem (SMART failing,
+  a critical warning, media errors, spare under 50 %, wear over 90 %, 70 °C, a failed self-test, btrfs
+  errors counted, a scrub with errors, aborted, overdue by 45 days or never run, or the dump itself
+  missing or older than three hours).
 - **Events**, stored and matched as they happen: Hyprland's socket2 (`window.open`,
   `window.close` with class and title, `window.fullscreen`, `window.urgent`, `monitor.added`,
   `monitor.removed`), `vpn.up`, `vpn.down` (the tunnel dropped) and `vpn.off` (turned off: Disconnect, Anonymous Mode off, a voice command; `pia.sh disconnect` leaves the time in `stopped`), both with the tunnel that went away and whether the kill switch is holding the traffic, `anon.on`/`anon.off`, `net.up`/`net.down` (default
@@ -561,7 +583,9 @@ without any AI:
   `video.foreign` (a movie or episode file of the video pipeline has audio beyond the original language
   and PT-BR, polled every 5 min: title, extra, what the trim does about it), `startup`,
   and the NAS: `nas.down` / `nas.up`, `nas.array` (state), `nas.disk`, `nas.containers`, `nas.alert`
-  (Unraid's own warnings and alerts) and `cert.expiring`, each with a one-line `text`; and the firewalls
+  (Unraid's own warnings and alerts) and `cert.expiring`, each with a one-line `text`; the local disks:
+  `disk.smart` (SMART failing, a critical warning, media errors that grew), `disk.selftest`, `btrfs.errors`
+  (a counter grew) and `btrfs.scrub` (errors, aborted, or overdue, weekly), each with `text`; and the firewalls
   (`fw.*`, see NAS → Firewalls): `fw.down` / `fw.up`, `fw.auth`, `fw.boot`, `fw.gateway`, `fw.interface`,
   `fw.ipsec`, `fw.dnsbl` and `fw.client` (a device never seen before took a lease).
 - **Rules** in `agent/rules.json`: `when` is an event name plus regexes on its fields
@@ -579,7 +603,9 @@ without any AI:
   cover-ask`, in a transient unit so the daemon never waits), a video file with audio in another language
   (`video.foreign`, a notification: the pipeline trims it by itself), the NAS ones (not answering and back,
   array not started, a disk with a problem, a container down, an Unraid alert or warning, array or a
-  pool above 85 %, a disk above 50 °C), a certificate about to expire, the firewall ones (not answering and
+  pool above 85 %, a disk above 50 °C), a certificate about to expire, the local disk ones (SMART
+  failing or media errors, a failed self-test, the NVMe over 90 % of its endurance or over 70 °C, btrfs
+  error counters growing, a scrub with errors or overdue), the firewall ones (not answering and
   back, key refused, reboot, gateway or interface down and back, the IPsec tunnel down and back, the DNSBL not
   blocking, a device never seen before on any network, the omni IoT network with more than 300 blocked
   connections in five minutes); two disabled ones keep caffeine on

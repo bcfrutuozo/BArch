@@ -215,6 +215,23 @@ Singleton {
         })
     }
 
+    // the review albums waiting only on a year-only date (nothing on earth has the day): one decision for all
+    readonly property var yearOnly: jobs.filter(j => j.state === "review" && (j.problems || []).length === 1
+                                                     && /^no full original release date/.test(j.problems[0]))
+    property bool acceptingYear: false
+    function acceptYear() {
+        if (acceptingYear || !yearOnly.length) return
+        acceptingYear = true
+        run([home + "/.local/bin/barch", "--json", "music", "accept-year"], (out, err, code) => {
+            acceptingYear = false
+            let d = null
+            try { d = JSON.parse(out) } catch (e) {}
+            if (code === 0 && d && d.ok) say(d.count + " album(s) queued again with the year as YYYY-01-01")
+            else say((err.trim().split("\n").pop() || "accept-year failed"), true)
+            refresh()
+        })
+    }
+
     // Fix with Agent (barch music fix): Claude takes the job over, resolves it and follows the run
     function fixJob(id, hint) {
         setAsk(id, { running: true, text: "The agent took the album over: researching, resolving, following the run… (minutes)", bad: false })

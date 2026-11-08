@@ -37,6 +37,15 @@ Item {
                     onPicked: v => page.filter = v
                 }
             }
+            // one decision for every album that waits only because no source has the day of its release
+            UiButton {
+                visible: page.fixedState === "review" && Store.yearOnly.length > 0
+                Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.fillWidth: true
+                label: Store.acceptingYear ? "Accepting the year…" : "Accept the year for " + Store.yearOnly.length + " album" + (Store.yearOnly.length === 1 ? "" : "s")
+                enabled: !Store.acceptingYear
+                tooltip: "These wait only for a full release date that MusicBrainz, Wikidata and Wikipedia do not have. This resolves them all with --date-year-only (DATE becomes YYYY-01-01):\n" + Store.yearOnly.map(j => "  " + j.name).join("\n")
+                onClicked: Store.acceptYear()
+            }
             Text {
                 Layout.leftMargin: 14
                 visible: page.list.length === 0

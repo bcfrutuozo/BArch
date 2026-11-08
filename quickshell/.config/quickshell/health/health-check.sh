@@ -5,6 +5,7 @@
 #   tpm:     o disco pediu senha neste boot em vez de destravar pelo TPM?
 #   clean:   órfãos, cache do pacman, tamanho do journal (para a limpeza mensal)
 #   backup:  último `barch backup run` (~/.local/state/barch/backup/last.json) e se está configurado
+#   disk:    problemas dos discos locais (agent/disk.py sobre o dump do barch-disk-health: SMART, btrfs)
 # Não precisa de root (o journal é legível para o grupo wheel).
 
 pacnew=$(find /etc \( -name '*.pacnew' -o -name '*.pacsave' \) 2>/dev/null | sort | jq -R . | jq -s .)
@@ -36,8 +37,13 @@ bk_check=$(cat "${bk_last%/*}/check.json" 2>/dev/null || echo null)   # the last
 backup=$(jq -c --argjson c "$bk_configured" --argjson check "$bk_check" '{at, ok, error, summary, configured: $c, check: $check}' "$bk_last" 2>/dev/null \
   || jq -nc --argjson c "$bk_configured" '{at: 0, ok: false, error: "", summary: null, configured: $c}')
 
+# discos locais: agent/disk.py (o repo é o alvo do symlink desta pasta)
+repo=$(readlink -f "$(dirname "$0")/../../../..")
+disk=$(python3 -I "$repo/agent/disk.py" problems 2>/dev/null) || disk='[]'
+jq -e 'type == "array"' <<<"$disk" >/dev/null 2>&1 || disk='[]'
+
 jq -n --argjson pacnew "$pacnew" --argjson fs "$failed_sys" --argjson fu "$failed_usr" \
   --arg tpm "$tpm" --argjson orphans "$orphans" --arg cache "${cache:-?}" --arg journal "${journal:-?}" \
-  --argjson backup "$backup" \
+  --argjson backup "$backup" --argjson disk "$disk" \
   '{pacnew: $pacnew, failed: {system: $fs, user: $fu}, tpm: $tpm,
-    clean: {orphans: $orphans, cache: $cache, journal: $journal}, backup: $backup}'
+    clean: {orphans: $orphans, cache: $cache, journal: $journal}, backup: $backup, disk: {problems: $disk}}'

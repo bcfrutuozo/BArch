@@ -8,9 +8,11 @@ One daemon (barch-events.service) does three things:
     fullscreen), VPN and Anonymous Mode up/down, network down/up, AirPods connected, session
     locked/unlocked, a new failure log, a boot, what Claude cost (agent tasks, voice), an album of
     the music pipeline landing in the review queue, the NAS (agent/nas.py, Unraid's API: down,
-    array, disks, containers, Unraid's own warnings, certificates about to expire) and the two
+    array, disks, containers, Unraid's own warnings, certificates about to expire), the two
     pfSense firewalls (agent/pfsense.py, their REST API: down, reboot, gateway, interface, IPsec,
-    DNSBL, a device never seen before taking a lease);
+    DNSBL, a device never seen before taking a lease) and the local disks (agent/disk.py, from the
+    hourly dump of barch-disk-health: SMART failing, media errors, a failed self-test, btrfs error
+    counters growing, a scrub with errors or overdue);
   * runs the rules of agent/rules.json: "when <event or metric threshold>, do <commands>", with
     notification, spoken sentence, cooldown and an optional "ask first" button.
 
@@ -49,6 +51,7 @@ BARCH = HOME / ".local/bin/barch"
 
 sys.path.insert(0, str(HERE))        # python -I (the service, barch) leaves the script's folder out
 import nas  # noqa: E402  agent/nas.py
+import disk  # noqa: E402  agent/disk.py
 import pfsense  # noqa: E402  agent/pfsense.py
 RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
 
@@ -455,6 +458,8 @@ class Daemon:
         self.nas_fails = 0
         self.next_fw: dict[str, float] = {}       # per site
         self.fw_fails: dict[str, int] = {}
+        self.disk_mtime = 0.0                     # health.json as last parsed (agent/disk.py)
+        self.disk_rows: list[tuple[str, float]] = []
         self.last_prune = 0.0
         self.flags: dict[str, object] = {}        # last known state of the things that transition
         self.hwmon = self._hwmon()
@@ -793,8 +798,6 @@ class Daemon:
                 self.emit("nas.down", {"error": str(snap["error"])[:200]})
             return [("nas.up", 0.0)]
         self.nas_fails = 0
-        self.next_fw: dict[str, float] = {}       # per site
-        self.fw_fails: dict[str, int] = {}
         if st.get("up") is False:
             self.emit("nas.up", {})
         st["up"] = True
@@ -806,6 +809,26 @@ class Daemon:
             self.emit(name, data)
         self.rules.save_state()
         return [("nas.up", 1.0)] + nas.metrics(snap)
+
+    def sample_disk(self) -> list[tuple[str, float]]:
+        """The local disks (agent/disk.py): barch-disk-health (root, hourly) dumps SMART and btrfs
+        into ~/.local/state/barch/disk/health.json; it is parsed again only when that file changes,
+        its metrics (smart.<disk>.*, btrfs.<fs>.*) repeated every sample so the charts stay
+        continuous, and its changes() become events (disk.smart, disk.selftest, btrfs.errors,
+        btrfs.scrub). A missing or stale dump is `barch disk status`'s problem, not an event."""
+        try:
+            mtime = disk.HEALTH.stat().st_mtime
+        except OSError:
+            return []
+        if mtime != self.disk_mtime:
+            snap = disk.summarize(disk.load())
+            self.disk_rows = disk.metrics(snap)
+            for name, data in disk.changes(snap, self.rules.state.setdefault("disk", {}), time.time(),
+                                           float(self.cfg.get("scrub_max_days", disk.SCRUB_MAX_DAYS))):
+                self.emit(name, data)
+            self.rules.save_state()
+            self.disk_mtime = mtime
+        return self.disk_rows
 
     def sample_fw(self) -> list[tuple[str, float]]:
         """The firewalls through their REST API (agent/pfsense.py; needs ~/.config/barch/pfsense.json,
@@ -1033,7 +1056,7 @@ class Daemon:
                 self.cfg = self.rules.cfg
                 rows = []
                 for fn in (self.sample_system, self.sample_gpu, self.sample_net, self.sample_bar, self.sample_pods,
-                           self.sample_nas, self.sample_fw, self.sample_claude):
+                           self.sample_nas, self.sample_fw, self.sample_disk, self.sample_claude):
                     try:
                         rows += fn()
                     except Exception as e:  # noqa: BLE001

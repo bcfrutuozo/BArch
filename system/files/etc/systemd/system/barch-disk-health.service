@@ -1,0 +1,13 @@
+# Dumps the local disks' SMART data and the btrfs error counters and scrub status (root only)
+# into the user's ~/.local/state/barch/disk/health.json, which barch-events turns into metrics,
+# events and rules (`barch disk status`). Script: /usr/local/bin/barch-disk-health. A failure
+# goes through the system OnFailure drop-in (service.d) to the desktop like any other service.
+[Unit]
+Description=Local disk health for the BArch agent (SMART, btrfs)
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/barch-disk-health
+Nice=10
+IOSchedulingClass=idle

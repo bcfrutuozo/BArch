@@ -58,8 +58,8 @@ for t in agent/tasks/*.md; do
 done
 ok "timers listed"
 
-step "Automation (agent/events.py, agent/nas.py)"
-python3 -m py_compile agent/events.py agent/nas.py 2>/dev/null || problem "automation: events.py or nas.py does not compile"
+step "Automation (agent/events.py, agent/nas.py, agent/pfsense.py, agent/disk.py)"
+python3 -m py_compile agent/events.py agent/nas.py agent/pfsense.py agent/disk.py 2>/dev/null || problem "automation: an agent module does not compile"
 python3 -m unittest discover -s agent/tests -q >/dev/null 2>&1 || problem "automation: unit tests fail (python3 -m unittest discover -s agent/tests)"
 find agent -name __pycache__ -prune -exec rm -rf {} +
 ((fail)) || ok "compiles, tests pass"

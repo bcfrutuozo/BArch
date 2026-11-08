@@ -3,12 +3,112 @@ standard library only (same shape as server/music's)."""
 from __future__ import annotations
 
 import http.cookiejar
+import base64
+import binascii
+import hashlib
 import json
+import os
+import re
 import time
 import urllib.parse
 import urllib.request
 
 UA = "BArch-video/1.0 (+https://github.com/bcfrutuozo/BArch)"
+
+
+def magnet_hash(magnet: str) -> str:
+    """The info hash of a magnet link, lower-case hex (a base32 btih is converted); "" when there is none."""
+    m = re.search(r"xt=urn:btih:([A-Za-z0-9]+)", magnet or "")
+    if not m:
+        return ""
+    h = m.group(1)
+    if len(h) == 32:
+        try:
+            return base64.b32decode(h.upper()).hex()
+        except (binascii.Error, ValueError):
+            return ""
+    return h.lower() if len(h) == 40 else ""
+
+
+def _bdecode(data: bytes, i: int = 0):
+    """Minimal bencode decoder: returns (value, end); dicts also carry the byte span of each value."""
+    c = data[i:i + 1]
+    if c == b"i":
+        j = data.index(b"e", i)
+        return int(data[i + 1:j]), j + 1
+    if c == b"l":
+        out, i = [], i + 1
+        while data[i:i + 1] != b"e":
+            v, i = _bdecode(data, i)
+            out.append(v)
+        return out, i + 1
+    if c == b"d":
+        out, i = {}, i + 1
+        while data[i:i + 1] != b"e":
+            k, i = _bdecode(data, i)
+            start = i
+            v, i = _bdecode(data, i)
+            out[k] = (v, start, i)
+        return out, i + 1
+    j = data.index(b":", i)
+    n = int(data[i:j])
+    return data[j + 1:j + 1 + n], j + 1 + n
+
+
+def torrent_hash(data: bytes) -> str:
+    """The v1 info hash of a .torrent file (sha1 of its bencoded `info`), lower-case hex; "" if unreadable."""
+    try:
+        top, _ = _bdecode(data)
+        _, start, end = top[b"info"]
+        return hashlib.sha1(data[start:end]).hexdigest()
+    except (KeyError, ValueError, IndexError, TypeError):
+        return ""
+
+
+def fetch_torrent(url: str, timeout: int = 60) -> tuple[str, str | bytes]:
+    """What a download link really is: ("magnet", "magnet:?...") when it redirects to or returns a magnet
+    (Prowlarr's links to the public indexers 301 to one), ("torrent", bytes) when it serves the file. The
+    pipeline follows the link itself: qBittorrent in a VPN container (binhex) resolves names through
+    the tunnel's DNS, so `http://prowlarr:9696/...` is "remote host name not found" there, and the add
+    fails after the API already said Ok (2026-11-08: eight jobs in review for that)."""
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None
+    opener = urllib.request.build_opener(NoRedirect, urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    for _ in range(6):
+        if url.startswith("magnet:"):
+            return "magnet", url
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        try:
+            with opener.open(req, timeout=timeout) as r:
+                body, ctype = r.read(), r.headers.get("Content-Type", "")
+        except urllib.error.HTTPError as e:
+            if 300 <= e.code < 400 and e.headers.get("Location"):
+                url = urllib.parse.urljoin(url, e.headers["Location"])
+                continue
+            raise RuntimeError(f"the link answered HTTP {e.code}") from e
+        if body[:1] == b"d" and torrent_hash(body):
+            return "torrent", body
+        text = body[:300].decode(errors="replace").strip()
+        if text.startswith("magnet:"):
+            return "magnet", text.split()[0]
+        raise RuntimeError(f"the link gave neither a torrent nor a magnet ({ctype or 'no content type'}, {len(body)} bytes)")
+    raise RuntimeError("the link redirects too many times")
+
+
+def qbit_failure_reason(entries: list[dict], *hints: str) -> str:
+    """qBittorrent's own reason for a torrent it did not add, from `log/main` entries ("Failed to add
+    torrent. Source: ... Reason: ..."), matched by any of `hints` (the source URL, the hash); "" if none."""
+    hints = tuple(h.lower() for h in hints if h)
+    for e in reversed(entries or []):
+        msg = str(e.get("message") or "")
+        if "failed to add torrent" not in msg.lower():
+            continue
+        if hints and not any(h in msg.lower() for h in hints):
+            continue
+        m = re.search(r'Reason:\s*"?(.*?)"?\s*$', msg)
+        return (m.group(1) if m else msg).strip()
+    return ""
 
 
 class Http:
@@ -19,10 +119,21 @@ class Http:
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
 
     def call(self, method: str, path: str, params: dict | None = None, body=None, form: dict | None = None,
-             timeout: int | None = None):
+             timeout: int | None = None, files: dict | None = None):
         url = self.base + path + ("?" + urllib.parse.urlencode(params, doseq=True) if params else "")
         data, headers = None, dict(self.headers)
-        if form is not None:
+        if files:
+            # multipart/form-data: the form fields plus {field: (filename, bytes)}
+            boundary = "----barch" + hashlib.sha1(os.urandom(16)).hexdigest()
+            parts = []
+            for k, v in (form or {}).items():
+                parts.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode())
+            for k, (name, blob) in files.items():
+                parts.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"; filename=\"{name}\"\r\n"
+                             f"Content-Type: application/x-bittorrent\r\n\r\n".encode() + blob + b"\r\n")
+            data = b"".join(parts) + f"--{boundary}--\r\n".encode()
+            headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+        elif form is not None:
             data = urllib.parse.urlencode(form).encode()
             headers["Content-Type"] = "application/x-www-form-urlencoded"
         elif body is not None:
@@ -157,14 +268,38 @@ class QBit:
         if name not in cats:
             self._api("POST", "/torrents/createCategory", form={"category": name, "savePath": path})
 
-    def add(self, url: str, category: str, tag: str) -> None:
-        r = self._api("POST", "/torrents/add", form={"urls": url, "category": category, "tags": tag})
+    def add(self, url: str, category: str, tag: str) -> str:
+        """Adds the release behind `url` (a magnet, or a link the pipeline follows itself: fetch_torrent)
+        and returns its info hash when known, so the download can be found even if the tag is lost."""
+        kind, src = fetch_torrent(url) if not url.startswith("magnet:") else ("magnet", url)
+        fields = {"category": category, "tags": tag}
+        if kind == "magnet":
+            r = self._api("POST", "/torrents/add", form={"urls": src, **fields})
+            h = magnet_hash(src)
+        else:
+            r = self._api("POST", "/torrents/add", form=fields, files={"torrents": ("release.torrent", src)})
+            h = torrent_hash(src)
         if isinstance(r, str) and "fail" in r.lower():
             raise RuntimeError(f"qBittorrent refused the torrent: {r}")
+        return h
 
     def by_tag(self, tag: str) -> dict | None:
         r = self._api("GET", "/torrents/info", params={"tag": tag}) or []
         return r[0] if r else None
+
+    def by_hash(self, h: str) -> dict | None:
+        if not h:
+            return None
+        r = self._api("GET", "/torrents/info", params={"hashes": h}) or []
+        return r[0] if r else None
+
+    def failure(self, *hints: str) -> str:
+        """Why qBittorrent did not keep a torrent it said Ok to (its log), "" when it says nothing."""
+        try:
+            entries = self._api("GET", "/log/main", params={"warning": "true", "critical": "true", "normal": "false", "info": "false"}) or []
+        except Exception:  # noqa: BLE001
+            return ""
+        return qbit_failure_reason(entries, *hints)
 
     def files(self, h: str) -> list[dict]:
         return self._api("GET", "/torrents/files", params={"hash": h}) or []

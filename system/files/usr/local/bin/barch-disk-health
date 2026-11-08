@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# /usr/local/bin/barch-disk-health — the local disks' health, as root, for the desktop's agent.
+# smartd notifies when the SSD *fails* and btrfs-scrub-report when the monthly scrub finds errors;
+# nothing kept the numbers in between (wear, spare, media errors, temperature, the btrfs error
+# counters, when the last scrub ran), so there was no history and no line to cross before the
+# failure. This runs hourly (barch-disk-health.timer) and dumps, unparsed, what only root can
+# read: `smartctl -j` of every disk, `btrfs device stats` and `btrfs scrub status` of every btrfs
+# filesystem, into ~/.local/state/barch/disk/health.json of the user (owned by the user). The
+# parsing lives in ~/BArch/agent/disk.py (`barch disk status`), which barch-events samples into
+# metrics (smart.*, btrfs.*), events and rules. No serial numbers: smartctl's are dropped here.
+set -euo pipefail
+
+user=${BARCH_USER:-$(getent passwd 1000 | cut -d: -f1)}
+home=$(getent passwd "$user" 2>/dev/null | cut -d: -f6)
+[[ -n $user && -d $home ]] || { echo "no user with uid 1000 (set BARCH_USER)" >&2; exit 1; }
+dest=$home/.local/state/barch/disk
+mkdir -p "$dest"
+chown "$user:$user" "$dest"
+
+smart='{}'
+if command -v smartctl >/dev/null; then
+  while IFS= read -r dev; do
+    [[ -n $dev ]] || continue
+    # exit status bits 0-2 are usage errors; the others (failing, past errors) still come with JSON
+    out=$(smartctl -j -H -A -l selftest "$dev" 2>/dev/null || true)
+    [[ -n $out ]] || continue
+    out=$(jq -c 'del(.serial_number, .nvme_ieee_oui_identifier, .wwn, .smartctl.argv)' <<<"$out" 2>/dev/null) || continue
+    smart=$(jq -c --arg d "$dev" --argjson o "$out" '. + {($d): $o}' <<<"$smart")
+  done < <(smartctl --scan-open -j 2>/dev/null | jq -r '.devices[]?.name' 2>/dev/null)
+fi
+
+btrfs='{}'
+if command -v btrfs >/dev/null; then
+  seen=()
+  while IFS=$'\t' read -r target uuid; do
+    [[ -n $target && -n $uuid ]] || continue
+    for s in "${seen[@]-}"; do [[ $s == "$uuid" ]] && continue 2; done
+    seen+=("$uuid")
+    stats=$(btrfs --format json device stats "$target" 2>/dev/null || echo '{}')
+    scrub=$(btrfs scrub status -R "$target" 2>/dev/null || true)
+    btrfs=$(jq -c --arg t "$target" --arg u "$uuid" --argjson s "$stats" --arg sc "$scrub" \
+              '. + {($t): {uuid: $u, stats: $s, scrub: $sc}}' <<<"$btrfs")
+  done < <(findmnt -t btrfs -n -o TARGET,UUID -r | awk '{print $1 "\t" $2}')
+fi
+
+tmp=$(mktemp "$dest/.health.XXXXXX")
+jq -n --argjson at "$(date +%s)" --argjson smart "$smart" --argjson btrfs "$btrfs" \
+   '{at: $at, smart: $smart, btrfs: $btrfs}' > "$tmp"
+chmod 644 "$tmp"
+chown "$user:$user" "$tmp"
+mv -f "$tmp" "$dest/health.json"
+echo "disk health written to $dest/health.json: $(jq -r '(.smart | length)' "$dest/health.json") disk(s), $(jq -r '(.btrfs | length)' "$dest/health.json") btrfs"
