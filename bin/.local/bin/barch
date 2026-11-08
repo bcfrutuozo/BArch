@@ -2302,8 +2302,12 @@ cmd_backup() {
       # 3 = some files could not be read (a socket, a file that vanished): the snapshot was still made
       [[ $rc == 0 || $rc == 3 ]] || backup_fail "restic backup failed (exit $rc): $(grep -v '^$' "$BACKUP_STATE/last.err" | tail -1)"
       if [[ ${1:-} == --prune || $(date +%u) == 7 ]]; then
+        # prune needs an exclusive lock, and a lock left by an interrupted read (the Backup Browser's ls/stats,
+        # a killed restic) blocks it forever; unlock only removes stale ones (dead PID here or older than 30 min)
+        restic unlock --quiet 2>>"$BACKUP_STATE/last.err"
+        local mark; mark=$(wc -l < "$BACKUP_STATE/last.err")
         restic forget --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --prune --quiet 2>>"$BACKUP_STATE/last.err" \
-          || backup_fail "restic forget/prune failed: $(tail -1 "$BACKUP_STATE/last.err")"
+          || backup_fail "restic forget/prune failed: $(tail -n +"$((mark + 1))" "$BACKUP_STATE/last.err" | grep -v '^$' | head -2 | paste -sd ' ')"
       fi
       backup_state true "" "${summary:-null}"
       logger -t barch-backup -- "ok: $(jq -r '"\(.files_new + .files_changed) files changed, \(.data_added) bytes added, snapshot \(.snapshot_id[0:8])"' <<<"${summary:-{}}" 2>/dev/null)"
