@@ -27,7 +27,7 @@ and commit messages stay in English, like the rest of the repo.
 
 Prefer `barch` (`bin/.local/bin/barch`, see `barch help`) over editing state files, calling
 `hyprctl`/`gsettings` or `notify-send` whenever a subcommand exists: notifications, theme, HDR and
-SDR brightness, side monitor, caffeine, night light, Do Not Disturb, system health, agent tasks,
+SDR brightness, side monitor, caffeine, night light, Do Not Disturb, system health, Claude plan usage, agent tasks,
 AUR review, safety snapshots, voice control (`barch voice`). Use `--json` to
 read state and check the exit code (`3` = the bar is not running). A new bar feature that scripts
 should reach gets an `IpcHandler` function answering JSON (`{"ok": ...}`) plus a `barch` subcommand,

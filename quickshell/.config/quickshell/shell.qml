@@ -29,6 +29,7 @@ import "media"
 import "vms"
 import "updates"
 import "health"
+import "claude"
 import "launcher"
 import "keys"
 import "switcher"
@@ -608,6 +609,9 @@ ShellRoot {
 
         // Notificações (central + não perturbe)
         NotificationCenter {}
+
+        // Uso do plano do Claude (sessão de 5 h na barra; semana, Fable, plano e agentes no painel)
+        ClaudeUsage { ipcEnabled: bar.primary }
 
         // Atualizações
         HealthWidget { ipcEnabled: bar.primary }

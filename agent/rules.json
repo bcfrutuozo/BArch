@@ -11,7 +11,7 @@
     "session.locked/unlocked, failure (unit, path), boot (seconds, text, kernel), claude.cost (source, usd, note), startup (boot_age_s), music.review (an album of the NAS music pipeline waits in the review queue: id, name, folder, problem, problems, cover_only yes|no), video.foreign (a movie or episode file of the video pipeline has audio beyond the original language and PT-BR: id, kind, title, file, original, audio, extra, por yes|no, trim pending|waiting|failed|skipped|none, text; every video_every_s).",
     "NAS (agent/nas.py, Unraid's API, `barch nas status`; every nas_every_s, certificates every nas_certs_every_s): nas.down (error) after three misses, nas.up, nas.array (state, previous), nas.disk (names, count, text), nas.containers (down for longer than nas_grace_s: names, count, text), nas.alert (Unraid's unread notifications: importance ALERT|WARNING, count, text), cert.expiring (under cert_warn_days, again under 3, or refused: hosts, count, days, text).",
     "Firewalls (agent/pfsense.py, the pfSense REST API of each site in ~/.config/barch/pfsense.json, `barch fw status`; every fw_every_s): fw.down (site, error, text) after three misses, fw.up, fw.auth (the key was refused; left alone for fw_auth_backoff_s), fw.boot (uptime), fw.gateway (name, status, ok yes|no), fw.interface (name, status, up), fw.ipsec (name, up), fw.dnsbl (ok: the DNSBL stopped answering its virtual IP for a blocked domain), fw.client (a MAC never seen on that site took a lease: mac, ip, hostname, if, online); every one carries site and text.",
-    "Metrics: cpu.temp cpu.pct cpu.load1 temp.<hwmon> gpu.temp gpu.util gpu.power gpu.vram_pct ram.pct swap.pct disk.<root|home>.pct",
+    "Metrics: cpu.temp cpu.pct cpu.load1 temp.<hwmon> gpu.temp gpu.util gpu.power gpu.vram_pct ram.pct swap.pct disk.<root|home>.pct claude.session.pct claude.week.pct claude.<model>.pct (the Claude plan's limits as /usage shows them, every claude_every_s; fable today)",
     "disk.<..>.free_gb net.latency_ms vpn.latency_ms vpn.connected pods.<left|right|case>.pct health.issues health.failed_units boot.seconds nas.up nas.cpu.pct nas.ram.pct nas.array.pct nas.pool.pct (the fullest pool) nas.disk.temp (the hottest) nas.disks.bad nas.containers.down nas.containers.updates nas.alerts cert.days (the certificate closest to expiring) fw.<site>.up fw.<site>.cpu.pct fw.<site>.ram.pct fw.<site>.temp fw.<site>.clients fw.<site>.ipsec.up fw.<site>.dnsbl fw.<site>.gw.<gateway>.rtt|loss fw.<site>.blocked (connections the firewall blocked since the last sample) fw.<site>.blocked.<interface>.",
     "`barch rules list|test|fire|enable|disable`, `barch events log`, `barch metrics list|series|summary`; the daemon reloads this file by itself."
   ],
@@ -180,6 +180,40 @@
       },
       "notify": "{source}: US$ {usd} em uma chamada ({note}).",
       "cooldown": "10m"
+    },
+    {
+      "id": "claude-session-high",
+      "description": "Claude 5-hour window almost used up",
+      "when": {
+        "metric": "claude.session.pct",
+        "above": 90,
+        "clear": 60
+      },
+      "notify": "A janela de 5 h do Claude está em {value} %. Os agentes agendados e o fallback de voz também contam; espere o reset antes de disparar mais (barch claude).",
+      "cooldown": "2h"
+    },
+    {
+      "id": "claude-week-high",
+      "description": "Claude weekly limit almost used up",
+      "when": {
+        "metric": "claude.week.pct",
+        "above": 85,
+        "clear": 70
+      },
+      "notify": "A semana do Claude está em {value} %. Pense em adiar tarefas de agente até o reset (barch claude mostra quando).",
+      "critical": true,
+      "cooldown": "12h"
+    },
+    {
+      "id": "claude-fable-high",
+      "description": "Claude top-model (Fable) weekly share almost used up",
+      "when": {
+        "metric": "claude.fable.pct",
+        "above": 85,
+        "clear": 70
+      },
+      "notify": "A fatia semanal do Fable está em {value} %: as sessões no modelo do topo vão parar antes da semana. Os agentes usam Sonnet e não contam aqui.",
+      "cooldown": "12h"
     },
     {
       "id": "music-cover",

@@ -88,6 +88,8 @@ Desktop (through the bar):
                               the VPN alone: PIA over WireGuard (what Anonymous Mode uses)
   vpn regions                 regions, fastest first; vpn region <id>|auto picks the one to use
   health [--refresh]          system health summary (.pacnew, failed services, TPM, cleanup)
+  claude [--refresh]          the Claude plan's usage as /usage shows it: 5-hour session, week, the top model's
+                              share (Fable), resets, plan (Max 5x), and what this machine's agents spent today
   voice on|off|toggle|status  always-on voice control (quickshell/voice, barch-voice.service):
                               say "barch" and the command, in Portuguese
   voice pause|resume          keep the service but ignore the microphone / listen again
@@ -1363,6 +1365,41 @@ cmd_anon() {
   show "$OUT" "$text"
 }
 
+# claude [--refresh]: the bar's ClaudeUsage widget (quickshell/claude): the plan's limits as Claude Code's
+# /usage shows them, plus the agents' spend from claude-cost.log
+cmd_claude() {
+  case ${1:-} in
+    '') ;;
+    --refresh)
+      local before i
+      ipc claude refresh
+      before=$(jq -r '.checkedAt' <<<"$OUT")
+      for ((i = 0; i < 40; i++)); do
+        sleep 0.5
+        ipc claude status
+        [[ $(jq -r '.checkedAt' <<<"$OUT") != "$before" ]] && break
+      done
+      ((i < 40)) || die 1 "the usage read did not finish in 20 s"
+      ;;
+    *) usage_error "claude [--refresh]" ;;
+  esac
+  ipc claude status
+  show "$OUT" '
+    def left(s): if s == null then "" elif s < 3600 then " (resets in \(s / 60 | floor) min)"
+      elif s < 129600 then " (resets in \(s / 3600 | floor) h \((s % 3600) / 60 | floor) min)"
+      else " (resets \(now + s | strflocaltime("%a %H:%M")))" end;
+    if .loaded | not then "Claude: not read yet (the bar reads ~8 s after start; use --refresh)"
+    elif .ok | not then "Claude: " + (.error // "no answer") + (if .plan.label then " · plan \(.plan.label)" else "" end)
+    else
+      "Claude · \(.plan.label) (read \(.checkedAt / 1000 | floor | strflocaltime("%H:%M")))",
+      (.limits[] | "  \(.label): \(.percent // "?") %" + left(.resets_in_s)
+        + (if .allowance_percent_of_weekly then "  [\(.allowance_percent_of_weekly) % of the weekly allowance]" else "" end)),
+      (if (.breakdown | length) > 0 then "  this week: " + (.breakdown | map("\(.name) \(.percent) %") | join(", ")) else empty end),
+      "  agents here: US$ \(.agents.today_usd) today (\(.agents.runs_today) runs), US$ \(.agents.week_usd) this week"
+        + (if (.agents.by_source_today | length) > 0 then ": " + (.agents.by_source_today | to_entries | sort_by(-.value) | map("\(.key) \(.value)") | join(", ")) else "" end)
+    end'
+}
+
 cmd_health() {
   case ${1:-} in
     '') ;;
@@ -2360,6 +2397,7 @@ case $cmd in
   video) cmd_video "$@" ;;
   torrents) cmd_torrents "$@" ;;
   health) cmd_health "$@" ;;
+  claude) cmd_claude "$@" ;;
   rules) cmd_rules "$@" ;;
   events) cmd_events "$@" ;;
   metrics) cmd_metrics "$@" ;;

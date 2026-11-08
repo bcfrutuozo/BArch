@@ -380,6 +380,16 @@ The main pieces:
   need a secret at startup are held until then with `keyring-wait` (Nextcloud: drop-in in `systemd/`)
   instead of asking for the keyring password at every login.
   To look at it without locking: `lock/preview.sh` (a normal window with its own Shell ID).
+- **Claude usage** (`quickshell/claude/`, `barch claude`): the plan's limits as Claude Code's `/usage` shows
+  them, read the same way (the OAuth usage endpoint with the login's token in `~/.claude/.credentials.json`;
+  `usage.py` never prints the token and never refreshes it, Claude Code does that when it runs). In the bar: the
+  five-hour window's percentage next to a robot, yellow from 70 %, red from 90 % (of any limit). Click: each
+  limit as a bar with its reset (Session, Week, the top model's weekly share, "Fable" today, with its allowance),
+  the plan (Max 5x), where the week went (Claude Code, chats…), extra usage if enabled, and what this machine's
+  agents spent today and this week by source (`claude-cost.log`: scheduled tasks, voice fallback, the music,
+  books and video agents), with buttons to the Center's History and Agent pages. Every 5 minutes and on open;
+  `barch-events` keeps `claude.session.pct`, `claude.week.pct` and `claude.fable.pct` in the metrics and warns at
+  90 % of the window, 85 % of the week or of the Fable share (rules `claude-*`).
 - **System health:** `.pacnew` files, failed services, TPM fallback warning, the daily backup (failed
   or more than two days old) and a monthly cleanup. **Automation** (`barch-events`, see below):
   metrics history, the event log and the rules of `agent/rules.json` (disk full, VPN dropped,
@@ -421,6 +431,7 @@ barch nightlight on|off|status     barch dnd on|off|status
 barch anon on [region]|off|toggle|status   # Anonymous Mode: VPN + kill switch + Mullvad Browser as default + hostname out of DHCP
 barch vpn on [region]|off|toggle|status|regions|region <id>|auto
 barch health [--refresh]           # .pacnew, failed services, TPM, backup, cleanup
+barch claude [--refresh]           # the Claude plan's usage: 5-hour session, week, Fable share, resets, plan, agents' spend
 barch rgb [status]|apply|on|off|color <tone|#hex>|brightness <0-100>|flash [tone] [n]   # Corsair lighting (see Theme)
 barch voice on|off|toggle|status   # always-on voice control (see Voice); pause|resume keep the service
 barch voice match "abre o terminal"  # which command a sentence hits, running nothing · test "..." runs it
@@ -476,7 +487,7 @@ barch replay share [file] [--from 12 --to 40]
 ```
 
 Every command takes `--json`. Exit codes: `0` ok, `1` the bar refused, `2` usage, `3` bar not reachable.
-On the QML side these are the `IpcHandler`s `control`, `theme`, `wallpaper`, `notifs`, `health`, `vpn`, `anon` and `voice` (`qs ipc show`).
+On the QML side these are the `IpcHandler`s `control`, `theme`, `wallpaper`, `notifs`, `health`, `claude`, `vpn`, `anon` and `voice` (`qs ipc show`).
 
 ## Agent
 
@@ -534,7 +545,8 @@ without any AI:
   hourly averages for a year): CPU and GPU temperature, load and power, every hwmon sensor
   (`temp.<name>`), RAM and zram, the disks (`disk.root.pct`, `disk.home.pct`, free GB), ping and
   VPN latency, whether the VPN is up, AirPods battery per side, the health check's issue count,
-  and the boot time of every boot (`systemd-analyze`, once per boot). Every five minutes the NAS too
+  the Claude plan's limits (`claude.session.pct`, `claude.week.pct`, `claude.fable.pct`, every five
+  minutes through the bar), and the boot time of every boot (`systemd-analyze`, once per boot). Every five minutes the NAS too
   (`nas.*`, see NAS health below): array and fullest pool, hottest disk, disks not OK, containers
   down or with an update, Unraid's unread warnings, its CPU and RAM, and `cert.days`, the days left
   on the certificate closest to expiring, and the firewalls (`fw.<site>.*`, see NAS → Firewalls).
@@ -560,7 +572,8 @@ without any AI:
   `cooldown` how long before it may fire again, `critical` and `enabled`. The daemon reloads the
   file when it changes. It ships with: disk above 90 %, CPU above 90 °C, GPU above 85 °C, VPN
   dropped (spoken), network down and back, AirPods below 20 % per side, monitor connected or
-  removed, a boot over 60 s, a Claude call over a dollar and an album of the music pipeline waiting
+  removed, a boot over 60 s, a Claude call over a dollar, the Claude plan at 90 % of its 5-hour window
+  or 85 % of the week or of the Fable share and an album of the music pipeline waiting
   only for a cover (`music.review` with `cover_only`: Claude searches the web for it, `barch music
   cover-ask`, in a transient unit so the daemon never waits), a video file with audio in another language
   (`video.foreign`, a notification: the pipeline trims it by itself), the NAS ones (not answering and back,

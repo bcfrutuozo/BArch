@@ -449,6 +449,7 @@ class Daemon:
         self.last_health = 0.0
         self.last_music = 0.0
         self.last_video = 0.0
+        self.last_claude = 0.0
         self.next_nas = 0.0
         self.last_certs = 0.0
         self.nas_fails = 0
@@ -700,6 +701,30 @@ class Daemon:
         if new or first:
             st["music_seen"] = sorted((seen | {j["id"] for j in jobs}))[-500:]
             self.rules.save_state()
+
+    def sample_claude(self) -> list[tuple[str, float]]:
+        """The Claude plan's limits as the bar reads them (quickshell/claude/usage.py, `barch claude`): metrics
+        claude.session.pct (the five-hour window), claude.week.pct and claude.<model>.pct (the top model's weekly
+        share, "fable" today), every `claude_every_s` (300), so the History page shows how the agents eat the plan."""
+        now = time.time()
+        if now - self.last_claude < float(self.cfg.get("claude_every_s", 300)):
+            return []
+        self.last_claude = now
+        rows = []
+        try:
+            r = run([str(BARCH), "--json", "claude"], timeout=20)
+            if r.returncode in (0, 1) and r.stdout.strip():
+                d = json.loads(r.stdout)
+                if d.get("ok"):
+                    for lim in d.get("limits") or []:
+                        if lim.get("percent") is None:
+                            continue
+                        name = {"session": "session", "weekly_all": "week"}.get(lim.get("kind")) or \
+                            re.sub(r"[^a-z0-9]+", "", (lim.get("label") or lim.get("kind") or "").lower()) or "scoped"
+                        rows.append((f"claude.{name}.pct", float(lim["percent"])))
+        except Exception:  # noqa: BLE001
+            pass
+        return rows
 
     def sample_video(self):
         """The video pipeline on the NAS (server/video): a file whose audio goes beyond the original language
@@ -1008,7 +1033,7 @@ class Daemon:
                 self.cfg = self.rules.cfg
                 rows = []
                 for fn in (self.sample_system, self.sample_gpu, self.sample_net, self.sample_bar, self.sample_pods,
-                           self.sample_nas, self.sample_fw):
+                           self.sample_nas, self.sample_fw, self.sample_claude):
                     try:
                         rows += fn()
                     except Exception as e:  # noqa: BLE001
