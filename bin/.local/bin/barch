@@ -150,8 +150,12 @@ Desktop (through the bar):
   video show <id>             one movie (m<id>) or season (s<series>x<season>): candidates, alignment, history
   video retry|skip|unskip <id>   search again from scratch / leave alone / take back
   video use <id> <guid>       try this candidate next (from video show)
+  video search <id> "query"   Prowlarr with your own query; what fits the job joins its candidates
+  video add <id> <url> ["title"]   a magnet or torrent URL found elsewhere, tried next
+  video fix <id> ["hint"]     Fix with Agent: Claude finds the donor (Brazilian title, packs, another cut) and runs it
+  video foreign               files with audio beyond the original and PT-BR, and what the trim does about them
   video scan|digest [days]|restart   run now / the week / restart after install
-  video audit [--json]        the library against the rule (HEVC, 2160p, HDR, bitrate, audio, subtitles)
+  video audit [--json|--foreign]   the library against the rule (HEVC, 2160p, HDR, bitrate, audio, subtitles)
   video install               copy Recyclarr's rules and the pipeline to the NAS (server/video/install.sh)
   player [browse] [page]      the Player (quickshell/player): the /music library played here, in the bar's theme
                               (albums|artists|tracks|genres|queue|favorites|recent|lyrics|stats|viz|eq|settings)
@@ -576,13 +580,15 @@ music_covers_ask() {
   show "$OUT" '.summary + (if .proposed then "\n(new proposal in Covers: barch music covers apply \"" + .folder + "\" to use it)" else "" end)'
 }
 
-# music_claude_run <run dir> <cost note> <barch command>...: Claude on $run/prompt.md (dontAsk, read-only
-# but for the barch commands listed, e.g. "barch music cover"), the answer in $run/result.json;
+# agent_claude_run <cost source> <run dir> <cost note> <barch command>...: Claude on $run/prompt.md (dontAsk,
+# read-only but for the barch commands listed, e.g. "barch music cover"), the answer in $run/result.json;
 # MUSIC_CLAUDE_TIMEOUT (20m) bounds it. Always Sonnet (MUSIC_CLAUDE_MODEL): a fix that chained three
-# rounds cost US$ 1.48 on the default model (2026-11-03); these are lookups, not reasoning
-music_claude_run() {
-  local run=$1 note=$2 rc=0 c
-  shift 2
+# rounds cost US$ 1.48 on the default model (2026-11-03); these are lookups, not reasoning.
+# music_claude_run is the same with the cost logged as music-agent; video_fix_job logs video-agent
+music_claude_run() { agent_claude_run music-agent "$@"; }
+agent_claude_run() {
+  local source=$1 run=$2 note=$3 rc=0 c
+  shift 3
   # read-only helpers too: a command chained with an unlisted tool (curl … | head) is refused whole
   local allowed=(Read Glob WebSearch WebFetch "Bash(curl *)" "Bash(magick *)" "Bash(identify *)" "Bash(ffprobe *)" "Bash(sleep *)"
                  "Bash(head *)" "Bash(tail *)" "Bash(ls *)" "Bash(cat *)" "Bash(wc *)" "Bash(grep *)" "Bash(jq *)" "Bash(file *)"
@@ -593,7 +599,7 @@ music_claude_run() {
     --add-dir "$run" --json-schema "$schema" --disallowedTools Edit Write NotebookEdit \
     --allowedTools "${allowed[@]}" \
     <"$run/prompt.md" >"$run/result.json" 2>"$run/claude.log") || rc=$?
-  cost_log music-agent "$(jq -r '.total_cost_usd // empty' "$run/result.json" 2>/dev/null)" "$note"
+  cost_log "$source" "$(jq -r '.total_cost_usd // empty' "$run/result.json" 2>/dev/null)" "$note"
   jq -e '.structured_output | type == "object"' "$run/result.json" >/dev/null 2>&1 ||
     die 1 "Claude did not finish (exit $rc): see $run/claude.log"
 }
@@ -1101,6 +1107,47 @@ video_api() {   # video_api GET|POST <path> [json body]
   [[ $(jq -r '.ok' <<<"$OUT") == true ]] || { [[ $JSON == 1 ]] && jq . <<<"$OUT"; die 1 "$(jq -r '.error // "failed"' <<<"$OUT")"; }
 }
 
+# video fix <id> ["hint"]: Fix with Agent for a dub job (quickshell/video/job-fix.md). Claude gets the job as
+# barch video show prints it, researches the Brazilian title and the releases out there, searches Prowlarr
+# through the pipeline with its own queries (barch video search), adds a release it found elsewhere (barch
+# video add), picks a candidate (use) or retries, and reports; the download and the mux run in the pipeline
+# afterwards, so the answer says what was queued and what is left for Bruno
+video_fix_job() {
+  local id=${1:-} hint=${2:-}
+  [[ -n $id ]] || usage_error "video fix <id> [\"hint\"]"
+  need claude
+  video_api GET "/api/jobs/$id"
+  local job run
+  job=$(jq -c .job <<<"$OUT")
+  run=$STATE/video-agent/job-$id-$(date +%Y%m%d-%H%M%S)
+  mkdir -p "$run"
+  {
+    echo "# Context"
+    echo
+    echo "- Job id: \`$id\` (use exactly this with barch video show / search / add / use / retry)"
+    jq -r '"- Title: \(.title) (\(.year)) · original language \(.original) · IMDb \(.imdb // "?")\n- State: \(.state)\(if .reason != "" then " · " + .reason else "" end)\n- Kind: \(if .kind == "season" then "a season of a series (donor: a dubbed season pack, a range or single episodes)" else "a movie" end)\n- Audio now: \(.audio // [] | join(", "))\n- Titles the pipeline searched: \(.titles // [] | join(" · "))"' <<<"$job"
+    echo "- Run folder (write here only): $run"
+    if [[ -n $hint ]]; then echo; echo "## Bruno's hint"; echo; echo "$hint"; fi
+    echo
+    echo "## The job, as barch video show prints it"
+    echo
+    echo '```'
+    "$0" video show "$id" 2>/dev/null || jq . <<<"$job"
+    echo '```'
+    echo
+    echo "## The job as JSON (candidates with their guid and url, episodes, alignment, history)"
+    echo
+    echo '```json'
+    jq '{id, kind, state, reason, title, show, year, original, imdb, file, audio, runtime, titles, failures, donor, candidates, episodes, alignment, last_search, history: (.history | .[-30:])}' <<<"$job"
+    echo '```'
+  } >"$run/context.md"
+  { cat "$REPO/quickshell/.config/quickshell/video/job-fix.md"; echo; cat "$run/context.md"; } >"$run/prompt.md"
+  MUSIC_CLAUDE_TIMEOUT=${VIDEO_CLAUDE_TIMEOUT:-30m} agent_claude_run video-agent "$run" "fix $id" "barch video show" "barch video search" "barch video add" "barch video use" "barch video retry" "barch video list"
+  OUT=$(jq -c --arg id "$id" --arg run "$run" '{ok: true, id: $id, run: $run, summary: .structured_output.summary,
+    fixed: .structured_output.proposed, session: .session_id, cost: .total_cost_usd}' "$run/result.json")
+  show "$OUT" '.summary'
+}
+
 cmd_video() {
   local sub=${1:-status}
   (($#)) && shift
@@ -1121,6 +1168,7 @@ cmd_video() {
         + (if .reason then "\nreason: \(.reason)" else "" end)
         + (if .alignment then "\nalignment: \(if .alignment.ok then "offset \(.alignment.offset_ms) ms, speed \(.alignment.speed), \(.alignment.agreeing)/\(.alignment.windows) windows (\(.alignment.compared) vs original)" else .alignment.reason end)" else "" end)
         + (if (.candidates|length) > 0 then "\ncandidates:\n" + (.candidates | sort_by(-.score) | map("  [\(.status)] \(.score)  \(.title)  \(.size / 1073741824 * 10 | floor / 10) GB  \(.seeders) seeders  \(.indexer)\(if .reason != "" then "\n        " + .reason else "" end)\n        guid: \(.guid)") | join("\n")) else "" end)
+        + (if .last_search then "\nlast search by hand (\(.last_search.query)): \(.last_search.found | length) candidate(s), \(.last_search.rejected | length) rejected:\n" + (.last_search.rejected[:15] | map("  - \(.title)  [\(.why)]  \(.size / 1073741824 * 10 | floor / 10) GB  \(.seeders) seeders\(if .url != "" then "\n      url: " + .url else "" end)") | join("\n")) else "" end)
         + "\nhistory:\n" + (.history[-12:] | map("  \(.t | strftime("%d/%m %H:%M"))  \(.msg)") | join("\n"))' ;;
     retry|skip|unskip)
       [[ -n ${1:-} ]] || usage_error "video $sub <id>"
@@ -1130,6 +1178,20 @@ cmd_video() {
       [[ -n ${1:-} && -n ${2:-} ]] || usage_error "video use <id> <guid>"
       video_api POST "/api/jobs/$1" "$(jq -cn --arg g "$2" '{action: "use", guid: $g}')"
       show "$OUT" '"\(.job.title): this candidate next"' ;;
+    search)
+      [[ -n ${1:-} && -n ${2:-} ]] || usage_error "video search <id> \"query\""
+      video_api POST "/api/jobs/$1" "$(jq -cn --arg q "$2" '{action: "search", query: $q}')"
+      show "$OUT" '.job.last_search | "\(.found | length) candidate(s) joined the job" + (if (.found | length) > 0 then ":\n" + (.found | map("  + " + .) | join("\n")) else "" end)
+        + (if (.rejected | length) > 0 then "\n\(.rejected | length) rejected (barch video add <id> <url> takes one anyway):\n" + (.rejected[:20] | map("  - \(.title)  [\(.why)]  \(.size / 1073741824 * 10 | floor / 10) GB  \(.seeders) seeders\(if .url != "" then "\n      " + .url else "" end)") | join("\n")) else "" end)' ;;
+    add)
+      [[ -n ${1:-} && -n ${2:-} ]] || usage_error "video add <id> <magnet|torrent url> [\"title\"]"
+      video_api POST "/api/jobs/$1" "$(jq -cn --arg u "$2" --arg t "${3:-}" '{action: "add", url: $u, title: $t}')"
+      show "$OUT" '"\(.job.title): the release joined the job and is tried next (\(.job.state))"' ;;
+    fix) video_fix_job "$@" ;;
+    foreign)
+      video_api GET /api/foreign
+      show "$OUT" 'if (.files | length) == 0 then "no file has audio beyond the original and PT-BR" else
+        "\(.files | length) file(s) with audio in another language:\n" + (.files | map("  \(.id)\t\(.title)  audio \(.audio | join(",")) (original \(.original))  extra: \(.extra | join(","))  trim: \(.trim)\(if .trim_error != "" then " (" + .trim_error + ")" else "" end)") | join("\n")) end' ;;
     scan)
       video_api POST /api/scan '{}'
       show "$OUT" '"video pipeline: running now"' ;;
@@ -1141,7 +1203,7 @@ cmd_video() {
       show "$OUT" '"video pipeline: restarting"' ;;
     audit) exec python3 -I "$REPO/server/video/audit.py" "$@" ;;
     install) exec "$REPO/server/video/install.sh" ;;
-    *) usage_error "video status|list [state]|show|retry|skip|unskip|use|scan|digest|restart|audit|install" ;;
+    *) usage_error "video status|list [state]|show|retry|skip|unskip|use|search|add|fix|foreign|scan|digest|restart|audit|install" ;;
   esac
 }
 

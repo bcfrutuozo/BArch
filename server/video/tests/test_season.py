@@ -30,6 +30,12 @@ class Scope(unittest.TestCase):
         self.assertEqual(release_scope("The.Walking.Dead.S06E03.720p.Dublado"), ({6}, range(3, 4)))
         self.assertEqual(release_scope("The Walking Dead 6ª Temporada 1080p Dublado"), ({6}, None))
         self.assertEqual(release_scope("The Walking Dead S01-S11 Completa Dublado")[0], {1, 11})
+        # Brazilian trackers: the ordinal sign read as Latin-1 ("8Âª"), "Temp", a range of seasons
+        self.assertEqual(release_scope("Family Guy 8Âª Temporada 720p Dublado  Filmes Beta"), ({8}, None))
+        self.assertEqual(release_scope("Uma Familia da Pesada (Family Guy)  1 a 13 Temp  DUBLADO")[0], set(range(1, 14)))
+        self.assertEqual(release_scope("Family Guy Temp 3 Dublado"), ({3}, None))
+        self.assertEqual(release_scope("Family Guy 8&ordf; Temporada 720p Dublado - Filmes Beta"), ({8}, None))
+        self.assertEqual(release_scope("Family Guy [Uma Familia da Pesada] Dublado Temporada 16 [480p]"), ({16}, None))
 
     def test_files(self):
         self.assertEqual(episode_of("TWD/The.Walking.Dead.S06E03.1080p.mkv", 6), 3)
@@ -50,7 +56,12 @@ class RankSeason(unittest.TestCase):
 
     def test_named_forms(self):
         for title in ["The.Walking.Dead.S06.1080p.Dublado", "[ACESSE COMANDOTORRENTS] The Walking Dead S06 Dublado",
-                      "www.site.com - The Walking Dead 6ª Temporada Dublado", "The Walking Dead (2010) S06 Dublado"]:
+                      "www.site.com - The Walking Dead 6ª Temporada Dublado", "The Walking Dead (2010) S06 Dublado",
+                      "The Walking Dead 6Âª Temporada 720p Dublado  Filmes Beta", "The Walking Dead Temp 6 Dublado",
+                      "Os Mortos-Vivos (The Walking Dead) 6ª Temporada Dublado",
+                      "The Walking Dead 6&ordf; Temporada 720p Dublado - Filmes Beta",
+                      "The Walking Dead [Os Mortos-Vivos] Dublado Temporada 6 [480p]",
+                      "The Walking Dead Dual Audio 1080p WEB-DL S06"]:
             s, why = self.score(title)
             self.assertGreater(s, 0, f"{title}: {why}")
 
@@ -66,6 +77,7 @@ class RankSeason(unittest.TestCase):
                                ("The Walking Dead Daryl Dixon S06 1080p Dublado", "another title", {}),
                                ("The Walking Dead World Beyond S06 1080p Dublado", "another title", {}),
                                ("The Walking Dead S01-S11 1080p Dublado", "several", {}),
+                               ("The Walking Dead  1 a 11 Temp  DUBLADO", "several", {}),
                                ("The Walking Dead Serie Completa 1080p Dublado", "whole series", {}),
                                ("The Walking Dead S06 1080p Dublado", "not a torrent", {"protocol": "usenet"}),
                                ("The Walking Dead S06 1080p Dublado", "no seeders", {"seeders": 0})]:

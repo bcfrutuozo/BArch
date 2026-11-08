@@ -11,10 +11,14 @@ language and one in Portuguese, a Portuguese subtitle. Verdict per movie:
            SDR, starved bitrate. The file goes, Radarr searches again with the BArch 4K profile.
 Radarr comes from ~/.config/barch/video.json; its /movies is /mnt/nasfrutuozo/media/movies here.
 
-  audit.py            table
-  audit.py --json     one object per movie
+  audit.py            the foreign-audio table (Radarr and Sonarr, from what they know of each file), then
+                      the probe of every movie
+  audit.py --json     one object per movie (the probe only)
+  audit.py --foreign  only the files whose audio goes beyond the original language and PT-BR (a German DL
+                      release of an English series, a MULTi), movies and episodes, from Radarr's and
+                      Sonarr's media info, no probing; --json for one object per file
 """
-import json, subprocess, sys, urllib.request
+import json, re, subprocess, sys, urllib.parse, urllib.request
 from pathlib import Path
 
 MIN_MBPS = 10.0
@@ -23,10 +27,76 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from barch_video.langs import ISO  # noqa: E402
 
 
-def radarr(path):
-    cfg = json.load(open(Path.home() / ".config/barch/video.json"))["radarr"]
-    req = urllib.request.Request(cfg["url"] + "/api/v3/" + path, headers={"X-Api-Key": cfg["key"]})
+def arr(app, path, **params):
+    cfg = json.load(open(Path.home() / ".config/barch/video.json"))[app]
+    url = cfg["url"] + "/api/v3/" + path + ("?" + urllib.parse.urlencode(params) if params else "")
+    req = urllib.request.Request(url, headers={"X-Api-Key": cfg["key"]})
     return json.load(urllib.request.urlopen(req, timeout=60))
+
+
+def radarr(path):
+    return arr("radarr", path)
+
+
+CODE_ALIASES = {"ger": "deu", "fre": "fra", "dut": "nld", "cze": "ces", "rum": "ron", "gre": "ell", "chi": "zho",
+                "pob": "por", "ptb": "por", "pt": "por", "en": "eng", "und": ""}
+
+
+def codes_of(media, names):
+    """The audio language codes of a Radarr/Sonarr file: its media info (ffprobe, "ger/eng") first, else the
+    languages the app parsed from the release name."""
+    raw = [x.strip().lower() for x in ((media or {}).get("audioLanguages") or "").split("/") if x.strip()]
+    if not raw:
+        raw = [sorted(ISO.get(n, {n.lower()[:3]}))[0] for n in names]
+    return {CODE_ALIASES.get(c, c) for c in raw if CODE_ALIASES.get(c, c)}
+
+
+def ep_tag(path, season):
+    m = re.search(r"(?i)(?<![a-z0-9])S(\d{1,2})E(\d{1,3})(?:-?E?(\d{1,3}))?", Path(path).name)
+    if not m:
+        return f"S{season:02d}" if season is not None else Path(path).stem[:40]
+    return f"S{int(m.group(1)):02d}E{int(m.group(2)):02d}" + (f"-E{int(m.group(3)):02d}" if m.group(3) else "")
+
+
+def foreign():
+    """Movies and episodes whose audio goes beyond the original language and PT-BR."""
+    out = []
+    for m in arr("radarr", "movie"):
+        mf = m.get("movieFile")
+        if not m.get("hasFile") or not mf:
+            continue
+        orig = (m.get("originalLanguage") or {}).get("name", "English")
+        keep = {CODE_ALIASES.get(c, c) for c in ISO.get(orig, set())} | {"por"}
+        have = codes_of(mf.get("mediaInfo"), [l["name"] for l in mf.get("languages") or []])
+        extra = sorted(have - keep)
+        if extra:
+            out.append({"kind": "movie", "id": m["id"], "title": f"{m['title']} ({m['year']})", "original": orig,
+                        "audio": sorted(have), "extra": extra, "file": mf.get("relativePath", ""),
+                        "group": mf.get("releaseGroup", ""), "score": mf.get("customFormatScore")})
+    for s in arr("sonarr", "series"):
+        if not (s.get("statistics") or {}).get("episodeFileCount"):
+            continue
+        orig = (s.get("originalLanguage") or {}).get("name", "English")
+        keep = {CODE_ALIASES.get(c, c) for c in ISO.get(orig, set())} | {"por"}
+        for f in arr("sonarr", "episodefile", seriesId=s["id"]):
+            have = codes_of(f.get("mediaInfo"), [l["name"] for l in f.get("languages") or []])
+            extra = sorted(have - keep)
+            if extra:
+                out.append({"kind": "episode", "id": f["id"], "series_id": s["id"], "season": f.get("seasonNumber"),
+                            "title": f"{s['title']} {ep_tag(f.get('relativePath', ''), f.get('seasonNumber'))}", "original": orig,
+                            "audio": sorted(have), "extra": extra, "file": f.get("relativePath", ""),
+                            "group": f.get("releaseGroup", ""), "score": f.get("customFormatScore")})
+    return out
+
+
+def print_foreign(rows):
+    if not rows:
+        print("== foreign audio: none (every file has only the original language and PT-BR)")
+        return
+    print(f"== foreign audio ({len(rows)}: audio beyond the original and PT-BR; the pipeline trims it, Radarr/Sonarr score it -10000)")
+    for r in rows:
+        print(f"  {r['title']}  audio {','.join(r['audio'])} (original {r['original']})  extra {','.join(r['extra'])}"
+              f"  [{r['group'] or '?'}" + (f", score {r['score']}" if r.get("score") is not None else "") + "]")
 
 
 def probe(path):
@@ -102,6 +172,15 @@ def audit(movie):
 
 
 def main():
+    if "--foreign" in sys.argv:
+        rows = foreign()
+        if "--json" in sys.argv:
+            json.dump(rows, sys.stdout, indent=1, ensure_ascii=False)
+        else:
+            print_foreign(rows)
+        return
+    if "--json" not in sys.argv:
+        print_foreign(foreign())
     movies = [m for m in radarr("movie") if m.get("hasFile")]
     rows = [audit(m) for m in sorted(movies, key=lambda m: (m["title"].lower(), m["year"]))]
     if "--json" in sys.argv:

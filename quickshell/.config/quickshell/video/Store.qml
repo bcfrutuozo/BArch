@@ -190,6 +190,35 @@ Singleton {
         if (guid) args.push("--guid", guid)
         video(args, d => { say(id + ": " + action + " sent"); loadDubs(); openDub(id) })
     }
+    // a Prowlarr search with your own query (what fits joins the candidates), a release added by its URL
+    function dubSearch(id, query) {
+        if (!query.trim()) return
+        say(id + ": searching Prowlarr for “" + query.trim() + "”…")
+        video(["dub-act", id, "search", "--query", query.trim()], d => {
+            const ls = (d.job && d.job.last_search) || { found: [], rejected: [] }
+            say(id + ": " + ls.found.length + " candidate(s) joined, " + ls.rejected.length + " rejected", ls.found.length === 0)
+            openDub(id)
+        })
+    }
+    function dubAdd(id, url, title) {
+        if (!url.trim()) return
+        video(["dub-act", id, "add", "--url", url.trim(), "--title", title || ""], d => { say(id + ": release added, tried next"); loadDubs(); openDub(id) })
+    }
+
+    // Fix with Agent (barch video fix): Claude finds the donor (Brazilian title, packs, another cut), queues it
+    // and reports; the pipeline downloads and muxes afterwards. asks[id] = { running, text, bad, proposed }
+    property var asks: ({})
+    function setAsk(id, v) { const a = Object.assign({}, asks); a[id] = v; asks = a }
+    function fixJob(id, hint) {
+        setAsk(id, { running: true, text: "The agent took the job over: researching the title, searching the indexers, queuing a donor… (minutes)", bad: false })
+        run([Quickshell.env("HOME") + "/.local/bin/barch", "--json", "video", "fix", id, hint || ""], (out, err, code) => {
+            let d = null
+            try { d = JSON.parse(out) } catch (e) {}
+            if (code === 0 && d && d.ok) setAsk(id, { running: false, text: d.summary + (d.cost ? "  ($" + d.cost.toFixed(2) + ")" : ""), bad: !d.fixed, proposed: d.fixed })
+            else setAsk(id, { running: false, text: (err.trim().split("\n").pop() || "the agent did not finish"), bad: true })
+            loadDubs(); openDub(id)
+        })
+    }
 
     // the queue moves: every 5 s while something downloads, every 30 s otherwise
     readonly property bool downloading: queue.some(q => q.state === "downloading" && q.progress < 100)

@@ -82,7 +82,7 @@ Rectangle {
                 visible: !!d.m
                 spacing: 6
                 UiButton { label: "Search now"; icon: "󰍉"; tooltip: "Radarr searches every indexer and grabs the best release that fits"; onClicked: Store.searchNow({ kind: "movie", id: d.m.id, label: d.m.title }) }
-                UiButton { label: "Releases"; icon: "󰒺"; primary: true; tooltip: "every release the indexers have, ranked, to pick one by hand"; onClicked: Store.findReleases({ kind: "movie", id: d.m.id, label: d.m.title }) }
+                UiButton { label: "Releases"; icon: "󰒺"; primary: true; tooltip: "every release the indexers have, ranked, to pick one by hand"; onClicked: Store.findReleases({ kind: "movie", id: d.m.id, label: d.m.title, original: d.m.original }) }
                 UiButton { label: "Radarr"; icon: "󰏌"; small: true; onClicked: Store.openUrl("https://radarr.example.com/movie/" + d.m.tmdb) }
                 UiButton { visible: !!d.m && d.m.imdb !== ""; label: "IMDb"; icon: "󰏌"; small: true; onClicked: Store.openUrl("https://www.imdb.com/title/" + d.m.imdb) }
             }

@@ -14,9 +14,10 @@ puts it in, without touching the video:
                subtitles the 4K file lacks, all shifted by the offset; checked again (sync.verify), then
                it replaces the file in place, Radarr rescans and is told the file's languages
   done         the file has PT-BR (muxed, or it came with it)
-  (trim)       a file that has PT-BR but also other audio languages, subtitles outside `subtitles` or a dub
-               as default: remuxed with only the video, the original (default) and PT-BR audio, those
-               subtitles; never while it is hardlinked to a seeding torrent (that would cost space)
+  (trim)       a file with audio in other languages, subtitles outside `subtitles` or a dub as default,
+               with or without PT-BR yet: remuxed with only the video, the original (default) and PT-BR
+               audio, those subtitles; Radarr/Sonarr are told the languages it has now; never while it is
+               hardlinked to a seeding torrent (that would cost space)
   waiting      no candidate now: searched again every `research_h` hours
   review       what needs Bruno: every candidate failed, the 4K file lacks the original audio...
   skipped      left alone by hand
@@ -28,6 +29,8 @@ searched again. Only torrents are donors (qBittorrent). Heavy steps run one at a
 """
 from __future__ import annotations
 
+import hashlib
+import html
 import json
 import os
 import re
@@ -47,37 +50,63 @@ ACTIVE = {"search", "waiting", "downloading", "aligning"}
 VIDEO_EXT = (".mkv", ".mp4", ".avi", ".m4v", ".ts", ".m2ts", ".wmv", ".mov")
 PT_RE = re.compile(r"\b(dual([ ._-]?[aá]udio)?|dublado|dublagem|nacional|pt[ ._-]?br|brazilian|portugu[eê]s)\b", re.I)
 DUAL_RE = re.compile(r"\b(dual([ ._-]?[aá]udio)?|multi)\b", re.I)
+BR_RE = re.compile(r"\b(dublado|dublagem|nacional|pt[ ._-]?br|brazilian|portugu[eê]s)\b", re.I)
+# "Dual Audio" alone is not a Brazilian dub: Indian and European releases say it too (Hindi Eng, German DL)
+OTHER_LANG_RE = re.compile(r"\b(hindi|hin|tamil|tam|telugu|tel|malayalam|kannada|bengali|punjabi|urdu|german|deutsch|ger|french|"
+                           r"fran[cç]ais|vf|vff|vfq|truefrench|italian|italiano|ita|spanish|espa[nñ]ol|castellano|latino|esp|russian|"
+                           r"rus|polish|pl|turkish|japanese|jpn|korean|kor|chinese|mandarin|cantonese|arabic|ukr|hun|cze|swe|nor|dan|fin|nld|dut)\b", re.I)
 BAD_RE = re.compile(r"\b(cam|hdcam|camrip|ts|hdts|telesync|tc|telecine|screener|scr|dvdscr|r5|legendado|leg)\b", re.I)
 PACK_RE = re.compile(r"\b(cole[cç][aã]o|collection|trilogia|trilogy|saga|quadrilogia|complete|pack|box)\b", re.I)
 SERIES_PACK_RE = re.compile(r"\b(cole[cç][aã]o|collection|complete[ ._-]series|s[eé]rie[ ._-]completa|todas[ ._-]as[ ._-]temporadas)\b", re.I)
 EP_FILE_RE = re.compile(r"(?i)(?:\bs(\d{1,2})[ ._-]?e(\d{1,3})|\b(\d{1,2})x(\d{2,3})\b)")
 
 
+def clean_title(title: str) -> str:
+    """A release name as the trackers write it: "8Âª Temporada" is "8ª Temporada" read as Latin-1 once
+    too often, "8&ordf; Temporada" the same through an HTML entity (Brazilian trackers do both all the
+    time), so the entities are decoded and the mojibake marks go."""
+    t = html.unescape(title or "")
+    return t.replace("Â", "").replace("Ã£", "ã").replace("Ã©", "é").replace("Ã§", "ç").replace("Ã¡", "á")
+
+
 def release_scope(title: str) -> tuple[set[int], range | None]:
     """The seasons a release title names and its episodes (None: the whole season).
-    "S06 1080p" -> ({6}, None); "S11.E01-E20" -> ({11}, 1..20); "S06E03" -> ({6}, 3..3)."""
+    "S06 1080p" -> ({6}, None); "S11.E01-E20" -> ({11}, 1..20); "S06E03" -> ({6}, 3..3);
+    "3ª Temporada", "Temp 3", "1 a 13 Temp" (a range: every season in it) are the Brazilian forms."""
+    title = clean_title(title)
     seasons = {int(x) for x in re.findall(r"(?i)\bs(\d{1,2})(?=[ ._-]?e\d|\b)", title)}
-    seasons |= {int(x) for x in re.findall(r"(?i)\b(\d{1,2})\s*(?:ª|a|o|º)?\s*temporada\b", title)}
-    seasons |= {int(x) for x in re.findall(r"(?i)\b(?:season|temporada)[ ._-]?(\d{1,2})\b", title)}
+    seasons |= {int(x) for x in re.findall(r"(?i)\b(\d{1,2})\s*(?:ª|a|o|º)?\s*temp(?:orada)?\b", title)}
+    seasons |= {int(x) for x in re.findall(r"(?i)\b(?:season|temp(?:orada)?)[ ._-]?(\d{1,2})\b", title)}
+    for a, b in re.findall(r"(?i)\b(\d{1,2})\s*(?:a|à|-|ate|até)\s*(\d{1,2})\s*(?:ª|a|o|º)?\s*temp(?:orada)?s?\b", title):
+        if int(a) < int(b) <= 60:
+            seasons |= set(range(int(a), int(b) + 1))
     eps = [int(x) for x in re.findall(r"(?i)(?:\bs\d{1,2}[ ._-]?|[ ._-])e(\d{1,3})\b", title)]
     return seasons, (range(min(eps), max(eps) + 1) if eps else None)
 
 
 def series_named(title: str, series: str) -> bool:
-    """The release is of this series: its name at the start (or after a site tag or a dash) and the season
-    right after it, so "Fear the Walking Dead S06" or "The Walking Dead Daryl Dixon S01" are not The Walking Dead."""
+    """The release is of this series: its name at the start (or after a site tag, a dash, or as the alias in
+    parentheses: "Uma Família da Pesada (Family Guy) 3ª Temporada") and the season right after it (an alias
+    in parentheses or a year may sit in between), so "Fear the Walking Dead S06" or "The Walking Dead
+    Daryl Dixon S01" are not The Walking Dead."""
     words = norm(series).split()
     if not words:
         return False
-    m = re.search(r"(?i)" + r"[\W_]+".join(map(re.escape, words)), unicodedata.normalize("NFKD", title)
-                  .encode("ascii", "ignore").decode())
+    title = clean_title(title)
+    plain = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()
+    m = re.search(r"(?i)" + r"[\W_]+".join(map(re.escape, words)), plain)
     if not m:
         return False
-    before = title[:m.start()].strip()
-    if before and before[-1] not in "-]|):" and not re.fullmatch(r"(?i)(www\.)?\S+\.(com|net|org|br|to)(\.br)?", before):
+    before = plain[:m.start()].strip()
+    if before and before[-1] not in "-]|):(" and not re.fullmatch(r"(?i)(www\.)?\S+\.(com|net|org|br|to)(\.br)?", before):
         return False
-    return bool(re.match(r"(?i)[\W_]*(\(?(19|20)\d\d\)?[\W_]*)?(s\d{1,2}|season|temporada|\d{1,2}\s*(ª|a|o|º)?\s*temporada|\d{1,2}x\d)",
-                         title[m.end():]))
+    # between the name and the season: an alias in () or [], a year, and release words that are not a
+    # title ("Dublado", "Dual Audio", "1080p", "WEB-DL"...), never another word (a spin-off's name)
+    filler = r"(?:(?:dublado|dual(?:[ ._-]?[aá]udio)?|nacional|legendado|pt[ ._-]?br|completa|completo|\d{3,4}p|" \
+             r"web[ ._-]?dl|webrip|blu[ ._-]?ray|bdrip|hdtv|x26[45]|h[ ._-]?26[45]|hevc)[\W_]+)*"
+    return bool(re.match(r"(?i)[\W_]*([(\[][^)\]]{1,60}[)\]][\W_]*)?(\(?(19|20)\d\d\)?[\W_]*)?" + filler
+                         + r"(s\d{1,2}|season|temp(orada)?|\d{1,2}\s*(ª|a|o|º)?\s*(temp(orada)?|a\s*\d{1,2}\s*temp)|\d{1,2}x\d)",
+                         plain[m.end():]))
 
 
 def episode_of(name: str, season: int) -> int | None:
@@ -167,6 +196,8 @@ class Pipeline:
 
     def tick(self) -> None:
         with self.lock:
+            self.doing = "leftovers"
+            self.remove_leftovers()
             self.doing = "library"
             self.sync_library()
             if self.sonarr:
@@ -199,6 +230,23 @@ class Pipeline:
 
     # ------------------------------------------------------------------------------------- library
 
+    def remove_leftovers(self) -> None:
+        """A `<stem>.barch.mkv` next to a job's file is a mux or trim that died half-way (the service was
+        restarted during one): Radarr/Sonarr would take it for a second file, so it goes."""
+        for j in self.store.all():
+            files = [j.get("file")] if j.get("kind") != "season" else [e.get("file") for e in j.get("episodes", {}).values()]
+            for f in files:
+                if not f or not f.lower().endswith(".mkv"):
+                    continue
+                left = Path(f).with_name(Path(f).stem + ".barch.mkv")
+                if left.exists():
+                    try:
+                        left.unlink()
+                        log(j, f"removed a half-written copy: {left.name}")
+                        self.store.save(j)
+                    except OSError as e:
+                        print(f"video pipeline: leftover {left}: {e}", flush=True)
+
     def sync_library(self) -> None:
         """A job for every movie with a file; a new or changed file is probed once."""
         for m in self.radarr.movies():
@@ -208,8 +256,9 @@ class Pipeline:
             jid = f"m{m['id']}"
             j = self.store.load(jid)
             path, size = mf["path"], int(mf.get("size", 0))
-            if j and j.get("file") == path and j.get("file_size") == size and \
-                    (j.get("state") != "done" or j.get("trim_checked") == f"{path}:{size}:{sync.TRIM_VERSION}"):
+            key = f"{path}:{size}:{sync.TRIM_VERSION}"
+            same = bool(j) and j.get("file") == path and j.get("file_size") == size
+            if same and j.get("trim_checked") == key:
                 continue
             if j and j["state"] == "aligning":
                 continue   # our own mux in flight changes the file; the next tick sees the result
@@ -232,14 +281,15 @@ class Pipeline:
                 if j.get("state") != "done":
                     log(j, "the file has PT-BR audio")
                 j["state"], j["reason"] = "done", ""
-                j["trim"] = self.plan_trim(j, path)
-                j["trim_checked"] = f"{path}:{size}:{sync.TRIM_VERSION}"
             elif j.get("state") == "downloading":
-                log(j, "Radarr replaced the file; the dub being downloaded will be aligned with the new one")
-            else:
+                if not same:
+                    log(j, "Radarr replaced the file; the dub being downloaded will be aligned with the new one")
+            elif not same or not j.get("state"):
                 log(j, f"new file without PT-BR audio ({', '.join(langs) or 'no audio'}): looking for a dub")
                 j["state"], j["reason"] = "search", ""
                 j["failures"] = 0
+            # the trim (foreign audio, stray subtitles, a dub as default) is planned for every file, PT-BR or not
+            j["trim"], j["trim_checked"] = self.plan_trim(j, path), key
             self.store.save(j)
 
     def sync_series(self) -> None:
@@ -279,14 +329,16 @@ class Pipeline:
             nums = sorted(by_file.get(f["id"], []))
             if not nums:
                 continue
-            key = str(nums[0])
-            seen.add(key)
-            old = j["episodes"].get(key)
+            ek = str(nums[0])
+            seen.add(ek)
+            old = j["episodes"].get(ek)
             path, size = f["path"], int(f.get("size", 0))
-            if old and old["file"] == path and old["size"] == size and \
-                    (old["state"] != "done" or old.get("trim_checked") == f"{path}:{size}:{sync.TRIM_VERSION}"):
+            key = f"{path}:{size}:{sync.TRIM_VERSION}"
+            if old and old["file"] == path and old["size"] == size:
                 if old.get("file_id") != f["id"]:
                     old["file_id"], changed = f["id"], True
+                if old.get("trim_checked") != key and old["state"] != "review":
+                    old["trim"], old["trim_checked"], changed = self.plan_trim(j, path), key, True
                 continue
             try:
                 info = sync.probe(path)
@@ -295,10 +347,9 @@ class Pipeline:
                 continue
             langs = [sync.norm_lang(sync.lang(x)) for x in info["streams"] if x["codec_type"] == "audio"]
             e = {"file_id": f["id"], "file": path, "size": size, "episodes": nums, "audio": langs,
-                 "state": "done" if "por" in langs else "todo", "reason": ""}
-            if e["state"] == "done":
-                e["trim"], e["trim_checked"] = self.plan_trim(j, path), f"{path}:{size}:{sync.TRIM_VERSION}"
-            j["episodes"][key] = e
+                 "state": "done" if "por" in langs else "todo", "reason": "",
+                 "trim": self.plan_trim(j, path), "trim_checked": key}
+            j["episodes"][ek] = e
             changed = True
         for k in [k for k in j["episodes"] if k not in seen]:
             del j["episodes"][k]
@@ -339,9 +390,11 @@ class Pipeline:
 
     def rank(self, j: dict, r: dict) -> tuple[int, str]:
         """A score for a Prowlarr result (higher is better) or a reason it is no candidate."""
-        title = r.get("title", "")
+        title = clean_title(r.get("title", ""))
         if not PT_RE.search(title):
             return -1, "not dubbed"
+        if not BR_RE.search(title) and OTHER_LANG_RE.search(title):
+            return -1, "dual audio with another language, not PT-BR"
         if BAD_RE.search(title):
             return -1, "cam/ts or subtitled only"
         if r.get("protocol", "torrent") != "torrent":
@@ -838,7 +891,8 @@ class Pipeline:
                 dropped = ", ".join(x for x in [", ".join(plan["drop_audio"]) and "audio " + ", ".join(plan["drop_audio"]),
                                                  plan["drop_subs"] and "subtitles " + ", ".join(plan["drop_subs"]),
                                                  plan.get("reorder") and "original made the default"] if x)
-                log(j, f"trimmed {label}: {dropped}; {(before - after) / 2**30:.2f} GB freed")
+                log(j, f"trimmed {label}: {dropped}; {(before - after) / 2**30:.2f} GB freed"
+                    + ("" if plan.get("por", True) else " (no PT-BR yet: the dub comes in later)"))
                 rec["trim"], rec["trim_wait"] = None, ""
                 rec["trimmed"] = {"t": now(), "freed": before - after, "what": dropped}
                 rec["audio"] = [sync.norm_lang(sync.lang(x)) for x in sync.probe(path)["streams"]
@@ -856,12 +910,64 @@ class Pipeline:
                     self.episodes_linked(j, touched)
                 else:
                     self.movie_linked(j)
+                self.tell_languages(j, touched)
             if budget <= 0:
                 return
 
+    def tell_languages(self, j: dict, keys: list) -> None:
+        """Radarr/Sonarr score a file by the languages they parsed from its release name; after a trim the
+        file has only the original (and PT-BR when it had it), so they are told that: a German DL file
+        trimmed to English stops looking like a -10000 "foreign audio" release."""
+        try:
+            if j.get("kind") == "season":
+                by_path = {f["path"]: f for f in self.sonarr.episode_files(j["series_id"])}
+                for k in keys:
+                    e = j["episodes"][k]
+                    f = by_path.get(e["file"])
+                    if f:
+                        e["file_id"], e["size"] = f["id"], int(f.get("size", 0))
+                        self.sonarr.set_file_languages(f["id"], self.names(j, e.get("audio", [])))
+            else:
+                m = self.radarr.movie(j["movie_id"])
+                if m.get("movieFile"):
+                    j["file"], j["file_size"] = m["movieFile"]["path"], int(m["movieFile"].get("size", 0))
+                    self.radarr.set_file_languages(m["movieFile"]["id"], self.names(j, j.get("audio", [])))
+            self.store.save(j)
+        except Exception as e:  # noqa: BLE001 - the apps learn it at the next import anyway
+            log(j, f"languages after the trim: {e}")
+
+    @staticmethod
+    def names(j: dict, audio: list[str]) -> list[str]:
+        return [j.get("original") or "English"] + (["Portuguese (Brazil)"] if "por" in audio else [])
+
+    # ------------------------------------------------------------------------------- foreign audio
+
+    def foreign(self) -> list[dict]:
+        """Every file (movie or episode) with audio beyond the original language and PT-BR, as the last
+        probe saw it, and what the trim is doing about it: pending, waiting (hardlinked to a seed),
+        failed, or done (the file was probed again and still has it: a track tagged with the wrong
+        language, say). `barch video foreign`, the video.foreign event of barch-events."""
+        out = []
+        for j in self.store.all():
+            keep = {sync.norm_lang(c) for c in codes(j.get("original", ""))} | {"por", "und"}
+            recs = [(None, j)] if j.get("kind") != "season" else \
+                   [(k, e) for k, e in sorted(j.get("episodes", {}).items(), key=lambda kv: int(kv[0]))]
+            for k, rec in recs:
+                extra = sorted({a for a in rec.get("audio") or [] if a not in keep})
+                if not extra:
+                    continue
+                trim = "pending" if rec.get("trim") else "waiting" if rec.get("trim_wait") else \
+                       "failed" if rec.get("trim_error") else "skipped" if j["state"] == "skipped" else "none"
+                out.append({"id": j["id"], "kind": j.get("kind", "movie"), "title": j["title"] + ("" if k is None else f"E{int(k):02d}"),
+                            "file": rec.get("file", ""), "size": rec.get("size", rec.get("file_size", 0)),
+                            "original": j.get("original", ""), "audio": rec.get("audio") or [], "extra": extra,
+                            "por": "por" in (rec.get("audio") or []), "trim": trim,
+                            "trim_error": rec.get("trim_error", ""), "state": j["state"]})
+        return out
+
     # ------------------------------------------------------------------------------------ actions
 
-    def act(self, jid: str, action: str, guid: str = "") -> dict:
+    def act(self, jid: str, action: str, guid: str = "", query: str = "", url: str = "", title: str = "") -> dict:
         j = self.store.load(jid)
         if not j:
             raise KeyError(jid)
@@ -886,6 +992,43 @@ class Pipeline:
             c["status"], c["score"] = "new", 10**6
             j["state"], j["reason"] = "search", ""
             log(j, f"candidate chosen by hand: {c['title']}")
+        elif action == "search":    # Prowlarr with this query (Fix with Agent); what fits joins the candidates
+            if not query.strip():
+                raise ValueError("search needs a query")
+            cats: tuple[int, ...] = (5000,) if j.get("kind") == "season" else (2000,)
+            seen = {c["guid"] for c in j.get("candidates", [])}
+            found, rejected = [], []
+            for r in self.prowlarr.search(query.strip(), cats):
+                if not isinstance(r, dict) or r.get("guid") in seen:
+                    continue
+                score, why = self.rank(j, r)
+                if score < 0:
+                    rejected.append({"title": r.get("title", ""), "why": why, "indexer": r.get("indexer", ""),
+                                     "size": r.get("size", 0), "seeders": r.get("seeders"),
+                                     "url": r.get("magnetUrl") or r.get("downloadUrl") or ""})
+                    continue
+                seen.add(r["guid"])
+                c = {"guid": r["guid"], "title": r.get("title", ""), "size": r.get("size", 0), "seeders": r.get("seeders"),
+                     "indexer": r.get("indexer", ""), "url": r.get("magnetUrl") or r.get("downloadUrl") or "",
+                     "score": score, "status": "new", "reason": ""}
+                j.setdefault("candidates", []).append(c)
+                found.append(c["title"])
+            j["last_search"] = {"query": query.strip(), "found": found[:40], "rejected": rejected[:40], "t": now()}
+            log(j, f"search by hand ({query.strip()}): {len(found)} candidate(s), {len(rejected)} rejected")
+            if found and j["state"] in ("waiting", "review", "search"):
+                j["state"], j["reason"] = "search", ""
+        elif action == "add":       # a release found elsewhere (a rejected one above, a magnet): tried next
+            if not url.strip():
+                raise ValueError("add needs a magnet or torrent URL")
+            guid = "manual:" + hashlib.sha1(url.strip().encode()).hexdigest()[:16]
+            c = next((c for c in j.get("candidates", []) if c["guid"] == guid), None)
+            if not c:
+                c = {"guid": guid, "title": title.strip() or url.strip()[:100], "size": 0, "seeders": None,
+                     "indexer": "by hand", "url": url.strip(), "score": 10**6, "status": "new", "reason": ""}
+                j.setdefault("candidates", []).append(c)
+            c["status"], c["score"] = "new", 10**6
+            j["state"], j["reason"] = "search", ""
+            log(j, f"candidate added by hand: {c['title']}")
         else:
             raise ValueError(action)
         self.store.save(j)
@@ -904,4 +1047,11 @@ class Pipeline:
             lines.append(f"• Revisão ({len(rev)}): " + "; ".join(f"{j['title']}: {j.get('reason', '')[:80]}" for j in rev[:6]))
         if wait:
             lines.append(f"• Sem dublagem encontrada ainda: {len(wait)}")
+        foreign = self.foreign()
+        trimmed = sum(1 for j in jobs for rec in ([j] + list(j.get("episodes", {}).values()))
+                      if (rec.get("trimmed") or {}).get("t", 0) >= since)
+        if foreign or trimmed:
+            lines.append(f"• Áudio fora do original e PT-BR: {len(foreign)} arquivo(s)"
+                         + (": " + ", ".join(sorted({x['title'].split(' S')[0] for x in foreign})[:5]) if foreign else "")
+                         + f" · {trimmed} aparado(s) no período")
         return "\n".join(lines)

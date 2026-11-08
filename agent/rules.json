@@ -8,7 +8,7 @@
     "      {metric: name, above|below: value, clear: value} fires once when the metric crosses the line and re-arms past clear.",
     "Events: window.open/close/urgent (address, class, title, workspace), window.fullscreen (on), monitor.added/removed (name,",
     "description), vpn.up (region, name, country), vpn.down (it dropped) / vpn.off (turned off: Disconnect, Anonymous Mode off, voice), both with the tunnel that went away (region, name, country) plus killswitch (armed|off) and note, anon.on/off, net.up/down (dev), pods.connected/disconnected (name),",
-    "session.locked/unlocked, failure (unit, path), boot (seconds, text, kernel), claude.cost (source, usd, note), startup (boot_age_s), music.review (an album of the NAS music pipeline waits in the review queue: id, name, folder, problem, problems, cover_only yes|no).",
+    "session.locked/unlocked, failure (unit, path), boot (seconds, text, kernel), claude.cost (source, usd, note), startup (boot_age_s), music.review (an album of the NAS music pipeline waits in the review queue: id, name, folder, problem, problems, cover_only yes|no), video.foreign (a movie or episode file of the video pipeline has audio beyond the original language and PT-BR: id, kind, title, file, original, audio, extra, por yes|no, trim pending|waiting|failed|skipped|none, text; every video_every_s).",
     "NAS (agent/nas.py, Unraid's API, `barch nas status`; every nas_every_s, certificates every nas_certs_every_s): nas.down (error) after three misses, nas.up, nas.array (state, previous), nas.disk (names, count, text), nas.containers (down for longer than nas_grace_s: names, count, text), nas.alert (Unraid's unread notifications: importance ALERT|WARNING, count, text), cert.expiring (under cert_warn_days, again under 3, or refused: hosts, count, days, text).",
     "Firewalls (agent/pfsense.py, the pfSense REST API of each site in ~/.config/barch/pfsense.json, `barch fw status`; every fw_every_s): fw.down (site, error, text) after three misses, fw.up, fw.auth (the key was refused; left alone for fw_auth_backoff_s), fw.boot (uptime), fw.gateway (name, status, ok yes|no), fw.interface (name, status, up), fw.ipsec (name, up), fw.dnsbl (ok: the DNSBL stopped answering its virtual IP for a blocked domain), fw.client (a MAC never seen on that site took a lease: mac, ip, hostname, if, online); every one carries site and text.",
     "Metrics: cpu.temp cpu.pct cpu.load1 temp.<hwmon> gpu.temp gpu.util gpu.power gpu.vram_pct ram.pct swap.pct disk.<root|home>.pct",
@@ -192,6 +192,15 @@
         "systemd-run --user --quiet --collect --unit barch-music-cover-{id} -- barch music cover-ask {id}"
       ],
       "notify": "{name}: nenhuma fonte tinha uma capa boa. Claude está procurando uma na web; se achar, o álbum entra sozinho.",
+      "cooldown": "5s"
+    },
+    {
+      "id": "video-foreign",
+      "description": "Video file with audio in another language",
+      "when": {
+        "event": "video.foreign"
+      },
+      "notify": "{text}. Radarr/Sonarr recusam esses releases desde 08/11 (BArch: foreign audio); barch video foreign lista os que restam.",
       "cooldown": "5s"
     },
     {

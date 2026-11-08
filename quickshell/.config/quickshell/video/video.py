@@ -133,17 +133,20 @@ def langset(s: str | None) -> set[str]:
 
 
 def checklist(media: dict | None, original: str) -> dict | None:
-    """Original-language audio, PT-BR audio, English and PT-BR subtitles; None without a file."""
+    """Original-language audio, PT-BR audio, English and PT-BR subtitles, and no audio in any other
+    language (a German DL release of an English series, a MULTi: the pipeline trims it); None without a file."""
     if not media:
         return None
     audio, subs = langset(media.get("audioLanguages")), langset(media.get("subtitles"))
     orig = {ALIASES.get(c, c) for c in codes(original)}
+    extra = sorted(audio - orig - {"por", "und"})
     return {"native": bool(orig & audio) if orig else None, "por_audio": "por" in audio,
-            "eng_sub": "eng" in subs, "por_sub": "por" in subs}
+            "eng_sub": "eng" in subs, "por_sub": "por" in subs,
+            "no_foreign": (not extra) if (orig and audio) else None, "extra": extra}
 
 
 def all_ok(c: dict | None) -> bool:
-    return bool(c) and all(v is not False for v in c.values())
+    return bool(c) and all(v is not False for k, v in c.items() if k != "extra")
 
 
 def media_view(mi: dict | None) -> dict:
@@ -372,7 +375,8 @@ def cmd_show(args) -> dict:
         seasons.append({"season": sn, "episodes": rows, "files": len(have), "total": len(rows),
                         "complete": sum(1 for r in have if r["complete"]),
                         "check": {k: (all(r["check"][k] is not False for r in have) if have else None)
-                                  for k in ("native", "por_audio", "eng_sub", "por_sub")},
+                                  for k in ("native", "por_audio", "eng_sub", "por_sub", "no_foreign")}
+                                 | {"extra": sorted({x for r in have for x in r["check"].get("extra", [])})},
                         "dub": job.get("state", ""), "dub_reason": job.get("reason", ""), "dub_job": job.get("id", "")})
     return {"ok": True, "series": {"id": sid, "title": x.get("title", ""), "year": x.get("year"), "original": orig,
                                    "poster": poster(x.get("images")), "profile": s.profile_names().get(x.get("qualityProfileId"), ""),
@@ -524,13 +528,21 @@ def cmd_dub_show(args) -> dict:
 
 
 def cmd_dub_act(args) -> dict:
-    if len(args) < 2 or args[1] not in ("retry", "skip", "unskip", "use"):
-        raise Fail("dub-act <job id> retry|skip|unskip|use [--guid G]")
-    body = {"action": args[1]} | ({"guid": opt(args, "--guid")} if args[1] == "use" else {})
+    if len(args) < 2 or args[1] not in ("retry", "skip", "unskip", "use", "search", "add"):
+        raise Fail("dub-act <job id> retry|skip|unskip|use|search|add [--guid G] [--query Q] [--url U --title T]")
+    body = {"action": args[1]} | ({"guid": opt(args, "--guid")} if args[1] == "use" else {}) \
+        | ({"query": opt(args, "--query")} if args[1] == "search" else {}) \
+        | ({"url": opt(args, "--url"), "title": opt(args, "--title")} if args[1] == "add" else {})
     d = pipeline("POST", f"/api/jobs/{args[0]}", body) or {}
     if not d.get("ok", True):
         raise Fail(d.get("error", "the pipeline refused"))
     return {"ok": True, "job": d.get("job")}
+
+
+def cmd_foreign(args) -> dict:
+    """The pipeline's list of files with audio beyond the original and PT-BR, and what the trim does."""
+    d = pipeline("GET", "/api/foreign") or {}
+    return {"ok": True, "files": d.get("files", [])}
 
 
 def cmd_audit(args) -> dict:
@@ -544,7 +556,7 @@ def cmd_audit(args) -> dict:
 COMMANDS = {"status": cmd_status, "search": cmd_search, "add": cmd_add, "movies": cmd_movies, "movie": cmd_movie,
             "series": cmd_series, "show": cmd_show, "releases": cmd_releases, "grab": cmd_grab,
             "search-now": cmd_search_now, "profile": cmd_profile, "queue": cmd_queue, "remove": cmd_remove,
-            "dub": cmd_dub, "dub-show": cmd_dub_show, "dub-act": cmd_dub_act, "audit": cmd_audit}
+            "dub": cmd_dub, "dub-show": cmd_dub_show, "dub-act": cmd_dub_act, "foreign": cmd_foreign, "audit": cmd_audit}
 
 
 def main(argv: list[str]) -> int:

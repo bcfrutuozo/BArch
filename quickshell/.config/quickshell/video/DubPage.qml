@@ -5,7 +5,8 @@ import QtQuick.Layouts
 // The PT-BR pipeline's jobs (server/video): one per movie (m<id>) and per season (s<series>x<season>).
 // A job searches a release with the Brazilian dub, downloads it, aligns its audio to the file and muxes
 // the PT-BR track (and subtitles) in. On the right: the candidates it found (Use one), the alignment,
-// the episodes of a season and the history; Retry / Skip / Unskip.
+// the episodes of a season and the history; Retry / Skip / Unskip; a Prowlarr search with your own
+// query or a release by URL; Fix with Agent (barch video fix) hands the job to Claude.
 Item {
     id: page
     property string filter: "all"
@@ -126,6 +127,66 @@ Item {
                         UiButton { visible: !!det.j && det.j.state === "skipped"; label: "Unskip"; icon: "󰐕"; onClicked: Store.dubAct(det.j.id, "unskip") }
                         Item { Layout.fillWidth: true }
                         UiButton { small: true; label: "Close"; icon: "󰅖"; onClicked: Store.dub = null }
+                    }
+                    // the agent, and the two things it does that you can do by hand too: a search with your own
+                    // query (the Brazilian title, "3ª Temporada", a group) and a release by its magnet/URL
+                    Card {
+                        visible: !!det.j && det.j.state !== "done"
+                        title: "Find the dub"
+                        subtitle: "a Prowlarr search with your words (what fits joins the candidates), a release by URL, or the agent"
+                        readonly property var ask: det.j ? (Store.asks[det.j.id] || null) : null
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            UiField { id: fQuery; Layout.fillWidth: true; placeholderText: "search: Uma Família da Pesada 3ª Temporada Dublado"; onAccepted: Store.dubSearch(det.j.id, text) }
+                            UiButton { small: true; label: "Search"; icon: "󰍉"; enabledBtn: fQuery.text.trim() !== ""; onClicked: Store.dubSearch(det.j.id, fQuery.text) }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            UiField { id: fUrl; Layout.fillWidth: true; placeholderText: "magnet: or torrent URL of a dubbed release (tried next)" }
+                            UiField { id: fTitle; Layout.preferredWidth: 180; placeholderText: "its name (optional)" }
+                            UiButton { small: true; label: "Add"; icon: "󰐕"; enabledBtn: fUrl.text.trim() !== ""; onClicked: { Store.dubAdd(det.j.id, fUrl.text, fTitle.text); fUrl.text = ""; fTitle.text = "" } }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            UiField { id: fHint; Layout.fillWidth: true; enabled: !(parent.parent.ask && parent.parent.ask.running); placeholderText: "Hint for the agent (optional): the Brazilian title, the edition the file is, where the dub exists" }
+                            UiButton {
+                                label: parent.parent.ask && parent.parent.ask.running ? "Agent is working…" : "Fix with Agent"; icon: "󰚩"; primary: true
+                                enabledBtn: !(parent.parent.ask && parent.parent.ask.running)
+                                tooltip: "Claude finds out the Brazilian title and the editions, searches the indexers with better queries, queues the right donor and reports; the pipeline downloads and muxes afterwards"
+                                onClicked: Store.fixJob(det.j.id, fHint.text.trim())
+                            }
+                        }
+                        Text {
+                            visible: !!parent.ask
+                            Layout.fillWidth: true
+                            text: parent.ask ? parent.ask.text : ""
+                            color: parent.ask && parent.ask.bad ? Ui.red : parent.ask && parent.ask.running ? Ui.accent : Ui.text
+                            font.family: Ui.font; font.pixelSize: Ui.fontSize - 1; wrapMode: Text.WordWrap
+                        }
+                    }
+                    Card {
+                        visible: !!det.j && !!det.j.last_search
+                        title: "Last search by hand"
+                        subtitle: det.j && det.j.last_search ? "“" + det.j.last_search.query + "”: " + det.j.last_search.found.length + " joined the candidates, " + det.j.last_search.rejected.length + " rejected" : ""
+                        Repeater {
+                            model: det.j && det.j.last_search ? det.j.last_search.rejected.slice(0, 12) : []
+                            RowLayout {
+                                id: rj
+                                required property var modelData
+                                Layout.fillWidth: true
+                                spacing: 6
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 1
+                                    Text { Layout.fillWidth: true; text: rj.modelData.title; color: Ui.subtext; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3; elide: Text.ElideMiddle }
+                                    Text { text: rj.modelData.why + " · " + Store.gb((rj.modelData.size || 0) / 1073741824) + (rj.modelData.seeders !== null && rj.modelData.seeders !== undefined ? " · " + rj.modelData.seeders + " seeds" : "") + " · " + (rj.modelData.indexer || ""); color: Ui.overlay; font.family: Ui.font; font.pixelSize: Ui.fontSize - 3 }
+                                }
+                                UiButton { small: true; label: "Add anyway"; enabledBtn: !!rj.modelData.url; tooltip: "it is this title and season, dubbed: try it next"; onClicked: Store.dubAdd(det.j.id, rj.modelData.url, rj.modelData.title) }
+                            }
+                        }
                     }
                     Card {
                         visible: !!det.j && !!det.j.alignment

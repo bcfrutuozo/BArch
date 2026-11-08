@@ -8,7 +8,11 @@ HTTP API (port 8339, header X-Barch-Token or ?token=):
     GET  /api/status                  counts per state, what the worker is doing, missing tools
     GET  /api/jobs[?state=review]     one summary per movie
     GET  /api/jobs/<id>               everything: candidates, alignment, history
-    POST /api/jobs/<id>               {"action": "retry|skip|unskip|use", "guid": candidate for "use"}
+    POST /api/jobs/<id>               {"action": "retry|skip|unskip|use|search|add", "guid": candidate for "use",
+                                       "query" for "search" (Prowlarr, what fits joins the candidates),
+                                       "url" + "title" for "add" (a magnet/torrent tried next)}
+    GET  /api/foreign                 files with audio beyond the original and PT-BR, and what the trim does
+    POST /api/webhook                 Radarr/Sonarr "Webhook" connection (import, upgrade, delete): run the loop now
     POST /api/scan                    run the loop now
     GET  /api/digest[?days=7]         the week in one message (also sent to Telegram on Sundays at 18:00)
     POST /api/restart                 end the process: s6 starts it again (after install.sh)
@@ -113,6 +117,8 @@ def make_handler(p: Pipeline, token: str):
                 return self._send(200, {"ok": True, "job": j}) if j else self._send(404, {"ok": False, "error": "no such job"})
             if parts == ["api", "digest"]:
                 return self._send(200, {"ok": True, "text": p.digest(int((q.get("days") or ["7"])[0]))})
+            if parts == ["api", "foreign"]:
+                return self._send(200, {"ok": True, "files": p.foreign()})
             return self._send(404, {"ok": False, "error": "not found"})
 
         def do_POST(self):
@@ -129,18 +135,27 @@ def make_handler(p: Pipeline, token: str):
             if parts == ["api", "scan"]:
                 p.wake.set()
                 return self._send(200, {"ok": True})
+            if parts == ["api", "webhook"]:
+                # Radarr/Sonarr tell us a file came in (or went): probe and trim now, not at the next tick
+                ev = str(body.get("eventType", ""))
+                what = (body.get("movie") or body.get("series") or {}).get("title", "")
+                if ev not in ("Test", "Health", "HealthRestored", "ApplicationUpdate"):
+                    print(f"video pipeline: webhook {ev} {what}".strip(), flush=True)
+                    p.wake.set()
+                return self._send(200, {"ok": True, "event": ev})
             if parts == ["api", "restart"]:
                 self._send(200, {"ok": True})
                 threading.Timer(0.5, lambda: os._exit(0)).start()
                 return
             if len(parts) == 3 and parts[:2] == ["api", "jobs"]:
                 try:
-                    j = p.act(parts[2], str(body.get("action", "")), str(body.get("guid", "")))
+                    j = p.act(parts[2], str(body.get("action", "")), str(body.get("guid", "")),
+                              query=str(body.get("query", "")), url=str(body.get("url", "")), title=str(body.get("title", "")))
                 except KeyError as e:
                     return self._send(404, {"ok": False, "error": f"not found: {e}"})
                 except ValueError as e:
                     return self._send(400, {"ok": False, "error": f"unknown action {e}"})
-                return self._send(200, {"ok": True, "job": summary(j)})
+                return self._send(200, {"ok": True, "job": summary(j) | ({"last_search": j["last_search"]} if body.get("action") == "search" else {})})
             return self._send(404, {"ok": False, "error": "not found"})
 
     return H

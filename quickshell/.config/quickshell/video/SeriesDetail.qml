@@ -85,7 +85,7 @@ Rectangle {
                             }
                             Item { Layout.fillWidth: true }
                             UiButton { small: true; icon: "󰍉"; tooltip: "Sonarr searches this season now"; onClicked: Store.searchNow({ kind: "series", id: d.s.id, season: sea.n, label: d.s.title + " S" + d.pad(sea.n) }) }
-                            UiButton { small: true; icon: "󰒺"; tooltip: "releases of this season: packs and episodes, ranked"; onClicked: Store.findReleases({ kind: "series", id: d.s.id, season: sea.n, label: d.s.title + " S" + d.pad(sea.n) }) }
+                            UiButton { small: true; icon: "󰒺"; tooltip: "releases of this season: packs and episodes, ranked"; onClicked: Store.findReleases({ kind: "series", id: d.s.id, season: sea.n, label: d.s.title + " S" + d.pad(sea.n), original: d.s.original }) }
                         }
                         Text {
                             visible: sea.modelData.dub_reason !== "" && sea.modelData.dub !== "done"
@@ -112,7 +112,7 @@ Rectangle {
                                 Checks { visible: ep.modelData.has_file; check: ep.modelData.check; compact: true }
                                 UiButton {
                                     small: true; icon: "󰒺"; tooltip: "releases of this episode"
-                                    onClicked: Store.findReleases({ kind: "series", id: d.s.id, season: sea.n, episode: ep.modelData.episode, label: d.s.title + " S" + d.pad(sea.n) + "E" + d.pad(ep.modelData.episode) })
+                                    onClicked: Store.findReleases({ kind: "series", id: d.s.id, season: sea.n, episode: ep.modelData.episode, label: d.s.title + " S" + d.pad(sea.n) + "E" + d.pad(ep.modelData.episode), original: d.s.original })
                                 }
                             }
                         }

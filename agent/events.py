@@ -448,6 +448,7 @@ class Daemon:
         self.prev_cpu = None
         self.last_health = 0.0
         self.last_music = 0.0
+        self.last_video = 0.0
         self.next_nas = 0.0
         self.last_certs = 0.0
         self.nas_fails = 0
@@ -698,6 +699,47 @@ class Daemon:
                 self.emit("music.review", data)
         if new or first:
             st["music_seen"] = sorted((seen | {j["id"] for j in jobs}))[-500:]
+            self.rules.save_state()
+
+    def sample_video(self):
+        """The video pipeline on the NAS (server/video): a file whose audio goes beyond the original language
+        and PT-BR (a German DL release of an English series, a MULTi) is an event, video.foreign (id, title,
+        file, original, audio, extra, trim: what the pipeline's trim is doing about it), once per file
+        (`video_seen` in the state, by path and size). Needs ~/.config/barch/video.json (barch video
+        install); every `video_every_s`, 300 by default."""
+        conf = HOME / ".config/barch/video.json"
+        now = time.time()
+        if not conf.exists() or now - self.last_video < float(self.cfg.get("video_every_s", 300)):
+            return
+        self.last_video = now
+        try:
+            c = (json.loads(conf.read_text()).get("pipeline") or {})
+            import urllib.request
+            req = urllib.request.Request(c["url"].rstrip("/") + "/api/foreign", headers={"X-Barch-Token": c.get("token", "")})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                files = json.loads(r.read().decode()).get("files") or []
+        except Exception:  # noqa: BLE001 - the NAS or the pipeline is down: nothing to say
+            return
+        st = self.rules.state
+        seen = set(st.get("video_seen") or [])
+        first = not seen and "video_seen" not in st
+        keys = {f"{f.get('file')}:{f.get('size')}": f for f in files if f.get("file")}
+        trim_text = {"pending": "o pipeline vai tirar as faixas que sobram", "waiting": "aparado quando o torrent parar de semear",
+                     "failed": "o trim falhou", "skipped": "o job está skipped", "none": "nada a fazer por aqui"}
+        for k, f in keys.items():
+            if k in seen:
+                continue
+            data = {"id": f.get("id", ""), "kind": f.get("kind", ""), "title": f.get("title", ""), "file": f.get("file", ""),
+                    "original": f.get("original", ""), "audio": ", ".join(f.get("audio") or []), "extra": ", ".join(f.get("extra") or []),
+                    "por": "yes" if f.get("por") else "no", "trim": f.get("trim", ""),
+                    "text": f"{f.get('title', '')}: áudio em {', '.join(f.get('extra') or [])} (original {f.get('original', '')}); "
+                            + trim_text.get(f.get("trim", ""), "")}
+            if first:
+                self.store.event("video.foreign", data | {"imported": True})
+            else:
+                self.emit("video.foreign", data)
+        if first or set(keys) - seen:
+            st["video_seen"] = sorted((seen | set(keys)))[-2000:]
             self.rules.save_state()
 
     def sample_nas(self) -> list[tuple[str, float]]:
@@ -973,6 +1015,7 @@ class Daemon:
                         log(fn.__name__, "failed:", e)
                 self.sample_lock()
                 self.sample_music()
+                self.sample_video()
                 if rows:
                     self.store.samples(rows)
                     for m, v in rows:

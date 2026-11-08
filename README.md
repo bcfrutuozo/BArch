@@ -305,10 +305,18 @@ The main pieces:
   (4K / 1080p), the dub job, **Search now** and **Releases**: everything the indexers have, ranked (the ones
   that fit first), each with why Radarr rejected it, and **Grab** for any of them. **Series**: episodes on
   disk and the dub per season; a series opens to its seasons (checklist over the episodes, Search and
-  Releases per season or episode). **Downloads**: Radarr's and Sonarr's queue (a season pack's episodes
+  Releases per season or episode). The checklist also marks audio in a language beyond the original and
+  PT-BR (`+deu`, red: a German DL release of an English series; the pipeline trims it, and such releases
+  score -10000 since 2026-11-08, `BArch: foreign audio`), with a "Foreign audio" filter in Movies; in
+  Releases the languages badge turns red for the same reason. **Downloads**: Radarr's and Sonarr's queue (a season pack's episodes
   together) with progress and warnings; remove, or blocklist and search another. **PT-BR dub**: the jobs
   (`m<id>`, `s<series>x<season>`) with the reason they wait, the candidates (Use one), the alignment, the
-  episodes and the history; Retry / Skip / Unskip. `qs ipc call app select movie|series|dub <id>` opens one.
+  episodes and the history; Retry / Skip / Unskip; **Find the dub**: a Prowlarr search with your own words
+  (the Brazilian title, "3ª Temporada": what fits joins the candidates, the rest is listed with why and an
+  "Add anyway"), a release by magnet/URL, and **Fix with Agent** (`barch video fix <id> ["hint"]`, prompt
+  `quickshell/video/job-fix.md`): Claude finds the Brazilian title and the editions, searches the indexers
+  with better queries, queues the right donor and reports; the pipeline downloads and muxes afterwards.
+  `qs ipc call app select movie|series|dub <id>` opens one.
 - **Torrents** (`quickshell/torrents/`, "Torrents" in the launcher, `barch torrents browse [overview|sources|torrents]`):
   qBittorrent over time. The client only knows its totals as they are now, so a small service on the NAS
   (`server/torrents`, container `barch-torrents`, read only) samples it every five minutes; the app draws what
@@ -460,7 +468,8 @@ barch books search <query> · shelf · want|unwant <id> · sync   # Hardcover th
 barch books requests [status] · show|releases <id> [--query Q] [--source S] · fulfil <id> --pick N · accept <id> · reject|reopen <id>
 barch books fix <id> ["hint"]         # Claude takes a request no source matched and downloads the right release
 barch video status|list [state]|show <id>   # the PT-BR pipeline on the NAS (server/video): dub muxed into each movie and episode (s<id>x<season>)
-barch video retry|skip|unskip <id> · use <id> <guid> · scan · digest · audit · install
+barch video retry|skip|unskip <id> · use <id> <guid> · search <id> "query" · add <id> <url> · fix <id> ["hint"] · scan · digest · install
+barch video foreign · audit [--foreign]   # files with audio beyond the original and PT-BR (the pipeline trims them)
 barch replay share [file] [--from 12 --to 40]
                                    # newest replay (or FILE) → <name>-share.mp4 for WhatsApp status:
                                    # H.264 ≤1080p30, HDR tone mapped to SDR, at most 60 s
@@ -535,7 +544,9 @@ without any AI:
   route), `pods.connected`/`pods.disconnected`, `session.locked`/`unlocked`, `failure` (a new
   log from `barch failure`), `boot`, `claude.cost` (every agent task run and voice fallback writes
   a line to `~/.local/state/barch/claude-cost.log`), `music.review` (an album of the NAS music
-  pipeline landed in the review queue, polled every 2 min: id, name, problem, `cover_only`), `startup`,
+  pipeline landed in the review queue, polled every 2 min: id, name, problem, `cover_only`),
+  `video.foreign` (a movie or episode file of the video pipeline has audio beyond the original language
+  and PT-BR, polled every 5 min: title, extra, what the trim does about it), `startup`,
   and the NAS: `nas.down` / `nas.up`, `nas.array` (state), `nas.disk`, `nas.containers`, `nas.alert`
   (Unraid's own warnings and alerts) and `cert.expiring`, each with a one-line `text`; and the firewalls
   (`fw.*`, see NAS → Firewalls): `fw.down` / `fw.up`, `fw.auth`, `fw.boot`, `fw.gateway`, `fw.interface`,
@@ -551,7 +562,8 @@ without any AI:
   dropped (spoken), network down and back, AirPods below 20 % per side, monitor connected or
   removed, a boot over 60 s, a Claude call over a dollar and an album of the music pipeline waiting
   only for a cover (`music.review` with `cover_only`: Claude searches the web for it, `barch music
-  cover-ask`, in a transient unit so the daemon never waits), the NAS ones (not answering and back,
+  cover-ask`, in a transient unit so the daemon never waits), a video file with audio in another language
+  (`video.foreign`, a notification: the pipeline trims it by itself), the NAS ones (not answering and back,
   array not started, a disk with a problem, a container down, an Unraid alert or warning, array or a
   pool above 85 %, a disk above 50 °C), a certificate about to expire, the firewall ones (not answering and
   back, key refused, reboot, gateway or interface down and back, the IPsec tunnel down and back, the DNSBL not

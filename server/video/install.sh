@@ -91,6 +91,38 @@ else
   echo "pipeline: not running yet (or older): see the container steps below"
 fi
 
+# Radarr and Sonarr call the pipeline when a file comes in, is upgraded or goes (a "Webhook" connection,
+# made once through their API): the probe and the trim happen then, not at the next 5-minute tick
+if jq -e .pipeline.token "$keys" >/dev/null 2>&1; then
+  hook="http://barch-video:8339/api/webhook?token=$(jq -r .pipeline.token "$keys")"
+  # the apps test the URL when the connection is created: give the service just restarted time to listen
+  for _ in $(seq 1 20); do
+    curl -sf --max-time 3 -H "X-Barch-Token: $(jq -r .pipeline.token "$keys")" "$(jq -r .pipeline.url "$keys")/api/status" >/dev/null 2>&1 && break
+    sleep 2
+  done
+  for app in radarr sonarr; do
+    url=$(jq -r ".$app.url // \"\"" "$keys"); key=$(jq -r ".$app.key // \"\"" "$keys")
+    [ -n "$url" ] && [ -n "$key" ] || continue
+    have=$(curl -sf --max-time 15 -H "X-Api-Key: $key" "$url/api/v3/notification" | jq -r '.[] | select(.name == "BArch video pipeline") | .id' 2>/dev/null | head -1)
+    if [ -n "$have" ]; then
+      echo "$app: webhook to the pipeline already there (connection $have)"
+      continue
+    fi
+    if [ "$app" = radarr ]; then
+      events='{onDownload: true, onUpgrade: true, onMovieFileDelete: true, onMovieFileDeleteForUpgrade: true}'
+    else
+      events='{onDownload: true, onUpgrade: true, onImportComplete: true, onEpisodeFileDelete: true, onEpisodeFileDeleteForUpgrade: true}'
+    fi
+    body=$(jq -cn --arg u "$hook" "$events + {name: \"BArch video pipeline\", implementation: \"Webhook\", configContract: \"WebhookSettings\",
+      tags: [], fields: [{name: \"url\", value: \$u}, {name: \"method\", value: 1}]}")
+    if curl -sf --max-time 15 -X POST -H "X-Api-Key: $key" -H 'Content-Type: application/json' -d "$body" "$url/api/v3/notification" >/dev/null; then
+      echo "$app: webhook to the pipeline created"
+    else
+      echo "$app: could not create the webhook connection (Settings > Connect > Webhook, URL $hook)" >&2
+    fi
+  done
+fi
+
 stage_smb=${STAGE:-/mnt/nasfrutuozo/temporary/barch-video-s6}
 stage_srv=/mnt/user/temporary/barch-video-s6
 seen="$HOME/.cache/barch/video-s6.sha"

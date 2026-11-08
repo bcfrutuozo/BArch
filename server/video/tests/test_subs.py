@@ -38,5 +38,50 @@ class Subs(unittest.TestCase):
         self.assertEqual(self.ids(PRADA, have), [5])   # the reference lacked only the forced PT-BR
 
 
+def a(tid, lang, default=False, name=""):
+    return {"id": tid, "type": "audio", "codec": "AC-3", "properties": {"language": lang, "track_name": name,
+                                                                        "default_track": default}}
+
+
+class Trim(unittest.TestCase):
+    """trim_plan over mkvmerge -J shaped files (mkvmerge_ids patched): what goes, what is kept, the default."""
+
+    def plan(self, tracks, original=("eng",), subs=("por", "eng")):
+        real = sync.mkvmerge_ids
+        sync.mkvmerge_ids = lambda path: {"tracks": [{"id": 0, "type": "video", "properties": {}}] + tracks}
+        try:
+            return sync.trim_plan("x.mkv", list(original), list(subs))
+        finally:
+            sync.mkvmerge_ids = real
+
+    def test_german_dl_without_ptbr(self):
+        # Family Guy S03E01 German.AC3.DL-FuN: German first and default, English second, German subtitles.
+        # Trimmed before any dub exists: English alone, default, no subtitles left
+        plan = self.plan([a(1, "ger", default=True), a(2, "eng"), t(3, "ger")])
+        self.assertEqual(plan["keep_audio"], [2])
+        self.assertEqual(plan["drop_audio"], ["deu AC-3"])
+        self.assertEqual(plan["drop_subs"], ["deu"])
+        self.assertTrue(plan["reorder"])
+        self.assertFalse(plan["por"])
+
+    def test_with_ptbr_keeps_both(self):
+        plan = self.plan([a(1, "por", default=True), a(2, "eng"), a(3, "fre"), t(4, "por"), t(5, "fre")])
+        self.assertEqual(plan["keep_audio"], [2, 1])
+        self.assertEqual(plan["drop_audio"], ["fra AC-3"])
+        self.assertEqual(plan["keep_subs"], [4])
+        self.assertTrue(plan["por"])
+
+    def test_nothing_to_do(self):
+        self.assertIsNone(self.plan([a(1, "eng", default=True), t(2, "eng"), t(3, "por")]))
+        self.assertIsNone(self.plan([a(1, "eng", default=True), a(2, "por"), t(3, "eng")]))
+
+    def test_no_original_audio_is_not_trimmed(self):
+        # a German-only file of an English series: another release fixes it, not a remux
+        self.assertIsNone(self.plan([a(1, "ger", default=True), t(2, "ger")]))
+
+    def test_not_matroska(self):
+        self.assertIsNone(sync.trim_plan("x.mp4", ["eng"], ["por", "eng"]))
+
+
 if __name__ == "__main__":
     unittest.main()

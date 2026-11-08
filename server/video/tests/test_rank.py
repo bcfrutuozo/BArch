@@ -40,7 +40,9 @@ class Rank(unittest.TestCase):
                            ("Harry Potter e a Pedra Filosofal 2001 HDCAM Dublado", "cam"),
                            ("Harry Potter Coleção Completa 2001-2011 1080p Dublado", "pack"),
                            ("Harry Potter e a Camara Secreta (2002) 1080p Dublado", "another title"),
-                           ("Harry Potter e a Pedra Filosofal 2015 1080p Dublado", "another year")]:
+                           ("Harry Potter e a Pedra Filosofal 2015 1080p Dublado", "another year"),
+                           ("Harry Potter and the Philosopher's Stone 2001 1080p BDRip [Dual Audio][Hindi Eng]", "dual audio with another"),
+                           ("Harry Potter and the Philosopher's Stone 2001 German DL Dual 1080p", "dual audio with another")]:
             s, got = self.score(title)
             self.assertLess(s, 0, title)
             self.assertIn(why.split()[0], got, title)

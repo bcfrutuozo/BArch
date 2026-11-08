@@ -276,7 +276,7 @@ def mkvmerge_ids(path: str | Path) -> dict:
 PORTUGAL_RE = re.compile(r"(?i)portugal|europe|\bpt[-_ ]?pt\b|\(pt\)")
 SDH_RE = re.compile(r"(?i)\bsdh\b|\bcc\b|hearing|deaf|surdos|closed caption")
 FORCED_RE = re.compile(r"(?i)forced|for[cç]ad[ao]")
-TRIM_VERSION = 2   # bump when the rules below change: done files are checked again
+TRIM_VERSION = 3   # bump when the rules below change: files already checked are checked again
 
 
 def is_portugal(t: dict) -> bool:
@@ -435,9 +435,11 @@ def verify(muxed: str | Path, orig_pos: int = 0, por_pos: int = 1, count: int = 
 # --------------------------------------------------------------------------------------------- trim
 
 def trim_plan(path: str | Path, original: list[str], keep_subs: list[str]) -> dict | None:
-    """What a file that already has PT-BR carries beyond the rule: audio in other languages, subtitles
-    outside `keep_subs`, or a default audio that is not the original. None when there is nothing to do,
-    or when it cannot be done safely (not Matroska, no track in the original language or in Portuguese)."""
+    """What a file carries beyond the rule: audio in other languages, subtitles outside `keep_subs`, or a
+    default audio that is not the original. With or without PT-BR: a German DL release of an English
+    series loses its German right away, and the dub comes in later (2026-11-08, Family Guy). None when
+    there is nothing to do, or when it cannot be done safely (not Matroska, no track in the original
+    language: that file needs another release, the pipeline's business)."""
     path = Path(path)
     if path.suffix.lower() != ".mkv":
         return None
@@ -450,8 +452,8 @@ def trim_plan(path: str | Path, original: list[str], keep_subs: list[str]) -> di
     keep_p = [t for t in audio if tlang(t) == "por" and not is_portugal(t)]
     if "por" in orig:
         keep_o = [t for t in keep_o if not is_portugal(t)] or keep_o
-    if not keep_o or not keep_p:
-        return None     # no Brazilian dub (Portugal's only, or none): the pipeline's business, not a trim
+    if not keep_o:
+        return None     # no original audio: another release is the fix, not a trim
     keep_a = keep_o + [t for t in keep_p if t not in keep_o]
     drop_a = [t for t in audio if t not in keep_a]
     keep_s = pick_subs(subs, {norm_lang(x) for x in keep_subs})
@@ -464,7 +466,7 @@ def trim_plan(path: str | Path, original: list[str], keep_subs: list[str]) -> di
             "drop_audio": [f"{tlang(t)} {t.get('codec', '')}".strip() for t in drop_a],
             "drop_subs": sorted({tlang(t) + (" (Portugal)" if is_portugal(t) else " SDH" if is_sdh(t) else
                                          " forced" if is_forced(t) else "") for t in drop_s}),
-            "reorder": not default_ok}
+            "reorder": not default_ok, "por": bool(keep_p)}
 
 
 def trim(path: str | Path, plan: dict) -> Path:

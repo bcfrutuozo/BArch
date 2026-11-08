@@ -132,18 +132,43 @@ it without linking the movie (hasFile false, so it would have downloaded the fil
 rescanned again and imported in place (manual import, what fixed it by hand); still not linked, the job
 goes to review with a Telegram message. Only
 Matroska files; a few per tick (`trims_per_tick`, 4); `"trim": false` in config.json turns it off.
+The trim does not wait for the dub (2026-11-08): a file that came as `German.AC3.DL` (German first and
+default, English second, German subtitles) or as a `MULTi` is trimmed to its original audio right
+away and the PT-BR track is muxed in later; Radarr/Sonarr are then told the languages the file really
+has (the original, plus PT-BR when it is there), so a trimmed file stops scoring as a foreign release.
+A file with no track in the original language is never trimmed (another release fixes that, the job
+goes to review). `GET /api/foreign` (`barch video foreign`) lists every file whose audio still goes
+beyond the original and PT-BR and what the trim is doing about it (pending, waiting on a seed, failed);
+`barch-events` polls it and raises `video.foreign` once per file (rule `video-foreign`, a notification),
+and the Sunday digest counts them and the trims of the week. `barch video audit --foreign` is the same
+question asked to Radarr's and Sonarr's media info, no pipeline needed.
 
 **Series** (Sonarr) work the same way, one job per season (`s<series id>x<season>`, specials left out):
 every episode file is probed, and the season waits for a dub while any lacks PT-BR. A donor is a dubbed
 release of that season: a whole-season pack, a range (`S11.E01-E20`) or one episode, ranked by how many
 missing episodes it covers (then dual, 1080p, surround, seeders), up to `max_season_donor_gb` (120). The
-series' name must open the title and the season follow it, so `Fear the Walking Dead` or `The Walking Dead
-Daryl Dixon` never stand in for `The Walking Dead`; packs of every season are refused. Once downloaded, its
+series' name must open the title and the season follow it (an alias in parentheses or brackets, a year and
+release words like `Dublado`, `Dual Áudio`, `1080p` may sit in between), so `Fear the Walking Dead` or `The
+Walking Dead Daryl Dixon` never stand in for `The Walking Dead`; packs of every season are refused. The
+Brazilian forms are read: `3ª Temporada`, `Temp 3`, `Temporada 3`, a range `1 a 13 Temp` (several seasons:
+refused), and the ordinal sign as the trackers mangle it (`8Âª`, `8&ordf;`). `Dual Audio` alone with another
+language named (`[Hindi Eng]`, `German DL`) is not a Brazilian dub and is refused. Once downloaded, its
 files are matched by `SxxEyy`/`6x03` and each episode is aligned, muxed and checked on its own; what the
 donor lacked or what did not fit is searched again with the next donor, an episode file without the
 original audio goes to review. Sonarr then rescans and is told the files' languages. Sonarr's key goes in
 `secrets-sonarr.json` next to `secrets.json` (install.sh writes it, group-readable by the container).
 Donors are torrents only (they go through qBittorrent), for movies too.
+
+**Fix with Agent** (`barch video fix <id> ["hint"]`, the button in the Video app's PT-BR dub page, prompt
+`quickshell/video/job-fix.md`): Claude takes a job that waits or failed (no donor with the queries the
+pipeline knows, every candidate another cut, a season with episodes left): it finds the Brazilian title
+and the editions on the web, searches Prowlarr through the pipeline with its own queries (`barch video
+search <id> "query"`: what fits the job joins its candidates, the rest is shown with the reason and its
+URL), puts a release the ranking rejected or one found elsewhere at the front (`barch video add <id>
+<url>`), or picks a candidate (`use`), and reports what it queued; the download, the alignment and the
+mux run in the pipeline afterwards. It never skips a job and never touches files; Sonnet, like the music
+agent (`MUSIC_CLAUDE_MODEL`), bounded by `VIDEO_CLAUDE_TIMEOUT` (30m); cost logged as `video-agent`. The
+same search and add are in the app's "Find the dub" card for doing it by hand.
 
 ## Files
 
@@ -152,10 +177,10 @@ Donors are torrents only (they go through qBittorrent), for movies too.
 | `recyclarr/recyclarr.yml` | the profile, the formats and their scores (`!secret` for URLs/keys) |
 | `recyclarr/settings.yml` | the local custom formats as a resource provider |
 | `recyclarr/custom-formats/{radarr,sonarr}/` | `BArch: PT-BR audio`, `BArch: not HEVC`, `BArch: foreign audio` (trash_id = md5 of `barch:<service>:<name>`) |
-| `install.sh` | copies Recyclarr's config and the pipeline to the NAS; with `RECYCLARR=<binary>` it runs `sync --preview` first |
+| `install.sh` | copies Recyclarr's config and the pipeline to the NAS, restarts the service and makes sure Radarr and Sonarr have the "BArch video pipeline" Webhook connection (import, upgrade, delete → `POST /api/webhook`, so a new file is probed and trimmed at once, not at the next tick); with `RECYCLARR=<binary>` it runs `sync --preview` first |
 | `barch_video/` | the pipeline: `sync.py` (alignment, mux, check), `pipeline.py` (the jobs), `service.py` (API on 8339), `integrations.py` |
 | `deploy/` | the s6 scripts (packages, service) and the example config/secrets |
-| `audit.py` | `barch video audit` |
+| `audit.py` | `barch video audit` (`--foreign`: the files with audio beyond the original and PT-BR, movies and episodes, from Radarr's and Sonarr's media info) |
 | `tests/` | alignment on synthetic soundtracks, the ranking of candidates |
 
 The containers (Unraid templates printed by `install.sh`): `recyclarr`

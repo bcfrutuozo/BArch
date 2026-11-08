@@ -5,10 +5,15 @@ import QtQuick.Layouts
 // The releases of Store.relTarget (a movie, a season or an episode), ranked by video.py releases:
 // the ones that fit the profile first, then resolution, custom format score, seeders. Grab sends one
 // to the download client through Radarr/Sonarr, even a rejected one (it says why it was rejected).
+// The languages badge: green with PT-BR, red when a language beyond the original and PT-BR is in
+// (what "BArch: foreign audio" scores -10000), so you see why a release lost before grabbing it.
 ColumnLayout {
     id: view
     spacing: 6
     visible: Store.relTarget !== null
+    readonly property string original: (Store.relTarget && Store.relTarget.original) || ""
+    function hasPt(l) { return l.indexOf("Portuguese (Brazil)") >= 0 || l.indexOf("Portuguese") >= 0 }
+    function foreign(l) { return l.some(x => x !== view.original && x !== "Portuguese (Brazil)" && x !== "Portuguese" && x !== "Original" && x !== "Unknown") }
 
     RowLayout {
         Layout.fillWidth: true
@@ -60,7 +65,12 @@ ColumnLayout {
                         Badge { visible: rel.modelData.seeders !== null && rel.modelData.seeders !== undefined; text: rel.modelData.seeders + " seeds"; tint: rel.modelData.seeders > 5 ? Ui.green : Ui.yellow }
                         Badge { visible: rel.modelData.score !== 0; text: "score " + rel.modelData.score; tint: rel.modelData.score > 0 ? Ui.green : Ui.red }
                         Badge { visible: rel.modelData.full_season; text: "full season"; tint: Ui.accent }
-                        Badge { visible: rel.modelData.languages.length > 0; text: rel.modelData.languages.slice(0, 3).join("/"); tint: rel.modelData.languages.indexOf("Portuguese (Brazil)") >= 0 || rel.modelData.languages.indexOf("Portuguese") >= 0 ? Ui.green : Ui.overlay }
+                        Badge {
+                            visible: rel.modelData.languages.length > 0
+                            text: rel.modelData.languages.slice(0, 3).join("/") + (rel.modelData.languages.length > 3 ? " +" + (rel.modelData.languages.length - 3) : "")
+                            tint: view.hasPt(rel.modelData.languages) ? Ui.green : view.foreign(rel.modelData.languages) ? Ui.red : Ui.overlay
+                            tip: view.foreign(rel.modelData.languages) && !view.hasPt(rel.modelData.languages) ? "audio in a language beyond the original (" + view.original + ") without PT-BR: BArch: foreign audio, -10000" : "languages Radarr/Sonarr parsed from the name" + (view.original ? " (original: " + view.original + ")" : "")
+                        }
                         Text { text: rel.modelData.indexer + " · " + rel.modelData.age_days + " d"; color: Ui.overlay; font.family: Ui.font; font.pixelSize: Ui.fontSize - 3 }
                     }
                     Text {
@@ -73,7 +83,7 @@ ColumnLayout {
                         visible: rel.modelData.formats.length > 0
                         Layout.fillWidth: true
                         text: rel.modelData.formats.join(", ")
-                        color: Ui.overlay; font.family: Ui.font; font.pixelSize: Ui.fontSize - 3; elide: Text.ElideRight
+                        color: rel.modelData.formats.indexOf("BArch: foreign audio") >= 0 ? Ui.red : Ui.overlay; font.family: Ui.font; font.pixelSize: Ui.fontSize - 3; elide: Text.ElideRight
                     }
                 }
                 UiButton {

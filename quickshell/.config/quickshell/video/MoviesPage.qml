@@ -14,6 +14,7 @@ Item {
         if (needle && m.title.toLowerCase().indexOf(needle.toLowerCase()) < 0) return false
         if (filter === "missing") return !m.has_file
         if (filter === "incomplete") return m.has_file && !m.complete
+        if (filter === "foreign") return m.has_file && !!m.check && m.check.no_foreign === false
         if (filter === "downloading") return !!m.queue
         if (filter === "ok") return m.complete
         return true
@@ -38,7 +39,7 @@ Item {
                 spacing: 8
                 UiField { Layout.fillWidth: true; placeholderText: "filter by title"; onTextChanged: page.needle = text }
                 UiCombo {
-                    entries: [{ label: "All", value: "all" }, { label: "Wanted (no file)", value: "missing" }, { label: "Incomplete (audio/subs)", value: "incomplete" },
+                    entries: [{ label: "All", value: "all" }, { label: "Wanted (no file)", value: "missing" }, { label: "Incomplete (audio/subs)", value: "incomplete" }, { label: "Foreign audio", value: "foreign" },
                               { label: "Downloading", value: "downloading" }, { label: "Complete", value: "ok" }]
                     value: page.filter
                     onPicked: v => page.filter = v
