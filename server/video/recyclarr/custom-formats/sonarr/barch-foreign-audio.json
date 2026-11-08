@@ -1,0 +1,30 @@
+{
+  "trash_id": "8fad1139542f8674d1a687b1c3cb5f94",
+  "trash_scores": {
+    "default": -10000
+  },
+  "name": "BArch: foreign audio",
+  "includeCustomFormatWhenRenaming": false,
+  "specifications": [
+    {
+      "name": "A language other than the original",
+      "implementation": "LanguageSpecification",
+      "negate": false,
+      "required": true,
+      "fields": {
+        "value": -2,
+        "exceptLanguage": true
+      }
+    },
+    {
+      "name": "No Portuguese (Brazil)",
+      "implementation": "LanguageSpecification",
+      "negate": true,
+      "required": true,
+      "fields": {
+        "value": 33,
+        "exceptLanguage": false
+      }
+    }
+  ]
+}

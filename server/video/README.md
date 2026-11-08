@@ -30,8 +30,18 @@ One quality profile, **BArch 4K**, in both apps:
 - Upgrades on (until Bluray-2160p and score 20000), so a file under the bar is replaced.
 - The old release profiles (`H265 Filter`, `Avoid x264, AVI, MP4`, `MKV Filter`) are disabled in
   both apps: the custom formats do their job, and `MKV Filter` wanted `.mkv` in release names.
+- **Only the original language and PT-BR** (`BArch: foreign audio`, both apps, both profiles): a
+  release whose languages go beyond the original of the movie or series and that has no PT-BR
+  (`German DL`, `MULTi`, a Russian dub) scores -10000 (-20000 in 1080p). A PT-BR dual or a
+  `Dublado`-only release still passes, and so does a German release of a German series (Dark): the
+  original is per title, Radarr's and Sonarr's `originalLanguage`. Nothing in the title means the
+  original. Before it, Family Guy's seasons 3-8 came as `German.AC3.DL.1080p.WebRip.x265-FuN` (German
+  first and default, German subtitles): the only 1080p HEVC on the indexers, at score 0, while the
+  English DSNP WEB-DLs are H.264 and sat at -775. A file on disk is scored by its languages too, so
+  those are replaced by the English ones at the next search. Subtitles are not scored: the pipeline
+  keeps English and PT-BR (`subtitles` in its config) at the mux.
 - Language of the profile: **Any** (set once by hand; the guide's "Original" would refuse a release
-  parsed as PT-BR only).
+  parsed as PT-BR only; the format above does what it was for, without that).
 
 A second profile, **BArch 1080p**, is for what never came out in 4K (The Walking Dead: no UHD
 release exists, the "2160p" ones are AVC upscales): Blu-ray and WEB 1080p as one step, HEVC preferred
@@ -141,7 +151,7 @@ Donors are torrents only (they go through qBittorrent), for movies too.
 |---|---|
 | `recyclarr/recyclarr.yml` | the profile, the formats and their scores (`!secret` for URLs/keys) |
 | `recyclarr/settings.yml` | the local custom formats as a resource provider |
-| `recyclarr/custom-formats/{radarr,sonarr}/` | `BArch: PT-BR audio`, `BArch: not HEVC` (trash_id = md5 of `barch:<service>:<name>`) |
+| `recyclarr/custom-formats/{radarr,sonarr}/` | `BArch: PT-BR audio`, `BArch: not HEVC`, `BArch: foreign audio` (trash_id = md5 of `barch:<service>:<name>`) |
 | `install.sh` | copies Recyclarr's config and the pipeline to the NAS; with `RECYCLARR=<binary>` it runs `sync --preview` first |
 | `barch_video/` | the pipeline: `sync.py` (alignment, mux, check), `pipeline.py` (the jobs), `service.py` (API on 8339), `integrations.py` |
 | `deploy/` | the s6 scripts (packages, service) and the example config/secrets |

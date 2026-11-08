@@ -8,6 +8,10 @@
 #   - PT-BR audio preferred, not required: "BArch: PT-BR audio" +2000 (no more, or a -10000 release
 #     with it and the best audio could reach 0). The video pipeline (barch_video) adds the dub to any
 #     file that lacks it; a release that already has it just saves that step
+#   - only the original language and PT-BR: "BArch: foreign audio" (a language other than the original
+#     and no PT-BR: German DL, MULTi, a Russian dub...) -10000 (-20000 in 1080p). Family Guy's seasons
+#     3-8 came as German DL x265 (German default, German subtitles) because nothing scored them; Dark's
+#     German releases still pass, German is its original
 #   - Blu-ray and WEB 2160p are one quality step, so the score decides; 250 MB/min at most (no remuxes)
 #   - upgrades on, so a file below the bar is replaced when something better shows up
 #
@@ -76,6 +80,11 @@ radarr:
             score: 2000
           - name: BArch 1080p
             score: 2000
+      - trash_ids: [54efba8afc1aa3765c7317a6ab1d2d04] # BArch: foreign audio (a language beyond the original, without PT-BR)
+        assign_scores_to:
+          - name: BArch 4K
+          - name: BArch 1080p
+            score: -20000
       - trash_ids: [d295ca6f4c437dd552f31851e6613600] # BArch: not HEVC
         assign_scores_to:
           - name: BArch 4K
@@ -196,6 +205,11 @@ sonarr:
             score: 2000
           - name: BArch 1080p
             score: 2000
+      - trash_ids: [8fad1139542f8674d1a687b1c3cb5f94] # BArch: foreign audio (a language beyond the original, without PT-BR)
+        assign_scores_to:
+          - name: BArch 4K
+          - name: BArch 1080p
+            score: -20000
       - trash_ids: [3a19f7e88eddbf316a882427a11b8e38] # BArch: not HEVC
         assign_scores_to:
           - name: BArch 4K
