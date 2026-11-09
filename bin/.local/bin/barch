@@ -1891,11 +1891,36 @@ cmd_snapshot() {
 
 # ---------------------------------------------------------------- failure
 
-# Hyprland died in the last two minutes. start-hyprland (uwsm) restarts it inside the same unit,
-# so the unit never fails: the trace is its "exit not-cleanly, restarting" line in the journal.
-session_crashed() {
-  journalctl --user -u 'wayland-wm@*.service' --since -120s -o cat --no-pager 2>/dev/null |
-    grep -q 'exit not-cleanly'
+# The compositor went away: Hyprland died in the last two minutes (start-hyprland, uwsm, restarts
+# it inside the same unit, so the unit never fails: the trace is its "exit not-cleanly" line), or
+# its Wayland socket is gone right now. The second covers a clean exit (logout, a restart after an
+# update): the services that lose it fail in the same second, before "exit cleanly" is logged.
+#
+# The socket file outlives the exit (libwayland unlinks it in wl_display_destroy, ~0.6 s after
+# the clients got their broken pipe on 2026-11-09), so the socket is connected to, not just looked
+# at; with the variables already cleaned up by uwsm the session is over. When neither says so,
+# wait up to 2 s for start-hyprland's own "exit cleanly" / "exit not-cleanly" line.
+compositor_lost() {
+  local i
+  [[ -z ${WAYLAND_DISPLAY:-} || -z ${XDG_RUNTIME_DIR:-} ]] && return 0
+  python3 -I - "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" 2>/dev/null <<'EOF' || return 0
+import socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(0.5)
+s.connect(sys.argv[1])
+EOF
+  for ((i = 0; i < 5; i++)); do
+    journalctl --user -u 'wayland-wm@*.service' --since -120s -o cat --no-pager 2>/dev/null |
+      grep -qE 'exit (not-)?cleanly' && return 0
+    ((i < 4)) && sleep 0.5
+  done
+  return 1
+}
+
+# how the compositor ended since <epoch>: "clean", "crash" or "" (nothing logged)
+compositor_exit() {
+  journalctl --user -u 'wayland-wm@*.service' --since "@$(($1 - 5))" -o cat --no-pager 2>/dev/null |
+    grep -oE 'exit (not-)?cleanly' | tail -1 | sed 's/exit not-cleanly/crash/; s/exit cleanly/clean/'
 }
 
 # failure --cascade-report: the one notification for a compositor crash, with its casualties
@@ -1907,6 +1932,12 @@ cascade_report() {
   [[ -s $cdir/units ]] || return 0
   since=$(<"$cdir/since")
   mapfile -t units < <(sort -u "$cdir/units" | sed 's/\.service$//')
+  if [[ $(compositor_exit "$since") == clean ]]; then
+    # a logout or a restart of the session, not a failure: the logs stay, already dismissed
+    cat "$cdir/logs" >>"$STATE/failures/.dismissed" 2>/dev/null
+    rm -rf "$cdir"
+    return 0
+  fi
   rm -rf "$cdir"
   stamp=$(date -d "@$since" +%Y%m%d-%H%M%S)
   log=$STATE/failures/hyprland-$stamp.log
@@ -1991,11 +2022,12 @@ failure_manage() {
 # mark file (.last/<scope>-<unit>, whose mtime is the last notification) and the next notification
 # says how many there were. agent/failure-ignore lists units to skip.
 #
-# When it was Hyprland that died, the user services that only lost their compositor (portals,
-# cliphist, hyprsunset...) fail together within a second: each log is still saved, but instead of
-# one notification per service they are collected in .cascade/ and `failure --cascade-report`,
-# scheduled 30 s after the first one (the bar is back by then), posts one notification for the
-# crash with the list.
+# When the compositor goes away, the user services that only lost it (portals, cliphist,
+# hyprsunset...) fail together within a second: each log is still saved, but instead of one
+# notification per service they are collected in .cascade/ and `failure --cascade-report`,
+# scheduled 30 s after the first one (the bar is back by then), decides: Hyprland exited cleanly
+# (logout, a restart after an update) → no notification, the logs go straight to .dismissed;
+# otherwise one notification for the crash with the list.
 cmd_failure() {
   case ${1:-} in list|dismiss|delete) failure_manage "$@"; return ;; esac
   local unit="" scope=--user glob
@@ -2020,7 +2052,7 @@ cmd_failure() {
   fi
 
   local dir=$STATE/failures stamp log mark quiet=0 count=0 cascade=0
-  [[ $scope == --user ]] && session_crashed && cascade=1
+  [[ $scope == --user ]] && compositor_lost && cascade=1
   mkdir -p "$dir/.last"
   mark=$dir/.last/${scope#--}-$unit
   if [[ -e $mark ]]; then
@@ -2060,6 +2092,7 @@ cmd_failure() {
     mkdir -p "$dir/.cascade"
     [[ -e $dir/.cascade/since ]] || date +%s >"$dir/.cascade/since"
     echo "$unit" >>"$dir/.cascade/units"
+    echo "${log##*/}" >>"$dir/.cascade/logs"
     # one report for the whole burst; fails quietly when the first casualty already scheduled it
     systemd-run --user --quiet --collect --unit=barch-cascade --on-active=30 \
       "$BARCH" failure --cascade-report 2>/dev/null || true

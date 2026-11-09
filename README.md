@@ -454,7 +454,8 @@ The main pieces:
   Not shown while the pointer is on the bar's volume icon or its panel is open, nor for the jump a change
   of default device brings. The bar itself only carries the speaker icon (dim when muted; click for the
   panel with the level, devices, apps and microphone). `position: "center"` and `offset` in the file move it.
-- **Smaller widgets:** media player in the clock island (MPRIS, shows only while something plays);
+- **Smaller widgets:** power menu (Reload Hyprland, Lock, Suspend, Reboot and Shut Down, the last two
+  with a second click to confirm); media player in the clock island (MPRIS, shows only while something plays);
   system monitor (CPU, GPU, RAM bars; click for temperatures, VRAM, GPU power; right-click btop);
   disks (turns yellow/red as one fills; click a mount to open it); virtual machines (libvirt: start,
   console, pause, reboot, shut down); AirPods (`pods/`, from [omarchy-pods](https://github.com/thisisgm/omarchy-pods): battery,
@@ -572,7 +573,9 @@ Claude Code works on this machine on its own, read-only unless you are in the se
   the user services that only lost their compositor (portals, cliphist, hyprsunset) are not
   reported one by one: their logs are saved and, 30 s later, one notification says "Hyprland
   crashed at 10:58" with the list, and its log (`failures/hyprland-<stamp>.log`: coredumps,
-  crash report, journal of the session unit) is what **Investigate** opens. The logs of the last
+  crash report, journal of the session unit) is what **Investigate** opens. When Hyprland exits
+  cleanly instead (a logout, a restart after an update), the same services fall with it but nothing
+  is notified: their logs are saved already dismissed. The logs of the last
   day count in the System Center's sidebar and in the Inbox until dismissed (`barch failure dismiss`,
   the names in `failures/.dismissed`; the log stays for the morning and weekly tasks). `vdirsyncer` skips
   its run quietly while iCloud cannot be resolved (VPN switching, link down) instead of failing.

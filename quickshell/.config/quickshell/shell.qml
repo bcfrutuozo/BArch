@@ -687,6 +687,7 @@ ShellRoot {
 
             Repeater {
               model: [
+                { key: "reload",  icon: "\uDB81\uDC50", label: "Reload Hyprland", cmd: ["hyprctl", "reload"], confirm: false },
                 { key: "lock",    icon: "\uDB80\uDF3E", label: "Lock",      cmd: ["loginctl", "lock-session"], confirm: false },
                 // -i: a clicked Suspend is the user's decision, so sleep inhibitors (a Claude session
                 // wrapped in systemd-inhibit, a backup) do not refuse it; idle suspend (hypridle) still respects them
