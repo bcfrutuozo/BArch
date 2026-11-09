@@ -688,7 +688,7 @@ the import logs (IDs of everything written) are in `~/.local/state/barch/finance
 ## Music
 
 `server/music` (details in its README) runs in its own container on the NAS (`barch-music`) and turns every
-finished Lidarr download (and any folder dropped in `/data/music-inbox` or downloaded by Soulseek: slskd + Soularr, `/data/slskd/completed`) into an album of
+finished Lidarr download (and any folder dropped in `/data/music-inbox` or downloaded by Soulseek: slskd + Soularr, `/data/slskd/completed`; slskd reaches the Soulseek server and every peer through the SOCKS5 proxy of the qBittorrent VPN container, `soulseek.connection.proxy` in its `slskd.yml`, so it fails closed without the VPN and has no incoming port; it shares the media folders back, read only, with every metadata and sidecar file filtered out, `shares` in the same file) into an album of
 `/music` exactly like the hand-made ones: lossless only, CUE images split per track, the
 MusicBrainz release found by track count and lengths, only the library's tags (artist: the album's on
 every track, even one MusicBrainz credits to someone else, extra names going to the title; `Various Artists`
