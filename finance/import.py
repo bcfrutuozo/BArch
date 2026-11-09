@@ -282,10 +282,13 @@ class Dictionary:
         keys = list(self.card)
         return difflib.get_close_matches(norm(name), keys, n=3, cutoff=0.55)
 
-    def learn_card(self, name, entry):
+    @staticmethod
+    def card_key(name):
         key = norm(re.sub(r"\s+-\s+(Parcela|Estorno).*$", "", name))
-        key = re.sub(r"^(FACEBK|PAYPAL|MP|PG|EBN|IFD)\s*\*\s*\w*$", r"\1 *", key)  # one-off ids after the star
-        self.card[key] = entry
+        return re.sub(r"^(FACEBK|PAYPAL|MP|PG|EBN|IFD)\s*\*\s*\w*$", r"\1 *", key)  # one-off ids after the star
+
+    def learn_card(self, name, entry):
+        self.card[self.card_key(name)] = entry
         self._index()
 
     def learn_checking(self, key, entry):
@@ -307,6 +310,17 @@ def checking_key(it):
 def checking_lookup(d, key):
     if key in d.checking:
         return d.checking[key]
+    # Pix names are cut at 28 characters in the key, entries learned from Firefly's history are not
+    head, _, place = key.partition("|")
+    # (and the CSV itself has spelled the same name shorter): one is a prefix of the other, at least 20
+    # characters; an entry that always asks loses to one that does not (the company's dividends against
+    # the odd ISS refund from the same account)
+    if head.startswith(("PIX", "DEVOL")) and place:
+        found = [v for k, v in d.checking.items()
+                 if k.partition("|")[0] == head and len(kp := k.partition("|")[2]) >= 20 and len(place) >= 20
+                 and (kp.startswith(place[:28]) or place.startswith(kp[:28]))]
+        if found:
+            return sorted(found, key=lambda v: bool(v.get("ask")))[0]
     # pedágio/estacionamento/débito: longest known prefix of the place ("SPVIAS SP127 1339 SUL" ~ "SPVIAS SP127")
     head, _, place = key.partition("|")
     best = None
@@ -436,8 +450,9 @@ class Planner:
                 self.notes.append(f"pulado: conta corrente {it['date']:%d/%m} {brl(it['amount'])} {t}")
                 continue
             d_, a_, c_ = ans
+            same = hit is not None and hit is self.d.checking.get(key)
             self.d.learn_checking(key, dict(description=d_, destination=a_, category=c_,
-                                            **({"ask": True} if d_ != sug[0] and hit else {})))
+                                            **({"ask": True} if d_ != sug[0] and same else {})))
             s, dd = src_dst(a_)
             self.add([it], self.kind(s, dd), it["date"], [split(d_, amt, s, dd, c_)], how="asked")
 
@@ -527,8 +542,11 @@ class Planner:
         if not ans:
             return None, None
         entry = dict(description=ans[0], destination=ans[1], category=ans[2], seen=f"answer {dt.date.today()}")
-        if hit and ans[0] != sug[0]:
-            entry["ask"] = True     # the description changes per purchase (Amazon, Mercado Livre…)
+        # the description changes per purchase (Amazon, Mercado Livre…): only when the answer differs from
+        # what this same merchant had; a hit of a shorter, broader key (MICROSOFT*XBOX for the Game Pass)
+        # makes a new entry of its own, which is not
+        if hit and ans[0] != sug[0] and raw == self.d.card_key(it["name"]):
+            entry["ask"] = True
         self.d.learn_card(it["name"], entry)
         return ans, "asked"
 
