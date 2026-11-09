@@ -14,21 +14,11 @@ is waiting on upstream; remove it when it's solved.
   `hdr-kick.sh` now stops kicking when it sees that error. Report any NVIDIA driver release
   that mentions suspend/resume, plane fences or semaphores with nvidia-drm, and any Hyprland
   or aquamarine release that changes how it handles resume or failed commits.
-- **Hyprland: realtime scheduling kills the compositor.** Hyprland 0.57 gains SCHED_RR through
-  rtkit and arms `RLIMIT_RTTIME` (200 ms); long NVIDIA modesets (dpms off while locked, resume)
-  got it SIGKILLed six times on 2026-10-31, so `HYPRLAND_NO_RT=1` is set in the uwsm env
-  (README, "Machine-specific notes"). Report any Hyprland release whose notes mention realtime,
-  rtkit, `RLIMIT_RTTIME`, a realtime watchdog or hyprwm/Hyprland#16737 / discussion #16648: the
-  variable can go once that is in. Also report changes to `start-hyprland` or `--locked` /
-  `--locked-cmd`: the safe-mode restart after a crash denies every lock client (session only
-  recoverable from a tty).
-- **BORE patch behind linux-cachyos 7.3.1.** 7.3.1 added `update_protect_slice()` in
-  `kernel/sched/fair.c`, which uses `normalized_sysctl_sched_base_slice`, a variable the BORE
-  patch only keeps without `CONFIG_SCHED_BORE`; the build failed on 2026-10-31 and
-  `bin/.local/share/kernel-update/bore-7.3.1-update_protect_slice.patch` adds the missing
-  `#ifdef`. Report any update of cachyos/kernel-patches `7.3/sched/0001-bore-cachy.patch` or a
-  firelzrd/bore-scheduler patch newer than `linux7.3-rc2`: `kernel-update` then prints
-  "already upstream, skipped" and the fixup can be deleted.
+- **Hyprland: safe-mode restart denies the lock.** After a crash `start-hyprland` brings the
+  session back in safe mode with `--locked`, and every lock client gets `denied` (session only
+  recoverable from a tty; `lock.sh` logs it and stops). Report changes to `start-hyprland` or
+  `--locked` / `--locked-cmd`. (The realtime kills that caused those crashes are gone: 0.57.2
+  stopped asking rtkit for SCHED_RR, hyprwm/Hyprland#16843.)
 - **limine-snapper-sync: `flock: 200: Bad file descriptor` and "FAT32 boot partition not
   found".** 1.32.1 logs the flock error at every `--delete` run (`mutex_unlock` releases fd 200
   without having taken it on that path; harmless, the menu is updated anyway). On 2026-10-29 the

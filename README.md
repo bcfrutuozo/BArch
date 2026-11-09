@@ -1041,11 +1041,6 @@ True for this machine only; review before using the repo elsewhere.
 - **Disk:** LUKS2 unlocked by the TPM bound to PCR 7. After firmware, dbx or Secure Boot changes
   the disk asks for the password; the bar warns and offers:
   `sudo systemd-cryptenroll /dev/nvme0n1p2 --wipe-slot=tpm2 --tpm2-device=auto --tpm2-pcrs=7`
-- **No realtime for Hyprland** (`HYPRLAND_NO_RT=1` in `uwsm/.config/uwsm/env`): Hyprland 0.57
-  asks rtkit for SCHED_RR with a 200 ms `RLIMIT_RTTIME`, and the NVIDIA modeset path (`dpms off`
-  with the session locked, resume) exceeds it without blocking, so the kernel killed the
-  compositor with no trace, six times on 2026-10-31. Drop the variable once a release carries
-  hyprwm/Hyprland#16737 (`agent/watchlist.md`).
 - **Monitors:** AW3225QF on `HDMI-A-2` (4K 240 Hz, 10-bit, HDR, scale 2, the bar lives here);
   P2723QE on `HDMI-A-1`, portrait, to the left. Values in `hypr/.config/hypr/conf/monitors.lua`
   (`BArch.monitors`); the bar changes HDR/SDR brightness through `BArch.set_monitor(...)`.
