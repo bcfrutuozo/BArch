@@ -22,6 +22,9 @@ and commit messages stay in English, like the rest of the repo.
   it without Bruno's go-ahead (it asks for his sudo password).
 - **No secrets in the repo.** App passwords (vdirsyncer, etc.) stay outside. Never add
   `~/.claude` contents other than `settings.json`, `CLAUDE.md` and skills that live in this repo.
+- **The repo is public: no domain, public address or hostname of Bruno's** (his domain and its URLs,
+  the WAN IPs). They live in `~/.config/barch/*.json`; code and docs use `example.com` placeholders.
+  `sync.sh` refuses a commit that matches `~/.config/barch/private.txt`.
 
 ## Controlling the desktop: `barch`
 

@@ -71,7 +71,7 @@ cat <<EOF
    shelfmark             -> fill in HARDCOVER_API_KEY, SLSKD_API_KEY, AUDIOBOOKSHELF_TOKEN, Apply;
                             log in with the Calibre-Web-Automated user
 
-4. SWAG: library.example.com points at the old container; in
+4. SWAG: your library subdomain points at the old container; in
    /mnt/user/appdata/swag/nginx/proxy-confs/calibre-web.subdomain.conf set
    \$upstream_app calibre-web-automated, then: docker exec swag nginx -s reload
 EOF

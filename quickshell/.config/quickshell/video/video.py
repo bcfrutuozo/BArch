@@ -2,7 +2,7 @@
 """video.py: Radarr, Sonarr and the PT-BR pipeline (server/video) for the Video app and `barch video`.
 
 Standard library only; every command prints one JSON object ({"ok": true, ...} or {"ok": false, "error"}).
-Keys in ~/.config/barch/video.json: {"radarr": {"url", "key"}, "sonarr": {...}, "pipeline": {"url", "token"}}.
+Keys in ~/.config/barch/video.json: {"radarr": {"url", "key", "web"?}, "sonarr": {...}, "pipeline": {"url", "token"}}.
 
     status
     search <query> [--kind movie|series]           TMDB (Radarr) / TVDB (Sonarr) lookups
@@ -178,7 +178,8 @@ def cmd_status(args) -> dict:
     return {"ok": True, "movies": len(movies), "movies_with_file": sum(1 for m in movies if m.get("hasFile")),
             "series": len(series), "queue": (rq.get("totalRecords") or 0) + (sq.get("totalRecords") or 0),
             "pipeline": {"counts": p.get("counts", {}), "doing": p.get("doing", ""), "error": p.get("error")},
-            "free_gb": round(max((f.get("freeSpace") or 0) for f in r.get("/rootfolder") or [{}]) / 2**30)}
+            "free_gb": round(max((f.get("freeSpace") or 0) for f in r.get("/rootfolder") or [{}]) / 2**30),
+            "radarr_web": (conf().get("radarr") or {}).get("web") or (conf().get("radarr") or {}).get("url", "")}
 
 
 # ------------------------------------------------------------------------------------------- search

@@ -13,7 +13,9 @@ cd ~/BArch && ./scripts/sync.sh "what changed"     # never with sudo; it asks wh
 Runs `scripts/check.sh` first (bash -n and shellcheck on every script, `luac -p` on the Lua
 config, jq on the JSON files, `systemd-analyze verify` on the user units, every agent task has
 its timer listed, `hyprctl configerrors`; it stops on the first problem, `BARCH_NO_CHECK=1`
-skips it), then refreshes the package lists and the system snapshot (`system/files`), commits
+skips it), then refreshes the package lists and the system snapshot (`system/files`), refuses to
+commit anything that matches `~/.config/barch/private.txt` (`scripts/private-scan.sh`: one regex per
+line, kept on this machine: the domain, the public addresses, since the repo is public), commits
 and pushes. Updates are done from the bar (**Update All**), not by hand: it shows unread Arch news first,
 has Claude review the PKGBUILD changes of the AUR updates (and asks before going on if anything
 looks suspicious), runs `paru -Syu` and then `kernel-update` when there is a new CachyOS kernel.
@@ -691,7 +693,7 @@ task (`barch agent run …`) or open Claude on something (`barch agent ask "…"
 ## Finance
 
 `barch finance import` consolidates C6 Bank statements into Firefly III
-(`https://firefly.example.com`). Drop the files in `~/.config/firefly/learning/` and run it:
+(the URL in `~/.config/firefly/config.json`). Drop the files in `~/.config/firefly/learning/` and run it:
 
 - the checking account CSV export, the closed card invoices (PDF) and, for the invoice that is
   still open (the app does not export it), screenshots of it with the last two entries of each
@@ -1057,6 +1059,9 @@ True for this machine only; review before using the repo elsewhere.
   hypridle turns the AW off before the machine sleeps (`hdr-kick.sh sleep`) and on again only once
   the GPU and the side monitor are back (`hdr-kick.sh resume`): a fresh connect, as if plugged in later.
   It stays on HDMI 2.1: over DisplayPort, DSC froze the machine on resume.
+  Each of those reconnects remakes the AW's lock surface, and Hyprland only gives the keyboard to a
+  lock surface the pointer moves over, so with the session locked `hdr-kick.sh` ends by moving the
+  cursor to the AW's center: the password field takes typing at once, no click first.
 - **Games:** Battle.net in its own prefix at `~/Games/battle.net` (games on drive `G:`).
   WoW has no native HDR; gamescope's inverse tone mapping didn't work nested in Hyprland
   (gamescope 3.17, Hyprland 0.56) — use the SDR brightness slider instead.

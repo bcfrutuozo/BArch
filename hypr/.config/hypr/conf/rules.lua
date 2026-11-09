@@ -43,6 +43,16 @@ hl.window_rule({
 })
 
 hl.window_rule({
+    -- Apps que seguram o hypridle (sem bloqueio nem tela apagada) enquanto
+    -- tiverem uma janela aberta, em tela cheia ou não: Parsec (sessão remota,
+    -- o teclado e o mouse vão pra outra máquina, então o idle daqui não vê uso).
+    name  = "idle-inhibit-apps",
+    match = { class = "^(parsecd)$" },
+
+    idle_inhibit = "always",
+})
+
+hl.window_rule({
     -- Battle.net (launcher e janelas dele, como login e avisos) sempre flutuante.
     -- O WoW tem outra class (wow.exe) e continua no tiling normal.
     name  = "battlenet-float",

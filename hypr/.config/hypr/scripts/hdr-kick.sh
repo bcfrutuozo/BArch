@@ -53,6 +53,25 @@ if [ "$METHOD" != "resume" ] && [ -f "$STAMP" ] && [ $((now - $(cat "$STAMP" 2>/
   exit 0
 fi
 echo "$now" >"$STAMP"
+
+# Turning the AW off and on while the session is locked destroys its lock surface and the lock
+# process makes a new one, but Hyprland hands the keyboard to a lock surface only when the
+# pointer moves or clicks on it: the password field ignored typing until a click (2026-11-09).
+# Warping the cursor to the AW's center is that pointer event. Only while locked, so an unlocked
+# desktop keeps its pointer and focus.
+focus_lock() {
+  qs -p "$HOME/.config/quickshell/lock" ipc call lock state 2>/dev/null | grep -q '"locked":true' || return 0
+  sleep 0.5   # let the new surface map
+  local c
+  c=$(hyprctl -j monitors 2>/dev/null | jq -r --arg m "$MON" '.[] | select(.name == $m) |
+      if (.transform % 2) == 1 then [.height, .width] else [.width, .height] end as $s |
+      "\((.x + $s[0] / .scale / 2) | floor) \((.y + $s[1] / .scale / 2) | floor)"')
+  [ -n "$c" ] || return 0
+  hyprctl dispatch "hl.dsp.cursor.move({ x = ${c% *}, y = ${c#* } })" >/dev/null
+  logger -t hdr-kick "session locked: pointer moved to $MON so its lock surface gets the keyboard"
+}
+trap focus_lock EXIT
+
 SINCE=$(date -d '-15 seconds' '+%Y-%m-%d %H:%M:%S')
 
 drm_failed() {

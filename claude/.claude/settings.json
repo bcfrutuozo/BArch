@@ -10,7 +10,7 @@
   "autoMode": {
     "allow": [
       "$defaults",
-      "Changing the configuration of the user's own self-hosted media apps on the user's NAS (Prowlarr, Lidarr, qBittorrent, the beets music pipeline) through their HTTP APIs, at 100.100.0.10, the frutuozoproxy containers or *.example.com: adding, editing, testing, disabling or deleting Prowlarr indexers, tags and proxies; Lidarr quality profiles, monitoring and searches; qBittorrent torrents and categories. Allowed when the user asked for that change in the session; API keys stay unprinted."
+      "Changing the configuration of the user's own self-hosted media apps on the user's NAS (Prowlarr, Lidarr, qBittorrent, the beets music pipeline) through their HTTP APIs, at 100.100.0.10, the frutuozoproxy containers or the user's own domain (its subdomains, the URLs in ~/.config/barch/*.json): adding, editing, testing, disabling or deleting Prowlarr indexers, tags and proxies; Lidarr quality profiles, monitoring and searches; qBittorrent torrents and categories. Allowed when the user asked for that change in the session; API keys stay unprinted."
     ],
     "environment": [
       "### Org-wide",

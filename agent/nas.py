@@ -34,10 +34,9 @@ CONF = Path(os.environ.get("BARCH_NAS_CONF", Path.home() / ".config/barch/nas.js
 # not carry yet (2026-11): its cross-signature by ISRG Root X1 closes the chain. Harmless once it does.
 EXTRA_CA = HERE / "certs" / "root-yr-by-x1.crt"
 HOMEPAGE = Path(os.environ.get("BARCH_HOMEPAGE_SERVICES", "/mnt/nasfrutuozo/appdata/homepage/services.yaml"))
-# what `setup` watches besides the Unraid interface itself: the reverse proxy's wildcard, both
-# firewalls (ACME) and the mail server
-DEFAULT_CERTS = ["portal.example.com:443", "fw-home.example.net:443", "fw-remote.example.net:443",
-                 "mail.example.com:465"]
+# what `setup` watches besides the Unraid interface itself; your own endpoints (the reverse proxy,
+# the firewalls, a mail server: "host:port") go in "certs" of nas.json, never in the repo
+DEFAULT_CERTS: list[str] = []
 
 QUERY = """{
   info { os { hostname uptime } versions { core { unraid } } }

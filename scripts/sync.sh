@@ -14,6 +14,7 @@ source "$(dirname "$0")/lib.sh"
 step "Git"
 cd "$REPO"
 git add -A
+"$REPO/scripts/private-scan.sh" || { git reset -q; exit 1; }
 if git diff --cached --quiet; then
   ok "No changes."
   exit 0

@@ -11,7 +11,7 @@ Shelfmark (search, request) -> Prowlarr / Soulseek (slskd) -> qBittorrent / slsk
 
 | Container | Image | Port | What |
 |---|---|---|---|
-| `calibre-web-automated` | `crocodilestick/calibre-web-automated:v4.0.8` | 8083 (`library.example.com`) | The ebook library in Calibre's format: everything dropped in its ingest folder is imported (and deleted from there), converted to EPUB, given metadata and a cover; the users of the whole stack |
+| `calibre-web-automated` | `crocodilestick/calibre-web-automated:v4.0.8` | 8083 | The ebook library in Calibre's format: everything dropped in its ingest folder is imported (and deleted from there), converted to EPUB, given metadata and a cover; the users of the whole stack |
 | `audiobookshelf` | `ghcr.io/advplyr/audiobookshelf:2.37.2` | 13378 | Audiobooks, with its own apps and progress sync |
 | `shelfmark` | `ghcr.io/calibrain/shelfmark:1.6.1` | 8084 | Search by book (Hardcover, Open Library), releases from Prowlarr's indexers and Soulseek, one click; marks what the library already has; other users request and an admin approves |
 

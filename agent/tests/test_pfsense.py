@@ -13,11 +13,11 @@ LOG = ("Nov  7 17:00:19 omni filterlog[12345]: 5,,,1794077112,em5.20,match,block
        "100.100.20.242,172.18.0.33,58870,32400,0,S,1234,,65535,,mss;sackOK;TS;nop;wscale")
 PASS = ("Nov  7 17:00:20 omni filterlog[12345]: 4,,,1794077066,em5.20,match,pass,in,4,0x0,,64,1,0,DF,17,udp,60,"
         "100.100.20.242,100.100.20.1,5353,123,40")
-ISO = ("<134>1 2026-11-07T17:01:24.106958-03:00 fw-home.example.net filterlog 74491 - - 5,,,1794077066,em5.20,match,block,in,4,0x0,,64,1,0,DF,6,tcp,60,"
+ISO = ("<134>1 2026-11-07T17:01:24.106958-03:00 fw.example.net filterlog 74491 - - 5,,,1794077066,em5.20,match,block,in,4,0x0,,64,1,0,DF,6,tcp,60,"
        "100.100.20.242,127.0.0.1,45116,19000,0,S,1,,65535,,mss")
-ISO2 = ("<134>1 2026-11-07T17:02:00.000001-03:00 fw-home.example.net filterlog 74491 - - 0,13,,1000000107,em5,state-insert,block,in,6,0x00,0xa3a76,255,ICMPv6,58,32,"
+ISO2 = ("<134>1 2026-11-07T17:02:00.000001-03:00 fw.example.net filterlog 74491 - - 0,13,,1000000107,em5,state-insert,block,in,6,0x00,0xa3a76,255,ICMPv6,58,32,"
         "fe80::2e4d:54ff:fe4d:be8f,ff02::1,")
-ISO3 = ("<134>1 2026-11-07T17:03:10.500000-03:00 fw-home.example.net filterlog 74491 - - 6,,,1000000103,em0,match,block,in,4,0x0,,107,17287,0,DF,6,tcp,48,"
+ISO3 = ("<134>1 2026-11-07T17:03:10.500000-03:00 fw.example.net filterlog 74491 - - 6,,,1000000103,em0,match,block,in,4,0x0,,107,17287,0,DF,6,tcp,48,"
         "198.51.100.7,203.0.113.53,53146,50300,0,S,2138324341,,8192,,mss")
 V6 = ("Nov  7 17:03:06 omni filterlog[12345]: 7,,,1000000112,em5.20,match,block,in,6,0x00,0x00000,255,ICMPv6,58,8,"
       "fe80::6275:6cff:fe34:39bd,ff02::2")
