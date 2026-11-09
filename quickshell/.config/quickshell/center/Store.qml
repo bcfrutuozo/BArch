@@ -24,7 +24,7 @@ Singleton {
     property var tasks: []
     property var reports: []                                // every report's meta, newest first
     property var snapshots: []
-    property var failures: []                               // [{ path, name, unit, stamp, time, size }]
+    property var failures: []                               // [{ path, name, unit, stamp, time, size, dismissed }]
     property var ignore: []                                 // agent/failure-ignore lines
     property string journal: ""
     // barch-events: the metrics history, the rules and the event log (barch --json metrics|rules|events)
@@ -48,6 +48,11 @@ Singleton {
     property bool logOpen: false
 
     function say(msg, bad) { status = msg; statusBad = !!bad }
+    // what asks for attention (the sidebar's badges, the Overview): the failure logs of the last day
+    // and the latest report of each task that is not "ok", until dismissed (`barch failure|agent dismiss`,
+    // the same state the bar's Inbox counts)
+    readonly property var failuresNew: failures.filter(f => !f.dismissed && Date.now() - f.time < 86400000)
+    readonly property var attention: reports.filter((r, i, a) => a.findIndex(x => x.task === r.task) === i && r.status !== "ok" && !r.dismissed)
     readonly property var failedNow: units.user.filter(u => u.active === "failed").map(u => ({ scope: "user", unit: u.unit }))
                                      .concat(units.system.filter(u => u.active === "failed").map(u => ({ scope: "system", unit: u.unit })))
 
@@ -105,17 +110,11 @@ Singleton {
     }
     function refreshSnapshots() { run([barch, "--json", "snapshot", "list"], out => snapshots = json(out, [])) }
     function refreshFailures() {
-        run(["sh", "-c", 'find "$1" -maxdepth 1 -name "*.log" -printf "%T@ %s %f\\n" 2>/dev/null | sort -rn', "sh", state + "/failures"], out => {
-            const list = []
-            for (const line of out.split("\n")) {
-                const m = /^(\d+)\.?\d* (\d+) (.+)$/.exec(line)
-                if (!m) continue
-                const name = m[3]
-                const nm = /^(.*)-(\d{8}-\d{6})\.log$/.exec(name)
-                list.push({ path: state + "/failures/" + name, name: name, unit: nm ? nm[1] : name, stamp: nm ? nm[2] : "",
-                            time: Number(m[1]) * 1000, size: Number(m[2]) })
-            }
-            failures = list
+        run([barch, "--json", "failure", "list"], out => {
+            failures = json(out, []).map(f => {
+                const nm = /-(\d{8}-\d{6})\.log$/.exec(f.name)
+                return { path: f.path, name: f.name, unit: f.unit, stamp: nm ? nm[1] : "", time: f.time * 1000, size: f.size, dismissed: !!f.dismissed }
+            })
         })
         ignoreFile.reload()
     }
@@ -221,10 +220,27 @@ Singleton {
         run(["systemctl", "--user", "start", "--no-block", "barch-agent@" + task + ".service"], (out, err, code) => { if (code !== 0) say(err.trim(), true); refreshAgent() })
     }
     function deleteFailure(path) { run(["rm", "-f", path], () => { refreshFailures(); if (logPath === path) logOpen = false }) }
-    function deleteFailuresOf(unit) {
-        const paths = failures.filter(f => f.unit === unit).map(f => f.path)
-        if (paths.length) run(["rm", "-f"].concat(paths), () => { refreshFailures(); logOpen = false })
+    // unit: one unit's logs, or "all". Dismissed logs stay on disk, out of the badges and the Inbox.
+    function failureAction(action, unit) {
+        run([barch, "--json", "failure", action, unit], (out, err, code) => {
+            const r = json(out, {})
+            say(r.ok ? r.count + " failure log" + (r.count === 1 ? "" : "s") + (action === "delete" ? " deleted" : " dismissed") : "failure " + action + ": " + (err.trim() || "failed"), !r.ok)
+            refreshFailures(); refreshInbox()
+            if (action === "delete") logOpen = false
+        })
     }
+    function deleteFailuresOf(unit) { failureAction("delete", unit) }
+    function dismissFailures(unit) { failureAction("dismiss", unit) }
+    // task: one task, or "all": its latest report stops asking for attention (the next run starts clean)
+    function dismissReport(task) {
+        run([barch, "--json", "agent", "dismiss", task], (out, err, code) => {
+            const r = json(out, {})
+            say(r.ok ? r.count + " report" + (r.count === 1 ? "" : "s") + " dismissed" : "agent dismiss: " + (err.trim() || "failed"), !r.ok)
+            refreshAgent(); refreshInbox()
+        })
+    }
+    // the bar's Inbox counts the same things: have it read them again now instead of in two minutes
+    function refreshInbox() { run([barch, "--json", "inbox", "--refresh"], () => {}) }
     function copy(text) { run(["wl-copy", text], () => say("copied: " + text)) }
     function snapperCmd(kind, s) {
         const range = s.pre + ".." + (s.post !== null && s.post !== undefined ? s.post : "")

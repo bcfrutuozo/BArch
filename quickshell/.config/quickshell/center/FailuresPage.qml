@@ -7,14 +7,17 @@ Item {
     id: page
     property string filter: ""
     property var expanded: ({})
+    property bool armed: false            // "Delete all" waits for its second click
+    Timer { id: disarm; interval: 4000; onTriggered: page.armed = false }
 
     readonly property var groups: {
         const q = filter.trim().toLowerCase()
         const map = {}, order = []
         for (const f of Store.failures) {
             if (q && f.unit.toLowerCase().indexOf(q) === -1) continue
-            if (!map[f.unit]) { map[f.unit] = { unit: f.unit, items: [], last: f.time }; order.push(f.unit) }
+            if (!map[f.unit]) { map[f.unit] = { unit: f.unit, items: [], last: f.time, fresh: 0 }; order.push(f.unit) }
             map[f.unit].items.push(f)
+            if (!f.dismissed && Date.now() - f.time < 86400000) map[f.unit].fresh++
         }
         return order.map(u => map[u]).sort((a, b) => b.last - a.last)
     }
@@ -33,7 +36,13 @@ Item {
             Layout.margins: 12
             spacing: 8
             UiField { Layout.fillWidth: true; placeholderText: "filter by unit"; onTextChanged: page.filter = text }
-            Text { text: Store.failures.length + " logs"; color: Ui.overlay; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2 }
+            Text { text: Store.failures.length + " logs" + (Store.failuresNew.length ? "  ·  " + Store.failuresNew.length + " new" : ""); color: Store.failuresNew.length ? Ui.yellow : Ui.overlay; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2 }
+            UiButton { label: "Dismiss all"; icon: "󰄬"; small: true; enabledBtn: Store.failuresNew.length > 0; tooltip: "seen: the logs stay here, the badge and the Inbox stop counting them"; onClicked: Store.dismissFailures("all") }
+            UiButton {
+                label: page.armed ? "Click again: delete " + Store.failures.length + " logs" : "Delete all"; icon: "󰆴"; small: true; danger: true; armed: page.armed
+                enabledBtn: Store.failures.length > 0
+                onClicked: { if (page.armed) { page.armed = false; Store.deleteFailuresOf("all") } else { page.armed = true; disarm.restart() } }
+            }
             UiButton { icon: "󰑐"; small: true; tooltip: "refresh"; onClicked: Store.refreshFailures() }
         }
         ScrollView {
@@ -53,8 +62,9 @@ Item {
                         readonly property bool open: !!page.expanded[modelData.unit]
                         Layout.leftMargin: 12; Layout.rightMargin: 12
                         title: modelData.unit
-                        subtitle: modelData.items.length + " failure" + (modelData.items.length === 1 ? "" : "s") + "  ·  last " + Store.ago(modelData.last) + (Store.ignored(modelData.unit) ? "  ·  ignored from now on" : "")
+                        subtitle: modelData.items.length + " failure" + (modelData.items.length === 1 ? "" : "s") + "  ·  last " + Store.ago(modelData.last) + (modelData.fresh ? "  ·  " + modelData.fresh + " new" : "") + (Store.ignored(modelData.unit) ? "  ·  ignored from now on" : "")
                         headerItems: [
+                            UiButton { label: "Dismiss"; icon: "󰄬"; small: true; visible: g.modelData.fresh > 0; tooltip: "seen: keep the logs, stop counting them"; onClicked: Store.dismissFailures(g.modelData.unit) },
                             UiButton { label: "latest log"; small: true; onClicked: Store.showFile(g.modelData.items[0].name, g.modelData.items[0].path) },
                             UiButton { label: "Investigate"; icon: "󰚩"; small: true; tooltip: "Claude reads the latest log in a terminal"; onClicked: Store.investigate(g.modelData.items[0].path) },
                             UiButton { label: g.open ? "hide" : "all " + g.modelData.items.length; small: true; onClicked: page.toggle(g.modelData.unit) },

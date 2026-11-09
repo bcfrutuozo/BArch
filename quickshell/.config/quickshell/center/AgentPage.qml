@@ -30,6 +30,14 @@ Item {
                 }
             }
 
+            RowLayout {
+                visible: Store.attention.length > 0
+                Layout.leftMargin: 16; Layout.rightMargin: 12
+                spacing: 8
+                Text { Layout.fillWidth: true; text: Store.attention.length + " report" + (Store.attention.length === 1 ? " asks" : "s ask") + " for attention: " + Store.attention.map(r => r.task).join(", "); color: Ui.yellow; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1; elide: Text.ElideRight }
+                UiButton { label: "Dismiss all"; icon: "󰄬"; small: true; tooltip: "seen: they stop counting here and in the Inbox (the reports stay in the history)"; onClicked: Store.dismissReport("all") }
+            }
+
             Repeater {
                 model: Store.tasks
                 Card {
@@ -48,14 +56,15 @@ Item {
                     RowLayout {
                         visible: tc.last !== null
                         spacing: 8
-                        Rectangle { width: 10; height: 10; radius: 5; color: page.statusColor(tc.last ? tc.last.status : "") }
+                        Rectangle { width: 10; height: 10; radius: 5; color: page.statusColor(tc.last ? tc.last.status : ""); opacity: tc.last && tc.last.dismissed ? 0.35 : 1 }
                         ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 2
                             Text { Layout.fillWidth: true; text: tc.last ? tc.last.title : ""; color: Ui.text; font.family: Ui.font; font.pixelSize: Ui.fontSize; font.bold: true; wrapMode: Text.Wrap }
                             Text { Layout.fillWidth: true; text: tc.last ? tc.last.summary : ""; color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1; wrapMode: Text.Wrap }
-                            Text { text: tc.last ? String(tc.last.time).slice(0, 16).replace("T", " ") + "  ·  $" + Number(tc.last.cost || 0).toFixed(2) : ""; color: Ui.overlay; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3 }
+                            Text { text: tc.last ? String(tc.last.time).slice(0, 16).replace("T", " ") + "  ·  $" + Number(tc.last.cost || 0).toFixed(2) + (tc.last.dismissed ? "  ·  dismissed" : "") : ""; color: Ui.overlay; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3 }
                         }
+                        UiButton { label: "Dismiss"; icon: "󰄬"; small: true; visible: tc.last !== null && tc.last.status !== "ok" && !tc.last.dismissed; tooltip: "seen: stop counting it (the next run starts clean)"; onClicked: Store.dismissReport(tc.t.task) }
                         UiButton { label: "Report"; icon: "󰈙"; small: true; onClicked: Store.showFile(tc.t.task + " · " + tc.last.title, tc.last.report) }
                         UiButton { label: "Continue"; icon: "󰚩"; small: true; tooltip: "resume the session in a terminal"; onClicked: Store.continueSession(tc.last.session) }
                     }

@@ -32,10 +32,18 @@ Item {
     readonly property color tint: popup.visible || barMouse.containsMouse ? Theme.accent : total > 0 ? Theme.fg : Theme.dim
 
     function glyph(cp) { return String.fromCodePoint(cp) }
+    property bool again: false              // a refresh asked for while one was running
     function refresh() {
-        if (checkProc.running) return
+        if (checkProc.running) { again = true; return }
         checkProc.running = true
     }
+    // failures and agent reports carry a `dismiss` command: seen, stop counting them (nothing is deleted)
+    function dismiss(cmd) {
+        if (dismissProc.running) return
+        dismissProc.command = cmd
+        dismissProc.running = true
+    }
+    Process { id: dismissProc; onExited: root.refresh() }
     function open(cmd) {
         Popups.hide(popup)
         Quickshell.execDetached(cmd)
@@ -44,6 +52,7 @@ Item {
     Process {
         id: checkProc
         command: ["bash", Quickshell.shellDir + "/inbox/inbox.sh"]
+        onExited: if (root.again) { root.again = false; root.refresh() }
         stdout: StdioCollector {
             onStreamFinished: {
                 let d
@@ -193,6 +202,7 @@ Item {
                             Text { text: row.modelData.label; color: Theme.fg; font.family: Theme.font; font.pixelSize: Theme.fontSize - 1; font.bold: true }
                             Line { text: row.modelData.text }
                         }
+                        Btn { visible: !!row.modelData.dismiss; label: "Dismiss"; onClicked: root.dismiss(row.modelData.dismiss) }
                         Btn { label: "Open"; onClicked: root.open(row.modelData.cmd) }
                     }
                 }

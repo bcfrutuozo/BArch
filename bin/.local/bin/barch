@@ -261,6 +261,8 @@ Agent:
   agent list                  scheduled tasks, last result and next run
   agent run <task> [--quiet]  run a task now (read-only; --quiet: no notification)
   agent report <task>         print the last report of a task
+  agent dismiss [<task>|all]  the last report (warn, alert) stops asking for attention in the
+                              Center and the Inbox; the report stays
   agent continue <session>    open a task's session in Claude to talk about it
   agent ask [text] [--continue]
                               open Claude in a terminal in the repo, starting with TEXT if given
@@ -272,6 +274,10 @@ Agent:
   snapshot hook               Claude Code SessionStart/SessionEnd hook (reads JSON on stdin)
   failure <unit> [--system]   OnFailure handler: save the log and notify (used by systemd);
                               a Hyprland crash groups its casualties into one notification
+  failure list [<unit>]       the saved failure logs, newest first
+  failure dismiss|delete [<unit>|all]
+                              dismiss: the logs stay but stop counting in the Center and the
+                              Inbox; delete: the logs are removed
 
 Backup (restic, encrypted, to the NAS; list: backup/include.txt in the repo):
   backup init                 create the repository and the password (printed once: keep it in
@@ -1936,6 +1942,48 @@ cascade_report() {
   post "$title" "$body" critical "System" "$acts"
 }
 
+# failure list|dismiss|delete [<unit>|all]: the saved logs. A dismissed log stays on disk (the
+# morning and weekly tasks still read it) but is out of what asks for attention: the Center's
+# badges and the Inbox count the logs of the last day that are not in failures/.dismissed (one
+# log file name per line). systemd always passes a full unit name (foo.service), so the three
+# words cannot be taken for a unit.
+failure_list() {   # [<unit>|all] → [{name, unit, time, size, path, dismissed}], newest first
+  local dir=$STATE/failures
+  find "$dir" -maxdepth 1 -name '*.log' -printf '%T@\t%s\t%f\n' 2>/dev/null | sort -rn |
+    jq -Rn --rawfile seen <(cat "$dir/.dismissed" 2>/dev/null) --arg dir "$dir" --arg unit "${1:-all}" '
+      ($seen | split("\n")) as $s
+      | [inputs | split("\t")
+         | {name: .[2], unit: (.[2] | sub("-[0-9]{8}-[0-9]{6}\\.log$"; "")), time: (.[0] | tonumber | floor),
+            size: (.[1] | tonumber), path: ($dir + "/" + .[2])}
+         | select($unit == "all" or .unit == $unit or .unit == $unit + ".service")
+         | .dismissed = (.name | IN($s[]))]'
+}
+
+failure_manage() {
+  local sub=$1 what=${2:-all} dir=$STATE/failures logs n f
+  (($# <= 2)) || usage_error "failure $sub [<unit>|all]"
+  logs=$(failure_list "$what")
+  case $sub in
+    list)
+      show "$logs" 'if length == 0 then "no failure logs" else
+        .[] | "\(.time | strflocaltime("%Y-%m-%d %H:%M"))  \(.unit)\(if .dismissed then "  (dismissed)" else "" end)" end'
+      return ;;
+    dismiss)
+      n=$(jq '[.[] | select(.dismissed | not)] | length' <<<"$logs")
+      jq -r '.[].name' <<<"$logs" >>"$dir/.dismissed" 2>/dev/null ;;
+    delete)
+      n=$(jq length <<<"$logs")
+      while read -r f; do [[ -n $f ]] && rm -f -- "$dir/$f"; done < <(jq -r '.[].name' <<<"$logs") ;;
+  esac
+  # the names of logs that are gone (deleted, or beyond the 50 kept) leave the list
+  if [[ -e $dir/.dismissed ]]; then
+    sort -u "$dir/.dismissed" | while read -r f; do [[ -n $f && -e $dir/$f ]] && echo "$f"; done >"$dir/.dismissed.new"
+    mv "$dir/.dismissed.new" "$dir/.dismissed"
+  fi
+  show "$(jq -nc --arg sub "$sub" --arg what "$what" --argjson n "$n" '{ok: true, action: $sub, what: $what, count: $n}')" \
+    '"\(.count) failure log(s) \(if .action == "delete" then "deleted" else "dismissed" end)"'
+}
+
 # failure <unit> [--system]: OnFailure handler (user: barch-failure@.service; system:
 # barch-failure-relay). systemd passes MONITOR_* about the failed run. Saves status and journal
 # to ~/.local/state/barch/failures/ (every failure) and notifies with Investigate / Show log. At
@@ -1949,6 +1997,7 @@ cascade_report() {
 # scheduled 30 s after the first one (the bar is back by then), posts one notification for the
 # crash with the list.
 cmd_failure() {
+  case ${1:-} in list|dismiss|delete) failure_manage "$@"; return ;; esac
   local unit="" scope=--user glob
   while (($#)); do
     case $1 in
@@ -2393,7 +2442,25 @@ agent_list() {
   done < <(agent_names)
   show "$(printf '%s\n' "${rows[@]}" | jq -s .)" '.[] |
     "\(.task) — \(.description)\n  timer: \(.timer)\(if .next != "" then ", next \(.next)" else "" end)\n  last: "
-    + (if .last == null then "never" else "\(.last.time[0:16] | sub("T"; " ")) [\(.last.status)] \(.last.title)" end)'
+    + (if .last == null then "never" else "\(.last.time[0:16] | sub("T"; " ")) [\(.last.status)\(if .last.dismissed then ", dismissed" else "" end)] \(.last.title)" end)'
+}
+
+# agent dismiss [<task>|all]: the latest report of a task that asked for attention (warn, alert)
+# stops counting in the Center's badge and in the Inbox: "dismissed" (the time) goes into its
+# meta JSON, so every reader sees it; the report stays, and the next run starts clean.
+agent_dismiss() {
+  local what=${1:-all} f t n=0
+  (($# <= 1)) || usage_error "agent dismiss [<task>|all]"
+  [[ $what == all || -e $STATE/reports/$what/latest.json ]] || die 1 "no report for '$what'"
+  for f in "$STATE"/reports/*/latest.json; do
+    [[ -r $f ]] || continue
+    t=${f%/latest.json}; t=${t##*/}
+    [[ $what == all || $what == "$t" ]] || continue
+    jq -e '.status != "ok" and (.dismissed | not)' "$f" >/dev/null 2>&1 || continue
+    f=$(readlink -f "$f")
+    jq --arg at "$(date -Is)" '.dismissed = $at' "$f" >"$f.tmp" && mv "$f.tmp" "$f" && n=$((n + 1))
+  done
+  show "$(jq -nc --arg what "$what" --argjson n "$n" '{ok: true, what: $what, count: $n}')" '"\(.count) report(s) dismissed"'
 }
 
 agent_continue() {
@@ -2437,10 +2504,11 @@ cmd_agent() {
     report)
       [[ -n ${1:-} && -r $STATE/reports/$1/latest.md ]] || die 1 "no report for '${1:-}'"
       cat "$STATE/reports/$1/latest.md" ;;
+    dismiss) agent_dismiss "$@" ;;
     continue) agent_continue "$@" ;;
     ask) agent_ask "$@" ;;
     investigate) agent_investigate "$@" ;;
-    *) usage_error "agent list|run|report|continue|ask|investigate" ;;
+    *) usage_error "agent list|run|report|dismiss|continue|ask|investigate" ;;
   esac
 }
 

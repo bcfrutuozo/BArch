@@ -171,9 +171,12 @@ The main pieces:
   stop / restart / reset-failed / enable / disable; system units go through polkit, so the bar's
   agent asks the password), **Timers** (both scopes, next and last run, run the service now),
   **Failures** (the logs `barch failure` saved, grouped by unit: view, Investigate with Claude,
-  delete; the ignore list `agent/failure-ignore` editable), **Agent** (ask Claude, each task with
+  delete; **Dismiss** per unit or **Dismiss all** keeps the logs and takes them out of the sidebar's
+  count, **Delete all** (click twice) removes them; the ignore list `agent/failure-ignore` editable),
+  **Agent** (ask Claude, each task with
   its timer, last result, Run now, the report in a side panel, Continue the session, history of
-  reports), **Automation** (the rules of `agent/rules.json` with a switch each, Run now, when
+  reports; a report that asks for attention counts in the sidebar until its **Dismiss**, or the
+  Overview's and this page's **Dismiss all**: the report stays, the task's next run starts clean), **Automation** (the rules of `agent/rules.json` with a switch each, Run now, when
   each fired last, and the event log of `barch-events`, see Automation below), **History**
   (the machine over time from `metrics.db`: boot time, failures per week, what Claude cost,
   temperatures, load, GPU power, network latency, disk, any metric, in 1 h to 30 d ranges; a chart spans
@@ -431,7 +434,8 @@ The main pieces:
   Music app settles: **Accept the year for N albums**, `barch music accept-year [--dry-run]`), the library
   albums the MusicBrainz sweep could not tie, the video dub jobs in review, the book requests pending a
   pick, the failure logs of the last day, the health check's issues and the agent reports that ask for
-  attention. A tray icon with the total, only while there is something; the panel lists each source with
+  attention (these two until dismissed: a **Dismiss** button next to them, the same state as the System
+  Center's). A tray icon with the total, only while there is something; the panel lists each source with
   an **Open** to the right app or Center page. `inbox.sh` asks every source with a timeout every 2 minutes,
   so the NAS asleep only hides its lines (the panel says what was not reachable).
 - **System health:** `.pacnew` files, failed services, TPM fallback warning, the daily backup (failed
@@ -502,7 +506,9 @@ barch disk status                  # the local disks: SMART (temperature, wear, 
 barch fw status|clients|blocked [site] [n]|setup   # the pfSense firewalls through their REST API: gateways, IPsec, DNSBL, leases, blocks (see NAS)
 barch agent ask "why is X slow?"   # Claude in a terminal in ~/BArch (the launcher's "a ")
 barch agent list|run|report|continue <task>   # scheduled tasks (see Agent)
+barch agent dismiss [<task>|all]   # a warn/alert report stops counting in the Center and the Inbox (it stays in the history)
 barch failure <unit> [--system]    # what OnFailure= calls: log + notification (see Agent)
+barch failure list [<unit>] · dismiss|delete [<unit>|all]   # the saved logs: seen (kept, no longer counted) or removed
 barch snapshot list                # safety snapshot pairs of the agent sessions
 barch aur review                   # verdict on the pending AUR updates
 barch finance import [--dry-run]   # C6 Bank statements → Firefly (see Finance)
@@ -566,7 +572,9 @@ Claude Code works on this machine on its own, read-only unless you are in the se
   the user services that only lost their compositor (portals, cliphist, hyprsunset) are not
   reported one by one: their logs are saved and, 30 s later, one notification says "Hyprland
   crashed at 10:58" with the list, and its log (`failures/hyprland-<stamp>.log`: coredumps,
-  crash report, journal of the session unit) is what **Investigate** opens. `vdirsyncer` skips
+  crash report, journal of the session unit) is what **Investigate** opens. The logs of the last
+  day count in the System Center's sidebar and in the Inbox until dismissed (`barch failure dismiss`,
+  the names in `failures/.dismissed`; the log stays for the morning and weekly tasks). `vdirsyncer` skips
   its run quietly while iCloud cannot be resolved (VPN switching, link down) instead of failing.
 - **Safety snapshot.** Every Claude session started in `~/BArch` takes a snapper pre snapshot of
   `/` when it starts and a post one when it ends (hooks in `claude/.claude/settings.json` →

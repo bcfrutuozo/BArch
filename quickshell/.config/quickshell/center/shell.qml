@@ -84,8 +84,8 @@ ShellRoot {
                             readonly property int marks: modelData.id === "services" ? Store.failedNow.length
                                                        : modelData.id === "nas" ? (Store.nas.problems || []).length
                                                        : modelData.id === "firewalls" ? Object.values(Store.fw.sites || {}).reduce((n, x) => n + (x.problems || []).length, 0)
-                                                       : modelData.id === "failures" ? Store.failures.filter(f => Date.now() - f.time < 86400000).length
-                                                       : modelData.id === "agent" ? Store.reports.filter((r, i, a) => a.findIndex(x => x.task === r.task) === i && r.status !== "ok").length
+                                                       : modelData.id === "failures" ? Store.failuresNew.length
+                                                       : modelData.id === "agent" ? Store.attention.length
                                                        : 0
                             Layout.fillWidth: true
                             implicitHeight: 32

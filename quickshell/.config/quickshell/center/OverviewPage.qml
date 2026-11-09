@@ -9,7 +9,7 @@ Item {
 
     readonly property var h: Store.health
     readonly property bool hOk: h.loaded === true
-    readonly property int failures24h: Store.failures.filter(f => Date.now() - f.time < 86400000).length
+    readonly property int failures24h: Store.failuresNew.length
     readonly property var nextTimers: Store.timers.user.concat(Store.timers.system).filter(t => t.next).sort((a, b) => a.next - b.next).slice(0, 6)
     readonly property var openSnapshots: Store.snapshots.filter(s => s.post === null || s.post === undefined)
     readonly property var latestByTask: {
@@ -52,7 +52,7 @@ Item {
                         MouseArea { anchors.fill: parent; cursorShape: parent.page_ ? Qt.PointingHandCursor : Qt.ArrowCursor; onClicked: if (parent.page_) page.go(parent.page_) }
                     }
                     Tile { label: "failed units now"; value: String(Store.failedNow.length); tint: Store.failedNow.length ? Ui.red : Ui.green; page_: "services" }
-                    Tile { label: "failures in 24 h"; value: String(page.failures24h); tint: page.failures24h ? Ui.yellow : Ui.green; page_: "failures" }
+                    Tile { label: "new failures (24 h)"; value: String(page.failures24h); tint: page.failures24h ? Ui.yellow : Ui.green; page_: "failures" }
                     Tile { label: ".pacnew / .pacsave"; value: page.hOk ? String((page.h.pacnew || []).length) : "—"; tint: page.hOk && page.h.pacnew.length ? Ui.yellow : Ui.green }
                     Tile { label: "TPM unlock"; value: page.hOk ? String(page.h.tpm || "?") : "—"; tint: page.h.tpm === "failed" ? Ui.red : Ui.green }
                     Tile {
@@ -91,17 +91,22 @@ Item {
                 Layout.margins: 12; Layout.topMargin: 0; Layout.bottomMargin: 0
                 title: "Agent reports"
                 subtitle: "the latest run of each scheduled task"
-                headerItems: [ UiButton { label: "Agent"; icon: "󰁔"; small: true; onClicked: page.go("agent") } ]
+                headerItems: [
+                    UiButton { label: "Dismiss all"; icon: "󰄬"; small: true; visible: Store.attention.length > 0; tooltip: "the reports that ask for attention stop counting (they stay in the history)"; onClicked: Store.dismissReport("all") },
+                    UiButton { label: "Agent"; icon: "󰁔"; small: true; onClicked: page.go("agent") }
+                ]
                 Repeater {
                     model: page.latestByTask
                     RowLayout {
                         id: rr
                         required property var modelData
+                        readonly property bool asks: modelData.status !== "ok" && !modelData.dismissed
                         spacing: 8
-                        Rectangle { width: 8; height: 8; radius: 4; color: page.statusColor(rr.modelData.status) }
+                        Rectangle { width: 8; height: 8; radius: 4; color: page.statusColor(rr.modelData.status); opacity: rr.modelData.dismissed ? 0.35 : 1 }
                         Text { Layout.preferredWidth: 130; text: rr.modelData.task; color: Ui.text; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 1 }
                         Text { Layout.fillWidth: true; text: rr.modelData.title; color: Ui.text; font.family: Ui.font; font.pixelSize: Ui.fontSize; elide: Text.ElideRight }
                         Text { text: String(rr.modelData.time).slice(0, 16).replace("T", " "); color: Ui.overlay; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3 }
+                        UiButton { icon: "󰄬"; small: true; visible: rr.asks; tooltip: "dismiss: seen, stop counting it"; onClicked: Store.dismissReport(rr.modelData.task) }
                         UiButton { icon: "󰈙"; small: true; tooltip: "open the report"; onClicked: Store.showFile(rr.modelData.task + " · " + rr.modelData.title, rr.modelData.report) }
                     }
                 }
