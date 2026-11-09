@@ -26,7 +26,7 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
                                          player plays, sent to Plex as a client's timeline (plexplay.py): Plex counts the
                                          play, Tautulli logs it · GET /api/player/status: the last report, the sessions
                                          · GET /api/player/sessions: Plex's Now Playing (to check it shows up)
-    GET  /api/jobs[?state=review]        summaries
+    GET  /api/jobs[?state=review]        summaries: every job still open (queued, working, review, failed) and the last 300 of the rest
     GET  /api/jobs/<id>                  everything: problems, candidates, the proposed tags
     GET  /api/jobs/<id>/cover            the proposed cover (JPEG), or the one chosen by hand
     POST /api/jobs/<id>/cover            an image as the body (Content-Type image/*, ?label=), or {"url": ...}:
@@ -58,6 +58,10 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
                                          ones waiting for a decision; POST {"action": "pause"|"resume"}
     GET  /api/library/compare?folder=&release=   a library album next to a release, track by track
     POST /api/library/tag {"folder", "release"} · skip {"folder"} · retry {"folder"}
+    POST /api/library/reorder {"folder", "release"}   the files renumbered and renamed to that release's order (the same
+                                         songs in another order), then tagged with its ids; undo log kept
+    POST /api/library/delete {"folder", "release"?}   the album folder out of /music (into library-trash, 30 days), Plex and
+                                         the catalog told, and Lidarr searching the album again (monitored, AlbumSearch)
     POST /api/library/adopt              {"folder": "Artist/Album", "release"}: a hand-made album merged into itself with that
                                          release (MusicBrainz ids and the library's rules on its files; a copy goes through the inbox)
     POST /api/lidarr/add-artists         {"artists": [{"mbid", "folder"}]}: artists of /music tracked at their own folder (one Lidarr
@@ -241,8 +245,13 @@ def make_handler(p: Pipeline, token: str):
                                         "counts": {s: sum(1 for j in jobs if j["state"] == s) for s in STATES}})
             if parts == ["api", "jobs"]:
                 st = (q.get("state") or [""])[0]
-                jobs = [summary(j) for j in p.store.all() if not st or j["state"] == st]
-                return self._send(200, {"ok": True, "jobs": jobs[-300:]})
+                jobs = [j for j in p.store.all() if not st or j["state"] == st]
+                # everything that still asks for attention, whatever its age, plus the last 300 of the rest: the
+                # app's badges count every job and its list must show the same ones (four review jobs of
+                # 2026-11-04 had fallen out of the window by 2026-11-09)
+                keep = {j["id"] for j in jobs if j["state"] in ("queued", "working", "review", "failed")}
+                keep |= {j["id"] for j in [j for j in jobs if j["id"] not in keep][-300:]}
+                return self._send(200, {"ok": True, "jobs": [summary(j) for j in jobs if j["id"] in keep]})
             if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "compare":
                 # ?release=<mbid or URL>: the download next to that release, track by track
                 import re as _re
@@ -381,6 +390,18 @@ def make_handler(p: Pipeline, token: str):
                 if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "rescan":
                     new = p.rescan(parts[2])
                     return self._send(200, {"ok": True, "jobs": [summary(j) for j in new], "result": f"{len(new)} new job(s) from the download"})
+                if parts == ["api", "library", "reorder"]:
+                    try:
+                        r = p.reorder_album(str(body.get("folder", "")), str(body.get("release", "")))
+                    except (ValueError, OSError) as e:
+                        return self._send(400, {"ok": False, "error": str(e)})
+                    return self._send(200, {"ok": True, **r, "result": "\n".join(r["done"])})
+                if parts == ["api", "library", "delete"]:
+                    try:
+                        r = p.delete_album(str(body.get("folder", "")), str(body.get("release", "")))
+                    except (ValueError, OSError) as e:
+                        return self._send(400, {"ok": False, "error": str(e)})
+                    return self._send(200, {"ok": True, **r, "result": "\n".join(r["done"])})
                 if parts == ["api", "library", "retitle"]:
                     try:
                         r = p.retitle_album(str(body.get("folder", "")), str(body.get("album", "")))

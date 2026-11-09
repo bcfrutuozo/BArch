@@ -143,6 +143,10 @@ Desktop (through the bar):
   music library [list]        the library albums the MusicBrainz sweep could not tie (the Library tab)
   music library show|compare|tag|skip|retry "<Artist/Album>" [<release>]   one of them: the entry, the
                               files against a release track by track, tag it with that release, skip, judge again
+  music library reorder "<Artist/Album>" <release>   the same songs in another order: files renumbered and renamed
+                              to MusicBrainz's order (titles and audio untouched, undo log), then tagged
+  music library delete "<Artist/Album>" [<release>]   the files you have out of /music (/music/.library-trash, 30 days);
+                              Lidarr monitors and searches the album again
   music library fix "<Artist/Album>" ["hint"]   Claude finds the release (lengths, catalogue, the web) and tags it
   music agent-sweep [library|review|all] [--parallel N] [--limit N]   Claude over every album waiting
                               (Library tab: library fix; Review: music fix), detached; status|stop
@@ -791,18 +795,23 @@ music_library() {
       [[ -n $folder && -n $release ]] || usage_error "music library compare \"<Artist/Album>\" <release mbid or URL>"
       music_api GET "/api/library/compare?folder=$(jq -rn --arg v "$folder" '$v | @uri')&release=$(jq -rn --arg v "$release" '$v | @uri')"
       show "$OUT" '"release \(.mbid): \(.artist // "") – \(.title // "") · \(.date // "") \(.country // "") · MusicBrainz discs \(.media | map(.tracks) | join(" + ")) vs files \(.ours | join(" + "))" +
-        (if .split then " (the files follow the discs in one list)" else "" end) + " · worst \(.worst)s, mean \(.mean)s off\n" +
+        (if .split then " (the files follow the discs in one list)" else "" end) + " · worst \(.worst)s, mean \(.mean)s off" +
+        (if (.reorder // [] | map(select(.moves)) | length) > 0 then "\n  the same songs in another order; barch music library reorder moves " + (.reorder | map(select(.moves)) | map("\(.disc).\(.index | tostring | if length < 2 then "0" + . else . end)→\(.to_disc).\(.to_pos | tostring | if length < 2 then "0" + . else . end) (\(.title))") | join(", ")) else "" end) + "\n" +
         ((.rows // []) | map("  \(.disc).\(.pos | tostring | if length < 2 then "0" + . else . end)  file \(.file)  \(.title)  \(.seconds)s  ↔  \(.mb_title)  \(.mb_seconds)s  Δ\(.diff)s" + (if (.diff // 0) > 10 then "  ✗" else "" end)) | join("\n"))' ;;
-    tag)
-      [[ -n $folder && -n $release ]] || usage_error "music library tag \"<Artist/Album>\" <release mbid or URL>"
-      music_api POST /api/library/tag "$(jq -cn --arg f "$folder" --arg r "$release" '{folder: $f, release: $r}')"
+    tag|reorder)
+      [[ -n $folder && -n $release ]] || usage_error "music library $sub \"<Artist/Album>\" <release mbid or URL>"
+      music_api POST "/api/library/$sub" "$(jq -cn --arg f "$folder" --arg r "$release" '{folder: $f, release: $r}')"
+      show "$OUT" '.result' ;;
+    delete)
+      [[ -n $folder ]] || usage_error "music library delete \"<Artist/Album>\" [<release mbid or URL>]"
+      music_api POST /api/library/delete "$(jq -cn --arg f "$folder" --arg r "$release" '{folder: $f, release: $r}')"
       show "$OUT" '.result' ;;
     skip|retry)
       [[ -n $folder ]] || usage_error "music library $sub \"<Artist/Album>\""
       music_api POST "/api/library/$sub" "$(jq -cn --arg f "$folder" '{folder: $f}')"
       show "$OUT" '.result' ;;
     fix) music_library_fix "$folder" "${3:-}" ;;
-    *) usage_error "music library [list|show|compare|tag|skip|retry|fix] ..." ;;
+    *) usage_error "music library [list|show|compare|tag|reorder|delete|skip|retry|fix] ..." ;;
   esac
 }
 
@@ -840,7 +849,9 @@ music_library_fix() {
     echo '```'
   } >"$run/context.md"
   { cat "$REPO/quickshell/.config/quickshell/music/library-fix.md"; echo; cat "$run/context.md"; } >"$run/prompt.md"
-  MUSIC_CLAUDE_TIMEOUT=${MUSIC_CLAUDE_TIMEOUT:-25m} music_claude_run "$run" "library fix $folder" "barch music library"
+  # show, compare, tag and reorder only: delete and skip are Bruno's decisions (library-fix.md says so too)
+  MUSIC_CLAUDE_TIMEOUT=${MUSIC_CLAUDE_TIMEOUT:-25m} music_claude_run "$run" "library fix $folder" \
+    "barch music library show" "barch music library compare" "barch music library tag" "barch music library reorder"
   OUT=$(jq -c --arg f "$folder" --arg run "$run" '{ok: true, folder: $f, run: $run, summary: .structured_output.summary,
     tagged: .structured_output.proposed, session: .session_id, cost: .total_cost_usd}' "$run/result.json")
   show "$OUT" '.summary'

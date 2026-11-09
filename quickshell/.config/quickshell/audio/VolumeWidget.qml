@@ -1,5 +1,6 @@
 // VolumeWidget.qml — controle de áudio para a barra do Quickshell (PipeWire)
-// Na barra: ícone + porcentagem da saída padrão.
+// Na barra: só o ícone da saída padrão (apagado e riscado no mudo); o nível aparece no
+// VolumeOsd quando muda e no painel.
 //   Rolar: ±5% (Shift: ±1%) · Clique do meio: silenciar · Clique direito: mixer completo
 // Clique esquerdo: painel com volume da saída, troca de dispositivo,
 // volume por aplicativo e microfone.
@@ -86,6 +87,9 @@ Item {
     function micGlyph(m) { return m ? glyph(0xF036D) : glyph(0xF036C) }
     function pct(v) { return Math.round(v * 100) + "%" }
 
+    // the pointer is on the widget or its panel is open: shell.qml keeps the VolumeOsd quiet meanwhile
+    readonly property bool busy: barMouse.containsMouse || popup.visible
+
     visible: ready
     implicitWidth: barRow.implicitWidth
     implicitHeight: barRow.implicitHeight
@@ -103,13 +107,6 @@ Item {
             font.family: root.fontFamily
             font.pixelSize: root.fontSize + 2
             Behavior on color { ColorAnimation { duration: 150 } }
-        }
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.muted ? "muted" : root.pct(root.level)
-            color: root.muted ? root.dim : root.fg
-            font.family: root.fontFamily
-            font.pixelSize: root.fontSize
         }
     }
 

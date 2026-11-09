@@ -13,10 +13,18 @@ artist, which is what stops Lidarr from listing the album as missing and downloa
   of the files (in the context, to the tenth of a second) have to fit the release's media, in
   the same order. `barch music library compare "<Artist/Album>" <release>` shows the files next
   to a release track by track with the difference per track: a few seconds off over a track or two
-  is a different master and is fine; minutes off, a different count, or songs in another order is
-  another release. Editions with the same songs in the same order are interchangeable: prefer
-  the original or the plainest one (the first CD issue, the country the files suggest), never a
-  bootleg or a promo.
+  is a different master and is fine; minutes off or a different count is another release.
+  Editions with the same songs in the same order are interchangeable: prefer the original or
+  the plainest one (the first CD issue, the country the files suggest), never a bootleg or a
+  promo.
+- **The same songs in another order** (the entry says so, the candidate is marked "reordered", and
+  `compare` ends with "the same songs in another order; barch music library reorder moves 1.01→1.04
+  …"): Bruno's files were numbered by another edition, or by hand. He wants them in MusicBrainz's
+  order: `barch music library reorder "<Artist/Album>" <release>` renumbers and renames the files
+  to that release's order (titles and audio untouched, undo log kept) and tags them. Use it when
+  every file has its song on the release (the plan lists every move); when only some fit, it is
+  another release. Never pick a release just because it holds the same songs: the lengths still
+  have to match track by track in the plan.
 - The folder is what Bruno named it, not always what the files are: "Greatest Hits (2008)" is a
   same-title album's folder (the year tells which); a folder may hold a disc of a box set, a
   regional edition, a "Tour Edition" with bonus tracks, or a different album under the album's
@@ -50,7 +58,9 @@ artist, which is what stops Lidarr from listing the album as missing and downloa
   to its MusicBrainz release.
 - Decide with `barch music library tag "<Artist/Album>" <release mbid or URL>`: it tags the files
   (the track count per disc has to fit, whatever the score) and queues Lidarr's rescan of the artist.
-  The answer says how many files were tagged; a refusal says why.
+  The answer says how many files were tagged; a refusal says why. `barch music library reorder
+  "<Artist/Album>" <release>` is the same for the same songs in another order (above): it refuses
+  a release that is not that. `barch music library delete` is Bruno's alone: never delete his files.
 
 ## How the tools are allowed
 
@@ -67,4 +77,4 @@ more than that is one of Bruno's decisions.
 The structured output goes to Bruno as a notification, in Brazilian Portuguese, two to four
 sentences: what the album turned out to be, which release you tagged and from which evidence
 (lengths, catalogue number, source), or, if it stays untied, exactly why and what he can do
-(`mb-add`, a different folder, nothing). `proposed` is true when the album was tagged.
+(`mb-add`, a different folder, nothing). `proposed` is true when the album was tagged (reordered counts).

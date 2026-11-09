@@ -215,29 +215,59 @@ def score(cand: Candidate, tracks: list[Track], hints: dict) -> None:
                     + (f" (left out: {', '.join(cand.bad)}, which do not fit)" if cand.bad else ""))
     cand.why.append(f"album {album_sim:.2f}, artist {artist_sim:.2f}" + (f", titles {tsim:.2f}" if tsim is not None else ""))
     cand.ok = worst <= 7 and mean <= 3 and known >= 0.9 and (album_sim >= 0.6 or (tsim or 0) >= 0.75) and artist_sim >= 0.5
-    if not cand.ok and album_sim >= 0.6 and artist_sim >= 0.5:
+    # the same album, another order? Also for a release picked by hand (force: the names are not compared)
+    if not cand.ok and (album_sim >= 0.6 or not hints.get("album")) and (artist_sim >= 0.5 or not hints.get("artist")):
         cand.reorder = _by_title(discs, media)
         if cand.reorder:
             cand.why.append("the same songs in another order (an edition MusicBrainz does not have, e.g. an LP)")
 
 
+def _length(mt: dict) -> float:
+    return (mt.get("length") or (mt.get("recording") or {}).get("length") or 0) / 1000
+
+
 def _by_title(discs: dict[int, list[Track]], media: list[dict]) -> dict | None:
     """Every track matched to a different track of the same disc by its title (>= 0.85) and its
-    length (within 7 s): {(disc number, index): MB track}. None unless all of them match."""
+    length (within 7 s): {(disc number, index): MB track}. None unless all of them match. Among the
+    tracks whose title fits, the length decides ("Avantasia" and "Avantasia (edit)" on the same
+    single: the same title twice, 330 s and 250 s)."""
     out = {}
     for (dn, ts), m in zip(sorted(discs.items()), media):
         free = list(m.get("tracks", []))
         for t in sorted(ts, key=lambda x: x.index):
             if not t.hints.get("title"):
                 return None
-            best = max(free, key=lambda mt: _sim(t.hints["title"], mt.get("title", "")), default=None)
-            if best is None or _sim(t.hints["title"], best.get("title", "")) < 0.85:
+            fits = [mt for mt in free if _sim(t.hints["title"], mt.get("title", "")) >= 0.85
+                    and (not _length(mt) or abs(_length(mt) - t.seconds) <= 7)]
+            if not fits:
                 return None
-            length = (best.get("length") or (best.get("recording") or {}).get("length") or 0) / 1000
-            if length and abs(length - t.seconds) > 7:
-                return None
+            best = min(fits, key=lambda mt: (-round(_sim(t.hints["title"], mt.get("title", "")), 2),
+                                             abs(_length(mt) - t.seconds) if _length(mt) else 99))
             out[(dn, t.index)] = best
             free.remove(best)
+    return out
+
+
+def reorder_plan(cand: Candidate, tracks: list[Track]) -> list[dict]:
+    """Where every file goes when the album is put in this release's order (cand.reorder): one row per
+    file, as it is (disc, index, title) and as MusicBrainz has it (to_disc, to_pos, mb_title, mb_seconds);
+    `moves` is False on the rows that stay where they are. Empty when the release is not the same songs
+    in another order."""
+    if not cand.reorder:
+        return []
+    discs, _ = discs_for(tracks, cand.media)
+    out = []
+    for dn, ((key, ts), m) in enumerate(zip(sorted(discs.items()), cand.media), 1):
+        mts = m.get("tracks") or []
+        for t in sorted(ts, key=lambda x: x.index):
+            mt = cand.reorder.get((key, t.index))
+            if mt is None:
+                return []
+            pos = next((i for i, x in enumerate(mts, 1) if x is mt), int(mt.get("position") or 0))
+            out.append({"disc": t.disc, "index": t.index, "title": t.hints.get("title", ""), "seconds": round(t.seconds, 1),
+                        "to_disc": dn, "to_pos": pos, "mb_title": mt.get("title", ""), "mb_seconds": round(_length(mt), 1) or None,
+                        "recording": (mt.get("recording") or {}).get("id", ""),
+                        "moves": (t.disc, t.index) != (dn, pos)})
     return out
 
 

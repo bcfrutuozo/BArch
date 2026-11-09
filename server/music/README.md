@@ -246,6 +246,18 @@ sweep, one album per turn, so a new download never waits for either.
   only those, the old values in an undo log, and a Lidarr `RescanFolders` of that artist's folder. Otherwise the
   album waits with its candidates (`GET /api/library/sweep`, the Music app's Library tab: compare, `tag`,
   `skip`, `retry`, `barch music mb-add "Artist/Album"`); "none" and "ambiguous" are tried again after a month.
+  Two more decisions there: **reorder** (`POST /api/library/reorder {"folder", "release"}`, `barch music library
+  reorder`): the files hold the same songs as the release in another order (an LP's sides, a hand-numbered
+  single: `Candidate.reorder`, paired by title and length, `matcher.reorder_plan` says where each file goes),
+  so they are renumbered (TRACKNUMBER, DISCNUMBER when it changes) and renamed (`D.TT - ` in the name, the
+  title part kept) to MusicBrainz's order, then tagged; `compare` carries the plan (`reorder`, `fits`) so the
+  app shows the moves before. **delete** (`POST /api/library/delete {"folder", "release"?}`, `barch music library
+  delete`): Bruno does not want the files he has; the folder goes to `/music/.library-trash/<stamp> Artist - Album`
+  (a dotfolder, which the sweep, the enforce, the catalog, Plex and Lidarr skip; purged after 30 days by the stamp
+  in the name, never by mtime, so a slip is undone by moving it back), the entry leaves `library.json`, Plex and
+  the catalog are told, and Lidarr has the album (the release's group, else the folder's title among the artist's
+  albums) rescanned, monitored and searched, so the pipeline delivers a catalogued edition. The move runs in a
+  thread (across disks it is a copy) and the entry shows as `deleting` meanwhile; a second request is refused.
   About 30 s per album (MusicBrainz's one request per second): the first pass over the library takes hours.
 - **Release profile** (`Lidarr.release_rules`, every hour): one profile ignoring box sets, discographies and
   "complete albums" packs (`Lidarr.BLOCK`, regexes on the release title), restored if edited. Vinyl rips are

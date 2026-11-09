@@ -116,3 +116,51 @@ class BoxDisc(unittest.TestCase):
         self.assertEqual(len(c.media), 1)
         self.assertGreater(c.score, 0)
         self.assertIn("disc 4 of 4 of the box", " ".join(c.why))
+
+
+class SameSongsOtherOrder(unittest.TestCase):
+    """Avantasia's "Avantasia" single in the library (2026-11-09): the files 1-4 are Avantasia, Reach Out for
+    the Light, The Final Sacrifice, Avantasia [Edit]; MusicBrainz's release 949e7e97 has the edit first and
+    the full version last. Two tracks with the same title, told apart by their lengths."""
+    MB = [("Avantasia (edit version)", 250.146), ("Reach Out for the Light", 394.546), ("The Final Sacrifice", 302.8), ("Avantasia", 329.507)]
+    OURS = [("Avantasia", 329.9), ("Reach Out For the Light", 394.5), ("The Final Sacrifice", 302.8), ("Avantasia [Edit]", 250.1)]
+
+    def release(self):
+        return {"id": "949e7e97", "title": "Avantasia", "artist-credit": [{"name": "Avantasia", "joinphrase": ""}], "date": "2000-11-13",
+                "media": [{"format": "CD", "tracks": [{"title": t, "length": int(l * 1000), "position": i, "recording": {"id": f"rec{i}"}}
+                                                       for i, (t, l) in enumerate(self.MB, 1)]}]}
+
+    def tracks(self):
+        return [Track(Path(f"1.{i:02d} - {t}.flac"), 1, i, int(s * 44100), 44100, 16, {"title": t}) for i, (t, s) in enumerate(self.OURS, 1)]
+
+    def test_reorder_found_by_name_and_by_hand(self):
+        for hints in ({"artist": "Avantasia", "album": "Avantasia"}, {}):      # the sweep, and a release picked by hand (force)
+            c = matcher._candidate(self.release())
+            matcher.score(c, self.tracks(), hints)
+            self.assertFalse(c.ok)
+            self.assertIsNotNone(c.reorder, (hints, c.why))
+            self.assertEqual(c.reorder[(1, 1)]["title"], "Avantasia")
+            self.assertEqual(c.reorder[(1, 4)]["title"], "Avantasia (edit version)")
+
+    def test_plan(self):
+        c = matcher._candidate(self.release())
+        matcher.score(c, self.tracks(), {})
+        plan = matcher.reorder_plan(c, self.tracks())
+        self.assertEqual([(r["index"], r["to_pos"], r["moves"], r["recording"]) for r in plan],
+                         [(1, 4, True, "rec4"), (2, 2, False, "rec2"), (3, 3, False, "rec3"), (4, 1, True, "rec1")])
+
+    def test_not_the_same_songs(self):
+        rel = self.release()
+        rel["media"][0]["tracks"][1]["title"] = "Something Else"
+        c = matcher._candidate(rel)
+        matcher.score(c, self.tracks(), {})
+        self.assertIsNone(c.reorder)
+        self.assertEqual(matcher.reorder_plan(c, self.tracks()), [])
+
+    def test_in_order_is_not_a_reorder(self):
+        rel = self.release()
+        rel["media"][0]["tracks"] = [{"title": t, "length": int(l * 1000), "position": i} for i, (t, l) in enumerate(self.OURS, 1)]
+        c = matcher._candidate(rel)
+        matcher.score(c, self.tracks(), {"artist": "Avantasia", "album": "Avantasia"})
+        self.assertTrue(c.ok, c.why)
+        self.assertIsNone(c.reorder)

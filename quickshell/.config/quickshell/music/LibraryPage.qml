@@ -4,8 +4,10 @@ import QtQuick.Layouts
 
 // the library tied to MusicBrainz (server/music/barch_music/library.py): the pipeline goes over every
 // album of /music while idle and writes the MusicBrainz ids on the files it is sure about; the rest
-// waits here. Pick the release after comparing it with the files (Tag), send an album MusicBrainz
-// lacks to its release editor (Add to MusicBrainz, then Tag with the new release), or Skip it.
+// waits here. Pick the release after comparing it with the files (Tag; Reorder when the files are the
+// same songs in another order: they are renumbered and renamed to MusicBrainz's order, then tagged), send
+// an album MusicBrainz lacks to its release editor (Add to MusicBrainz, then Tag with the new release),
+// Delete the files you have (the album goes back to Lidarr's search), or Skip it.
 Item {
     id: page
     readonly property var lib: Store.library
@@ -53,7 +55,11 @@ Item {
         })
     }
     Timer { id: cmpTimer; interval: 400; onTriggered: page.loadCompare() }
-    onSelectedChanged: { release.text = ""; cmp = null; cmpKey = "" }
+    onSelectedChanged: { release.text = ""; cmp = null; cmpKey = ""; confirmDelete = false }
+    readonly property var moves: cmp && cmp.reorder ? cmp.reorder.filter(r => r.moves) : []
+    function pos(d, i) { return d + "." + String(i).padStart(2, "0") }
+    property bool confirmDelete: false
+    Timer { id: confirmTimer; interval: 8000; onTriggered: page.confirmDelete = false }
 
     component Label: Text { color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1 }
 
@@ -121,8 +127,8 @@ Item {
                         Text { Layout.fillWidth: true; text: item.folder; color: Ui.text; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1; elide: Text.ElideMiddle }
                         Text {
                             Layout.fillWidth: true; elide: Text.ElideRight
-                            text: (item.e.state === "none" ? "not on MusicBrainz? " : item.e.state === "error" ? "error: " : "") + (item.e.why || "")
-                            color: item.e.state === "error" ? Ui.red : item.e.state === "none" ? Ui.yellow : Ui.subtext
+                            text: (item.e.state === "none" ? "not on MusicBrainz? " : item.e.state === "error" ? "error: " : item.e.state === "deleting" ? "deleting… " : "") + (item.e.why || "")
+                            color: item.e.state === "error" ? Ui.red : item.e.state === "none" ? Ui.yellow : item.e.state === "deleting" ? Ui.accent : Ui.subtext
                             font.family: Ui.font; font.pixelSize: Ui.fontSize - 3
                         }
                     }
@@ -156,6 +162,25 @@ Item {
                             UiButton { label: "Add to MusicBrainz"; icon: "󰐕"; small: true; tooltip: "opens MusicBrainz's release editor filled in with this album (titles, lengths); submit it there, then paste the new release below and Tag"; onClicked: Store.libraryMbAdd(page.selected) }
                             UiButton { label: "Look again"; icon: "󰑐"; small: true; tooltip: "the matcher tries this album again in the next idle step (MusicBrainz may have it now)"; onClicked: Store.libraryAct("retry", { folder: page.selected }) }
                             UiButton { label: "Skip"; icon: "󰒭"; small: true; tooltip: "leave this album without MusicBrainz ids (not asked again)"; onClicked: Store.libraryAct("skip", { folder: page.selected }) }
+                            UiButton {
+                                // the label never changes: a longer one made the button wrap to the next line of the
+                                // Flow, out from under the cursor, so the second click missed it
+                                label: "Delete"; icon: "󰆴"; small: true; danger: true
+                                armed: page.confirmDelete
+                                enabledBtn: !page.entry || page.entry.state !== "deleting"
+                                tooltip: "the files you have leave /music (kept 30 days in /music/.library-trash), Plex drops the album and Lidarr monitors and searches it again, so the pipeline brings a catalogued edition; click twice; it runs in the background and the entry shows \"deleting\" meanwhile"
+                                onClicked: {
+                                    if (!page.confirmDelete) { page.confirmDelete = true; confirmTimer.restart(); return }
+                                    page.confirmDelete = false
+                                    Store.libraryAct("delete", { folder: page.selected, release: page.releaseId(release.text) })
+                                }
+                            }
+                            Text {
+                                visible: page.confirmDelete
+                                height: 24; verticalAlignment: Text.AlignVCenter
+                                text: "click Delete again: the files go to the trash and Lidarr searches the album"
+                                color: Ui.red; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2
+                            }
                         }
                     }
                     Card {
@@ -180,7 +205,7 @@ Item {
                                     ColumnLayout {
                                         Layout.fillWidth: true
                                         spacing: 1
-                                        Text { Layout.fillWidth: true; text: cand.modelData.artist + " – " + cand.modelData.title; color: Ui.text; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1; font.bold: true; elide: Text.ElideRight }
+                                        Text { Layout.fillWidth: true; text: cand.modelData.artist + " – " + cand.modelData.title + (cand.modelData.reordered ? "  (same songs, other order)" : ""); color: Ui.text; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1; font.bold: true; elide: Text.ElideRight }
                                         Label { text: [cand.modelData.date, cand.modelData.country, cand.modelData.tracks + " tracks", "score " + cand.modelData.score].filter(x => x).join("  ·  ") }
                                         Label { Layout.fillWidth: true; text: (cand.modelData.why || []).join("; "); wrapMode: Text.Wrap; color: Ui.overlay }
                                     }
@@ -199,11 +224,23 @@ Item {
                             spacing: 8
                             UiField { id: release; Layout.fillWidth: true; mono: true; placeholderText: "MusicBrainz release id or URL"; onTextChanged: cmpTimer.restart() }
                             UiButton {
-                                label: "Tag"; icon: "󰓹"; primary: true
+                                label: "Tag"; icon: "󰓹"; primary: page.moves.length === 0
                                 enabledBtn: page.releaseId(release.text) !== ""
                                 tooltip: "write this release's MusicBrainz ids on the album's files (only the ids; undo log kept) and let Lidarr map it"
                                 onClicked: Store.libraryAct("tag", { folder: page.selected, release: release.text })
                             }
+                            UiButton {
+                                label: "Reorder"; icon: "󰒺"; primary: true
+                                visible: page.moves.length > 0
+                                tooltip: "the files are renumbered and renamed to this release's order (TRACKNUMBER and the \"D.TT - \" of the name; titles and audio untouched, undo log kept), then tagged with its ids"
+                                onClicked: Store.libraryAct("reorder", { folder: page.selected, release: release.text })
+                            }
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            visible: page.moves.length > 0
+                            text: "The same songs in another order. Reorder moves " + page.moves.map(r => page.pos(r.disc, r.index) + " → " + page.pos(r.to_disc, r.to_pos) + " (" + r.title + ")").join(", ") + "."
+                            color: Ui.yellow; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2; wrapMode: Text.Wrap
                         }
                         CompareTable { id: cmpTable; cmp: page.cmp; oursLabel: "your files" }
                     }

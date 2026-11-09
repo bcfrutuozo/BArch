@@ -72,6 +72,8 @@ ShellRoot {
   // Papel de parede (no lugar do hyprpaper) e agente polkit (no lugar do hyprpolkitagent)
   Wallpaper {}
   PolkitDialog {}
+  // Volume / mute on screen when it changes (media keys), so the eyes need not go up to the bar
+  VolumeOsd { id: volumeOsd }
 
   // ---- OLED: pixel shift ----
   // As ilhas percorrem uma grade de 25×13 pixels físicos em zigue-zague,
@@ -589,8 +591,8 @@ ShellRoot {
         // AirPods (some sozinho quando não há fones)
         AirPodsWidget {}
 
-        // Volume
-        VolumeWidget {}
+        // Volume (while it is in use the on-screen pill stays out: the eyes are already here)
+        VolumeWidget { onBusyChanged: volumeOsd.quiet = busy }
 
         // Histórico da área de transferência
         ClipboardWidget { id: clip }

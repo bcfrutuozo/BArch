@@ -267,8 +267,11 @@ class Catalog:
             new = dict(self.albums)
             todo = []
             for rel, folder in folders:
+                try:
+                    sig = signature(folder)
+                except FileNotFoundError:          # deleted between the listing and now (the Library tab's Delete)
+                    continue
                 seen.add(rel)
-                sig = signature(folder)
                 old = new.get(rel)
                 if old and old.get("sig") == sig and not full:
                     self.progress["done"] += 1

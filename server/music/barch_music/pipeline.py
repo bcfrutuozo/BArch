@@ -330,6 +330,7 @@ class Pipeline:
                 self.doing = "seed check"
                 self.seed_check()
                 self.purge_work()
+                self.purge_trash(hourly=True)
                 self.weekly_digest()
                 # idle: one album of the library tied to MusicBrainz, then the queue is looked at again
                 if self.cfg.get("library_sweep", True):
@@ -861,6 +862,135 @@ class Pipeline:
             self.store.save(j)
         self.wake.set()
         return jobs
+
+    def reorder_album(self, folder: str, release: str) -> dict:
+        """The Library tab's Reorder: library.reorder (names, numbers, ids), then Plex and the catalog see the
+        new names (Lidarr's rescan is the library's own)."""
+        result = self.library.reorder(folder, release)
+        done = [result]
+        try:
+            done.append(self.plex.scan(folder.split("/")[0]))
+        except Exception as e:  # noqa: BLE001
+            done.append(f"{e}")
+        self.catalog.refresh_async()
+        return {"folder": folder, "done": done}
+
+    TRASH = ".library-trash"        # inside /music: a rename, not a copy; a dotfolder, which the sweep, the enforce, the catalog, Plex and Lidarr all skip
+
+    def delete_album(self, folder: str, release: str = "") -> dict:
+        """The Library tab's Delete: Bruno does not want the files he has (a bad rip, an edition nobody
+        catalogued). The album folder leaves /music for `/music/.library-trash/<stamp> Artist - Album` (purged
+        after 30 days by the stamp in its name, so a slip is undone by moving it back), Plex drops it, and
+        Lidarr looks for the album again: its folder rescanned (the files are gone), the album monitored and
+        searched. The Lidarr album is the one of `release`'s group (the candidate picked, or the first the
+        sweep saw), else the one with the folder's title among the artist's albums. The work runs in a
+        thread (a move across disks copies, minutes for a big album; the app's request must not wait) and the
+        entry shows as "deleting" meanwhile; a second click is refused."""
+        src = (self.music / folder).resolve()
+        if "/" not in folder or self.music.resolve() not in src.parents or not src.is_dir() or folder.startswith("."):
+            raise ValueError(f"{folder}: not an album folder of the library")
+        if any(p.is_dir() and any(p.rglob("*.flac")) for p in src.iterdir()):
+            raise ValueError(f"{folder}: holds other albums (subfolders with FLAC files)")
+        with self.library.lock:
+            if (self.library.state.get(folder) or {}).get("state") == "deleting":
+                raise ValueError(f"{folder}: already being deleted")
+            e = dict(self.library.state.get(folder) or {})
+            e.update(state="deleting", why="leaving /music; Lidarr searches the album next", t=time.time())
+            self.library.state[folder] = e
+            self.library.save()
+        threading.Thread(target=self._delete_album, args=(folder, src, release, e), daemon=True, name=f"delete {folder}").start()
+        return {"folder": folder, "done": [f"{folder}: deleting in the background (the files go to {self.TRASH}, then Lidarr searches the album)"]}
+
+    def _delete_album(self, folder: str, src: Path, release: str, entry: dict) -> None:
+        artist, _, title = folder.partition("/")
+        done: list[str] = []
+        try:
+            groups: list[str] = []
+            for r in [release] + [c.get("mbid", "") for c in entry.get("candidates") or []]:
+                m = re.search(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", r or "")
+                if m:
+                    try:
+                        g = ((mb.release(m.group(0)) or {}).get("release-group") or {}).get("id", "")
+                    except Exception:  # noqa: BLE001
+                        g = ""
+                    if g and g not in groups:
+                        groups.append(g)
+            trash = self.music / self.TRASH
+            trash.mkdir(parents=True, exist_ok=True)
+            dst = trash / f"{time.strftime('%Y%m%d-%H%M%S')} {style.folder_name(artist)} - {style.folder_name(title)}"
+            shutil.move(str(src), str(dst))           # a rename on the same disk; a copy + delete across disks
+            os.utime(dst, None)
+            self.library.forget(folder)
+            done.append(f"{folder} moved to {self.TRASH}/{dst.name} (kept 30 days)")
+            self.catalog.refresh_async()
+            try:
+                done.append(self.plex.scan(artist))
+            except Exception as e:  # noqa: BLE001
+                done.append(f"Plex: {e}")
+            if self.lidarr.enabled:
+                try:
+                    done.append(self.lidarr_search_again(artist, title, groups))
+                except Exception as e:  # noqa: BLE001
+                    done.append(f"Lidarr: {e}")
+            else:
+                done.append("Lidarr: no API key configured")
+            self.purge_trash()
+        except Exception as e:  # noqa: BLE001
+            done.append(f"failed: {type(e).__name__}: {e}")
+            with self.library.lock:
+                if src.is_dir():
+                    entry.update(state="error", why=f"delete failed: {e}", t=time.time())
+                    self.library.state[folder] = entry
+                else:
+                    self.library.state.pop(folder, None)
+                self.library.save()
+        print(f"[library] delete {folder}: " + "; ".join(done), flush=True)
+        try:
+            self.tg.send(f"🗑 {folder}\n" + "\n".join(done))
+        except Exception:  # noqa: BLE001
+            pass
+
+    def lidarr_search_again(self, artist: str, title: str, groups: list[str]) -> str:
+        """The Lidarr album of a folder that just left /music: by release group, else by title among the
+        artist's albums; its artist folder rescanned, then monitored and searched."""
+        alb = None
+        for g in groups:
+            alb = self.lidarr.album_by_group(g)
+            if alb:
+                break
+        if not alb:
+            key = self.lidarr.name_key(re.sub(r"\s*\((?:19|20)\d{2}\)\s*$", "", title.replace("_", ":")))
+            try:
+                cands = [a for a in self.lidarr.albums(artist.replace("_", ":")) if self.lidarr.name_key(a["title"]) == key]
+            except ValueError as e:
+                return f"Lidarr: {e}; the album is not searched (monitor it there)"
+            if len(cands) != 1:
+                return f"Lidarr: {len(cands)} albums titled {title!r} for {artist}; the album is not searched (monitor it there)"
+            alb = {"id": cands[0]["id"], "artistId": cands[0]["artist_id"], "title": cands[0]["title"]}
+        self.lidarr.rescan_ids([alb["artistId"]])
+        return self.lidarr.search([alb["id"]]).replace("Lidarr:", f"Lidarr: {alb.get('title')!r} monitored,", 1)
+
+    def purge_trash(self, days: int = 30, hourly: bool = False) -> int:
+        """What Delete moved aside more than `days` ago goes for good (from the loop: once an hour). The age
+        is the stamp in the folder's name, never the folder's mtime: a copied folder keeps the album's own
+        mtime, years old, which on 2026-11-09 purged four albums seconds after they were moved."""
+        if hourly and time.time() - getattr(self, "_trash_purged", 0) < 3600:
+            return 0
+        self._trash_purged = time.time()
+        trash = self.music / self.TRASH
+        n = 0
+        for d in trash.iterdir() if trash.is_dir() else []:
+            m = re.match(r"^(\d{8}-\d{6}) ", d.name)
+            if not m:
+                continue
+            try:
+                stamp = time.mktime(time.strptime(m.group(1), "%Y%m%d-%H%M%S"))
+            except ValueError:
+                continue
+            if time.time() - stamp > days * 86400:
+                shutil.rmtree(d, ignore_errors=True)
+                n += 1
+        return n
 
     def retitle_album(self, folder: str, album: str) -> dict:
         """ALBUM on every track of /music/<folder> set to `album` (as given, no restyling) and the folder

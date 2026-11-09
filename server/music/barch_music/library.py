@@ -8,7 +8,9 @@ unmapped files), merges compare by title and a same-title album looks like the o
            values go to an undo log; Lidarr rescans the artist
     anything else (two editions with other titles, lengths off, nothing on MusicBrainz)
         -> waits in `library.json` with the candidates and the reason: the Music app's Library tab
-           (Use a candidate after the comparison, Tag; Add to MusicBrainz; Skip)
+           (Use a candidate after the comparison, Tag; Reorder when the files are the same songs in
+           another order: numbers and names put in MusicBrainz's order, then tagged; Add to MusicBrainz;
+           Delete, which hands the album back to Lidarr's search; Skip)
 
 One album per step, only while no job waits (the pipeline's loop calls step()); the state survives
 restarts, so the first pass over 1,800 albums simply takes its hours. Albums already tagged are
@@ -189,6 +191,10 @@ class Library:
             n = self.write(folder, best, tracks, "the matcher")
             return {"state": "tagged", "mbid": best.mbid, "title": best.title, "why": f"{n} files tagged", "candidates": summary[:1]}
         state = "none" if not cands else "ambiguous"
+        same = next((c for c in cands if c.reorder), None) if not (best and best.ok) else None
+        if same:
+            reason = (f"{same.artist} - {same.title} ({same.date}): the same {sum(len(m.get('tracks', [])) for m in same.media)} songs "
+                      "in another order; Reorder puts the files in MusicBrainz's order, or add your edition to MusicBrainz")
         return {"state": state, "why": reason or "no release fits well enough", "candidates": summary,
                 "tracks": [{"disc": t.disc, "index": t.index, "seconds": round(t.seconds, 1), "title": t.hints.get("title", "")} for t in tracks]}
 
@@ -264,6 +270,83 @@ class Library:
         self.flush_rescan()
         return f"{folder}: {n} files tagged with {best.artist} – {best.title} ({best.mbid})"
 
+    def reorder(self, folder: str, release: str) -> str:
+        """Bruno picked a release that holds the same songs in another order (an LP, another edition): the
+        files are renumbered and renamed to MusicBrainz's order (TRACKNUMBER, DISCNUMBER when it changes,
+        "D.TT - " in the name; the titles and everything else stay) and tagged with its ids. A release
+        that already fits in order is just tagged. The old names and tags go to the undo log."""
+        m = UUID.search(release or "")
+        if not m:
+            raise ValueError("no MusicBrainz release id")
+        path = self.music / folder
+        tracks = read_tracks(path)
+        if not tracks:
+            raise ValueError(f"{folder}: no FLAC files")
+        _, cands, reason = matcher.find(tracks, hints_for(folder, tracks), force=m.group(0))
+        cand = cands[0] if cands else None
+        if not cand or cand.score == 0.0:
+            raise ValueError(reason or "the release does not hold these songs")
+        if cand.ok:
+            return self.tag(folder, release)                 # already in that order: only the ids
+        if not cand.reorder:
+            raise ValueError(f"{cand.artist} – {cand.title}: not the same songs in another order ({'; '.join(cand.why)})")
+        plan = matcher.reorder_plan(cand, tracks)
+        if not plan:
+            raise ValueError("the release does not hold the same songs")
+        by_key = {(r["disc"], r["index"]): r for r in plan}
+        moves, undo = [], []
+        for t in tracks:
+            r = by_key.get((t.disc, t.index))
+            if not r:
+                raise ValueError(f"{t.path.name}: not in the plan")
+            mm = re.match(r"^\d+\.\d+ - (.*)\.flac$", t.path.name, re.I)
+            title_part = mm.group(1) if mm else style.file_title(t.hints.get("title") or t.path.stem)
+            dst = t.path.with_name(style.file_name(r["to_disc"], r["to_pos"], title_part))
+            moves.append((t, r, dst))
+        targets = [d for _, _, d in moves]
+        if len(set(targets)) != len(targets):
+            raise ValueError("two files would get the same name")
+        ours = {t.path for t in tracks}
+        for _, _, d in moves:
+            if d.exists() and d not in ours:
+                raise ValueError(f"{d.name} exists already")
+        # names first (through temporary names: 1.01 <-> 1.03 swap), then the tags, then the ids
+        for t, _, d in moves:
+            if d != t.path:
+                t.path.rename(d.with_name(f".reorder-{d.name}"))
+        for t, r, d in moves:
+            if d != t.path:
+                d.with_name(f".reorder-{d.name}").rename(d)
+            x = FLAC(d)
+            old = {k: list(x.get(k) or []) for k in ("TRACKNUMBER", "DISCNUMBER", "MUSICBRAINZ_ALBUMID", "MUSICBRAINZ_TRACKID")}
+            x["TRACKNUMBER"] = f"{r['to_pos']:02d}"
+            if x.get("DISCNUMBER") or r["to_disc"] != t.disc:
+                x["DISCNUMBER"] = str(r["to_disc"])
+            x["MUSICBRAINZ_ALBUMID"] = cand.mbid
+            if r["recording"]:
+                x["MUSICBRAINZ_TRACKID"] = r["recording"]
+            x.save()
+            undo.append({"path": str(t.path), "new": str(d), "tags": old})
+        self.undo_dir.mkdir(parents=True, exist_ok=True)
+        (self.undo_dir / f"{time.strftime('%Y%m%d-%H%M%S')}-{re.sub(r'[^A-Za-z0-9]+', '_', folder)[:80]}-reorder.json").write_text(
+            json.dumps({"folder": folder, "release": cand.mbid, "by": "Bruno", "files": undo}, ensure_ascii=False))
+        n = sum(1 for _, r, _ in moves if r["moves"])
+        with self.lock:
+            self.state[folder] = {"state": "tagged", "mbid": cand.mbid, "title": cand.title,
+                                  "why": f"{n} files moved to MusicBrainz's order, {len(moves)} tagged", "t": time.time()}
+            self.save()
+        self.rescan.add(folder.split("/")[0])
+        self.flush_rescan()
+        return (f"{folder}: {n} file(s) put in the order of {cand.artist} – {cand.title} ({cand.mbid}), {len(moves)} tagged: "
+                + ", ".join(f"{r['disc']}.{r['index']:02d}→{r['to_disc']}.{r['to_pos']:02d}" for _, r, _ in moves if r["moves"]))
+
+    def forget(self, folder: str) -> None:
+        """The album is gone from /music (deleted from the app): out of the state and the folder cache."""
+        with self.lock:
+            self.state.pop(folder, None)
+            self.save()
+        self._fm_t = 0
+
     def skip(self, folder: str) -> str:
         with self.lock:
             e = self.state.get(folder) or {}
@@ -287,14 +370,17 @@ class Library:
         if not rel:
             raise ValueError("MusicBrainz has no such release")
         tracks = read_tracks(self.music / folder)
-        return {"mbid": m.group(0), **matcher.compare([{"disc": t.disc, "index": t.index, "seconds": t.seconds,
-                                                        "title": t.hints.get("title", "")} for t in tracks], rel)}
+        cand = matcher._candidate(rel)
+        matcher.score(cand, tracks, {})                 # the names are not compared: lengths, titles, order
+        return {"mbid": m.group(0), "fits": cand.ok, "reorder": matcher.reorder_plan(cand, tracks) if not cand.ok else [],
+                **matcher.compare([{"disc": t.disc, "index": t.index, "seconds": t.seconds,
+                                    "title": t.hints.get("title", "")} for t in tracks], rel)}
 
     def summary(self) -> dict:
         counts: dict[str, int] = {}
         for e in self.state.values():
             counts[e["state"]] = counts.get(e["state"], 0) + 1
-        todo = [{"folder": f, **e} for f, e in sorted(self.state.items()) if e["state"] in ("ambiguous", "none", "error")]
+        todo = [{"folder": f, **e} for f, e in sorted(self.state.items()) if e["state"] in ("ambiguous", "none", "error", "deleting")]
         return {"counts": counts, "albums": sum(1 for _ in self.folders()), "current": self.current, "paused": self.paused,
                 "last_error": self.last_error,
                 "decide": todo}

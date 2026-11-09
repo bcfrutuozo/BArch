@@ -232,7 +232,12 @@ The main pieces:
   **Library**: the library tied to MusicBrainz (see Music): how far the sweep is, Pause, and the albums
   it could not settle, each with its candidates; Use one to see it next to the album's files track by
   track, Tag writes its ids, Add to MusicBrainz opens the release editor filled in from the files, Skip.
-  The same from a shell: `barch music library [list|show|compare|tag|skip|retry]`, and **`barch music library
+  **Reorder** shows up when the files are the same songs as the release in another order (the comparison
+  lists the moves, `1.01 → 1.04`): the files are renumbered and renamed to MusicBrainz's order (titles and
+  audio untouched, undo log kept) and tagged, so the album is as it was catalogued. **Delete** (click twice)
+  throws the files you have away (kept 30 days in `/music/.library-trash`) and puts the album back in
+  Lidarr's search, monitored, so the pipeline brings a catalogued edition.
+  The same from a shell: `barch music library [list|show|compare|tag|reorder|delete|skip|retry]`, and **`barch music library
   fix "<Artist/Album>"`** hands one album to Claude (prompt `quickshell/music/library-fix.md`): it reads the
   files' lengths and titles, compares the candidates and what MusicBrainz, Discogs and the web say about the
   edition, tags the release that fits (never skips; an edition MusicBrainz lacks is left for `mb-add`).
@@ -438,6 +443,13 @@ The main pieces:
   so an app opening the microphone (Discord, a call) never degrades the music: the fifine is the
   microphone. The connected device shows its codec in the Bluetooth tile and in the bar's device list.
 - **Updates:** pending packages, unread Arch news (also enforced by a pacman hook) and the kernel.
+- **Volume on screen** (`audio/VolumeOsd.qml`): a pill near the bottom of every monitor (icon, level,
+  percentage) for 1.4 s whenever the default output's volume or mute changes, and "Microphone muted / on"
+  for the mic key. It watches PipeWire, not the keys, so the keyboard's roller, a voice command and a
+  headset's own buttons show it too; click-through and above fullscreen windows, so it shows in games.
+  Not shown while the pointer is on the bar's volume icon or its panel is open, nor for the jump a change
+  of default device brings. The bar itself only carries the speaker icon (dim when muted; click for the
+  panel with the level, devices, apps and microphone). `position: "center"` and `offset` in the file move it.
 - **Smaller widgets:** media player in the clock island (MPRIS, shows only while something plays);
   system monitor (CPU, GPU, RAM bars; click for temperatures, VRAM, GPU power; right-click btop);
   disks (turns yellow/red as one fills; click a mount to open it); virtual machines (libvirt: start,
@@ -503,6 +515,8 @@ barch player show|hide|quit            # the window back · closed with the musi
 barch music status|browse|list|show|resolve|retry|reject|scan   # the NAS music pipeline and its review queue (see Music)
 barch music accept-year [--dry-run] [--older-than DAYS]   # the review albums waiting only on a year-only date: all resolved as YYYY-01-01
 barch music library [list|show|compare|tag|skip|retry] "<Artist/Album>" [<release>]   # the Library tab from a shell (see Music)
+barch music library reorder "<Artist/Album>" <release>   # the same songs in another order: files renumbered and renamed to MusicBrainz's, tagged
+barch music library delete "<Artist/Album>" [<release>]  # the files out of /music (/music/.library-trash, 30 days); Lidarr searches the album again
 barch music library fix "<Artist/Album>" ["hint"]   # Claude ties one library album to MusicBrainz (compare, then tag)
 barch music agent-sweep [library|review|all] [--parallel N] [--limit N] · status · stop   # Claude over everything waiting, detached
 barch music covers check [artist]|list|apply|undo|keep|pick|propose <Artist/Album>   # scans with a frame -> the clean artwork
