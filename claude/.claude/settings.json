@@ -29,6 +29,9 @@
       }
     ]
   },
+  "enabledPlugins": {
+    "clangd-lsp@claude-plugins-official": true
+  },
   "language": "português do Brasil (pt-BR)",
   "tui": "fullscreen",
   "theme": "auto",
@@ -63,8 +66,5 @@
       "**Trusted repo**: /home/bcfrutuozo/Source (no remotes configured) and /home/bcfrutuozo/BArch (the user's desktop configuration, private GitHub remote bcfrutuozo/BArch)",
       "**Org-specific CLIs**: None configured"
     ]
-  },
-  "enabledPlugins": {
-    "clangd-lsp@claude-plugins-official": true
   }
 }
