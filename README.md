@@ -67,7 +67,11 @@ The main pieces:
   asks in a new session in `~/BArch`, Shift+Enter continues the last one), `b` wallpapers (below);
   OCR, color picker, QR.
 - **Window tools:** minimize (Super+M, comes back to its own workspace), always on top
-  (Super+Shift+P), right-click menu on any window preview, swap/resize with Super+Shift/Ctrl+arrows.
+  (Super+Shift+P), right-click menu on any window preview, swap/resize with Super+Shift/Ctrl+arrows,
+  maximize keeping the bar and gaps (Super+Alt+F), kill a frozen app by clicking it (Super+Ctrl+Alt+Del),
+  tabbed groups (Super+G groups or ungroups, Super+Alt+Tab cycles the tabs, Super+Alt+1..9 picks one,
+  dragged onto the tab bar join), screen zoom around the cursor (Super+Ctrl+scroll, Super+Ctrl+0 resets;
+  `hypr/scripts/zoom.sh`, back to 1 at a reload).
   Alt+Tab and Super+Tab reach the remote machine when Parsec's immersive mode is on
   (`hypr/scripts/passthrough.sh`: an X11 window holding the keyboard gets the shortcut instead of
   Hyprland, since Xwayland's grab never reaches the compositor).

@@ -70,6 +70,27 @@ hl.config({
     },
 })
 
+-- Barra de abas dos grupos (Super+G): o padrão (14 px, fonte 8) some em 4K com escala 2.
+-- Cores e texto vêm do tema (theme/Theme.qml); a roda do mouse sobre a barra troca de aba
+hl.config({
+    group = {
+        groupbar = {
+            height             = 22,
+            font_size          = 11,
+            font_weight_active = "bold",
+            text_padding       = 8,
+            indicator_height   = 0,
+            gaps_in            = 4,
+            gaps_out           = 4,
+            rounding           = 6,
+            gradients          = true,
+            gradient_rounding  = 6,
+            scrolling          = true,
+            middle_click_close = true,
+        },
+    },
+})
+
 -- https://wiki.hypr.land/Configuring/Layouts/Master-Layout/
 hl.config({
     master = {

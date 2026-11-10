@@ -26,11 +26,30 @@ local closeWindowBind = hl.bind(mainMod .. " + C", hl.dsp.window.close(), { desc
 -- closeWindowBind:set_enabled(false)
 hl.bind(mainMod .. " + F", hl.dsp.window.float({ action = "toggle" }), { description = "Windows|Float / Tile" })
 hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" }), { description = "Windows|Fullscreen" })
+-- Ocupa a área toda, mas a barra, as bordas e os gaps ficam
+hl.bind(mainMod .. " + ALT + F", hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" }), { description = "Windows|Maximize" })
 hl.bind(mainMod .. " + P", hl.dsp.window.pseudo(), { description = "Windows|Pseudotile" })
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"), { description = "Windows|Toggle Split" })    -- só dwindle
 hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("qs ipc call minimize window"), { description = "Windows|Minimize" })
 hl.bind(mainMod .. " + SHIFT + M", hl.dsp.exec_cmd("qs ipc call minimize restoreLast"), { description = "Windows|Restore Last Minimized" })
 hl.bind(mainMod .. " + SHIFT + P", hl.dsp.exec_cmd("qs ipc call pin toggle"), { description = "Windows|Always on Top" })
+-- Mata na hora (SIGKILL): o cursor vira uma mira e o clique escolhe a janela; Esc cancela.
+-- Super+C só pede para fechar, o que um app travado ignora
+hl.bind(mainMod .. " + CTRL + ALT + Delete", hl.dsp.exec_cmd("hyprctl kill"), { description = "Windows|Kill (click a window)" })
+
+-- Grupos: janelas empilhadas com abas. Super+G cria o grupo com a janela em foco (ou desfaz o
+-- grupo dela); as janelas abertas depois e as arrastadas para a barra de abas entram nele
+hl.bind(mainMod .. " + G", hl.dsp.group.toggle(), { description = "Groups|Group / Ungroup" })
+hl.bind(mainMod .. " + ALT + Tab", hl.dsp.group.next(), { description = "Groups|Next Tab" })
+hl.bind(mainMod .. " + ALT + SHIFT + Tab", hl.dsp.group.prev(), { description = "Groups|Previous Tab" })
+for i = 1, 9 do
+    hl.bind(mainMod .. " + ALT + " .. i, hl.dsp.group.active({ index = i }), { description = "Groups|Go to Tab " .. i })
+end
+
+-- Zoom em volta do cursor (cursor:zoom_factor), passos de 25 %
+hl.bind(mainMod .. " + CTRL + mouse_up", hl.dsp.exec_cmd("~/.config/hypr/scripts/zoom.sh in"), { description = "Zoom|Zoom In" })
+hl.bind(mainMod .. " + CTRL + mouse_down", hl.dsp.exec_cmd("~/.config/hypr/scripts/zoom.sh out"), { description = "Zoom|Zoom Out" })
+hl.bind(mainMod .. " + CTRL + 0", hl.dsp.exec_cmd("~/.config/hypr/scripts/zoom.sh reset"), { description = "Zoom|Reset Zoom" })
 
 -- Trocar de janela (Alt+Tab com prévia) e visão geral dos workspaces.
 -- Passam por scripts/passthrough.sh: se a janela em foco é um app X11 segurando o teclado

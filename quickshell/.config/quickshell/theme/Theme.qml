@@ -601,6 +601,8 @@ Singleton {
         // grupos de janelas (abas)
         "  { group = { col = { border_active = " + q(rgba(accent)) + ", border_inactive = " + q(rgba(surface)) + " } } },",
         "  { group = { groupbar = { col = { active = " + q(rgba(accent)) + ", inactive = " + q(rgba(surface)) + " } } } },",
+        // título das abas: escuro sobre o destaque, o texto da paleta sobre as outras (legível no claro também)
+        "  { group = { groupbar = { text_color = " + q(rgba(crust)) + ", text_color_inactive = " + q(rgba(text)) + " } } },",
         // cantos das janelas iguais aos painéis da barra
         "  { decoration = { rounding = " + windowRadius + " } },",
         // fundo visível quando não há papel de parede

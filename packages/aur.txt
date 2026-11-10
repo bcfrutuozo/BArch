@@ -12,6 +12,7 @@ linux-cachyos-headers
 modprobed-db
 mullvad-browser-bin
 nvflash
+onlyoffice-bin
 otf-apple-sf-mono
 otf-apple-sf-pro
 otf-san-francisco
