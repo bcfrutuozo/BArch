@@ -462,7 +462,7 @@ The main pieces:
   panel with the level, devices, apps and microphone). `position: "center"` and `offset` in the file move it.
 - **Smaller widgets:** power menu (Reload Hyprland, Lock, Suspend, Reboot and Shut Down, the last two
   with a second click to confirm); media player in the clock island (MPRIS, shows only while something plays);
-  system monitor (CPU, GPU, RAM bars; click for temperatures, VRAM, GPU power; right-click btop);
+  system monitor (CPU, RAM, GPU bars and, apart, download and upload: the physical interfaces summed, VPN tunnel and VMs left out, on a log scale up to the link speed; click for temperatures, VRAM, GPU power and the network speed in MB/s and Mb/s; right-click btop);
   disks (turns yellow/red as one fills; click a mount to open it); virtual machines (libvirt: start,
   console, pause, reboot, shut down); AirPods (`pods/`, from [omarchy-pods](https://github.com/thisisgm/omarchy-pods): battery,
   listening mode; its daemon `librepods`/`librepods-ctl` is built into `~/.local` by `install.sh`

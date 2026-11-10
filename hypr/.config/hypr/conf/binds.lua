@@ -46,6 +46,11 @@ for i = 1, 9 do
     hl.bind(mainMod .. " + ALT + " .. i, hl.dsp.group.active({ index = i }), { description = "Groups|Go to Tab " .. i })
 end
 
+-- Every wheel step on a mod+scroll bind is the bind's: with the default delay (300 ms) Hyprland
+-- hands the steps that follow one that fired straight to the window, so a fast Super+Ctrl+scroll
+-- zoomed the screen once and then the browser (Ctrl+scroll), and Super+scroll leaked too.
+hl.config({ binds = { scroll_event_delay = 0 } })
+
 -- Zoom em volta do cursor (cursor:zoom_factor), passos de 25 %
 hl.bind(mainMod .. " + CTRL + mouse_up", hl.dsp.exec_cmd("~/.config/hypr/scripts/zoom.sh in"), { description = "Zoom|Zoom In" })
 hl.bind(mainMod .. " + CTRL + mouse_down", hl.dsp.exec_cmd("~/.config/hypr/scripts/zoom.sh out"), { description = "Zoom|Zoom Out" })

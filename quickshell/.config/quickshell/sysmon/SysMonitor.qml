@@ -1,9 +1,13 @@
 // SysMonitor.qml — monitor de recursos para a barra do Quickshell
-// Na barra (barStyle): três barrinhas de CPU, GPU e RAM ("bars", padrão), só um ícone ("icon")
-// ou as porcentagens ("numbers"). Tudo fica amarelo/vermelho com carga ou temperatura alta.
-// Clique esquerdo: painel com detalhes (temperaturas, VRAM, swap, consumo da GPU).
+// Na barra (barStyle): barrinhas de CPU, RAM e GPU e, separadas, download e upload ("bars", padrão),
+// só um ícone ("icon") ou as porcentagens ("numbers"). Tudo fica amarelo/vermelho com carga ou
+// temperatura alta.
+// Clique esquerdo: painel com detalhes (temperaturas, VRAM, swap, consumo da GPU, velocidade da rede).
 // Clique direito: abre o btop no terminal.
-// Fontes: /proc/stat, /proc/meminfo, sensor k10temp (Ryzen) e nvidia-smi (NVIDIA).
+// Fontes: /proc/stat, /proc/meminfo, /proc/net/dev, sensor k10temp (Ryzen) e nvidia-smi (NVIDIA).
+// Rede: soma das interfaces físicas ativas (as que têm /sys/class/net/X/device: cabo e Wi-Fi), então
+// lo, virbr/vnet, Docker e o túnel da VPN ficam de fora e nada conta duas vezes. As barrinhas são
+// logarítmicas, de 1 KB/s até a velocidade do link, para um tráfego pequeno já aparecer.
 
 import QtQuick
 import QtQuick.Layouts
@@ -58,9 +62,15 @@ Item {
     property real gpuPowerLimit: -1
     property string tempPath: ""
     property var lastCpu: null
+    property var netIfaces: []     // interfaces físicas ativas
+    property real netLinkMbps: 1000 // a maior velocidade de link entre elas (Wi-Fi não informa)
+    property real netRx: 0         // bytes/s
+    property real netTx: 0
+    property var lastNet: null
 
     readonly property real memUsage: memTotal > 0 ? memUsed / memTotal : 0
     readonly property bool hasGpu: gpuUsage >= 0
+    readonly property bool hasNet: netIfaces.length > 0
 
     // ---------- níveis: 0 normal, 1 aviso, 2 crítico ----------
     function level(v, lim) { return v >= lim[1] ? 2 : v >= lim[0] ? 1 : 0 }
@@ -79,6 +89,18 @@ Item {
     function pct(v) { return String(Math.round(v)).padStart(2, " ") + "%" }
     function gib(kib) { return (kib / 1048576).toFixed(1) }
     function temp(v) { return v < 0 ? "—" : Math.round(v) + "°C" }
+    function rate(b) {
+        if (b < 1000) return Math.round(b) + " B/s"
+        if (b < 1e6) return Math.round(b / 1e3) + " KB/s"
+        if (b < 1e9) return (b / 1e6).toFixed(b < 1e7 ? 2 : 1) + " MB/s"
+        return (b / 1e9).toFixed(2) + " GB/s"
+    }
+    function mbit(b) { return (b * 8 / 1e6).toFixed(b * 8 < 1e7 ? 2 : 0) + " Mb/s" }
+    // 0 até 1 KB/s, 1 na velocidade do link, logarítmica no meio
+    function netFraction(b) {
+        const max = Math.max(1e5, netLinkMbps * 125000)
+        return b <= 1000 ? 0 : Math.min(1, Math.log(b / 1000) / Math.log(max / 1000))
+    }
 
     // ---------- leitura ----------
     function parseStat(t) {
@@ -103,6 +125,63 @@ Item {
         memUsed = memTotal - kib(t, "MemAvailable")
         swapTotal = kib(t, "SwapTotal")
         swapUsed = swapTotal - kib(t, "SwapFree")
+    }
+
+    function parseNet(t) {
+        let rx = 0, tx = 0
+        for (const line of t.split("\n").slice(2)) {
+            const m = line.match(/^\s*([^:\s]+):\s*(.*)$/)
+            if (!m || netIfaces.indexOf(m[1]) < 0) continue
+            const f = m[2].trim().split(/\s+/).map(Number)
+            rx += f[0]; tx += f[8]
+        }
+        const now = Date.now()
+        // a lista de interfaces mudou (cabo/Wi-Fi): recomeça a contagem, sem um pico falso
+        const key = netIfaces.join(",")
+        if (lastNet && lastNet.key === key && now > lastNet.time) {
+            const dt = (now - lastNet.time) / 1000
+            netRx = Math.max(0, (rx - lastNet.rx) / dt)
+            netTx = Math.max(0, (tx - lastNet.tx) / dt)
+        } else if (!lastNet || lastNet.key !== key) {
+            netRx = 0; netTx = 0
+        }
+        lastNet = { rx: rx, tx: tx, time: now, key: key }
+    }
+
+    FileView {
+        id: netFile
+        path: "/proc/net/dev"
+        onLoaded: root.parseNet(text())
+    }
+
+    // Interfaces físicas ativas e a velocidade do link; lida de novo a cada 30 s
+    Process {
+        id: netIfProc
+        running: true
+        command: ["sh", "-c",
+            "for i in /sys/class/net/*; do [ -e \"$i/device\" ] && [ \"$(cat \"$i/operstate\")\" = up ] && " +
+            "echo \"${i##*/} $(cat \"$i/speed\" 2>/dev/null || echo -1)\"; done"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const names = [], speeds = []
+                for (const l of text.trim().split("\n")) {
+                    const f = l.trim().split(/\s+/)
+                    if (!f[0]) continue
+                    names.push(f[0])
+                    const sp = parseInt(f[1])
+                    if (sp > 0) speeds.push(sp)
+                }
+                if (names.join(",") !== root.netIfaces.join(",")) root.netIfaces = names
+                root.netLinkMbps = speeds.length ? Math.max.apply(null, speeds) : 1000
+            }
+        }
+    }
+
+    Timer {
+        interval: 30000
+        running: true
+        repeat: true
+        onTriggered: netIfProc.running = true
     }
 
     FileView {
@@ -142,6 +221,7 @@ Item {
         onTriggered: {
             statFile.reload()
             memFile.reload()
+            if (root.hasNet) netFile.reload()
             if (root.tempPath !== "") tempFile.reload()
         }
     }
@@ -233,6 +313,34 @@ Item {
                         color: root.barColor(parent.modelData.l)
                         Behavior on height { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
                         Behavior on color { ColorAnimation { duration: 200 } }
+                    }
+                }
+            }
+        }
+
+        // Duas barrinhas da rede: download e upload
+        Row {
+            visible: root.barStyle === "bars" && root.hasNet
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 3
+
+            Repeater {
+                model: [root.netFraction(root.netRx), root.netFraction(root.netTx)]
+
+                Rectangle {
+                    required property var modelData
+                    width: 4
+                    height: root.fontSize + 1
+                    radius: 2
+                    color: root.track
+
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        width: parent.width
+                        height: Math.max(2, parent.height * parent.modelData)
+                        radius: 2
+                        color: root.accent
+                        Behavior on height { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
                     }
                 }
             }
@@ -419,6 +527,33 @@ Item {
                     label: "Power"
                     value: Math.round(root.gpuPower) + (root.gpuPowerLimit > 0 ? " / " + Math.round(root.gpuPowerLimit) : "") + " W"
                     fraction: root.gpuPowerLimit > 0 ? root.gpuPower / root.gpuPowerLimit : -1
+                }
+
+                // --- Rede ---
+                SectionTitle { visible: root.hasNet; widget: root; icon: root.glyph(0xF04E1); title: "Network" }
+                StatRow {
+                    visible: root.hasNet
+                    widget: root
+                    label: "Download"
+                    value: root.rate(root.netRx) + "  ·  " + root.mbit(root.netRx)
+                    fraction: root.netFraction(root.netRx)
+                }
+                StatRow {
+                    visible: root.hasNet
+                    widget: root
+                    label: "Upload"
+                    value: root.rate(root.netTx) + "  ·  " + root.mbit(root.netTx)
+                    fraction: root.netFraction(root.netTx)
+                }
+                Text {
+                    visible: root.hasNet
+                    Layout.fillWidth: true
+                    text: root.netIfaces.join(" + ") + "  ·  link " +
+                          (root.netLinkMbps >= 1000 ? root.netLinkMbps / 1000 + " Gb/s" : root.netLinkMbps + " Mb/s")
+                    color: root.dim
+                    font.family: root.fontFamily
+                    font.pixelSize: root.fontSize - 2
+                    elide: Text.ElideRight
                 }
 
                 // --- rodapé ---
