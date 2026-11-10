@@ -1,0 +1,17 @@
+# BArch override of kernel-modules-hook's post hook (same name, /etc wins).
+# The pre hook copies the running kernel's modules, DKMS ones included, before the dkms
+# upgrade hook removes them; restoring that copy brought the old nvidia .ko back, and the
+# dkms install that follows aborted ("already installed", exit 6; 2026-11-10, nvidia-open-dkms
+# 615.78.08-1 -> -2 together with linux 7.2.15). updates/dkms is left to dkms.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/lib/modules/*/vmlinuz
+
+[Action]
+Description = Restoring Linux kernel modules (DKMS left to dkms)...
+When = PostTransaction
+Depends = coreutils
+Depends = rsync
+Exec = /bin/sh -xc 'KVER="${KVER:-$(uname -r)}"; if test -e "/usr/lib/modules/backup/${KVER}"; then rsync -AHXal --ignore-existing --exclude=updates/dkms/ "/usr/lib/modules/backup/${KVER}" /usr/lib/modules/; fi; rm -rf /usr/lib/modules/backup'

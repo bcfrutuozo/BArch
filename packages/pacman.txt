@@ -21,6 +21,7 @@ cliphist
 cmake
 cryptsetup
 ddcutil
+directx-shader-compiler
 discord
 dnsmasq
 docker
@@ -79,6 +80,7 @@ linux-headers
 man-db
 mangohud
 memtest86+-efi
+mingw-w64-gcc
 mono
 mpv
 mpv-mpris

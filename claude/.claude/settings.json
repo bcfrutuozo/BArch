@@ -1,12 +1,37 @@
 {
-  "tui": "fullscreen",
-  "theme": "auto",
   "env": {
     "DISABLE_AUTOUPDATER": "1",
     "DISABLE_TELEMETRY": "1",
     "DISABLE_ERROR_REPORTING": "1"
   },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.local/bin/barch\" snapshot hook",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.local/bin/barch\" snapshot hook",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
   "language": "português do Brasil (pt-BR)",
+  "tui": "fullscreen",
+  "theme": "auto",
   "autoMode": {
     "allow": [
       "$defaults",
@@ -39,29 +64,7 @@
       "**Org-specific CLIs**: None configured"
     ]
   },
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup|resume",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$HOME/.local/bin/barch\" snapshot hook",
-            "timeout": 60
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$HOME/.local/bin/barch\" snapshot hook",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
+  "enabledPlugins": {
+    "clangd-lsp@claude-plugins-official": true
   }
 }

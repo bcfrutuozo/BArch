@@ -76,10 +76,81 @@ hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }),    { descript
 hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }),  { description = "Windows|Focus Down" })
 
 -- Trocar de lugar com a vizinha (mainMod + SHIFT + setas) e redimensionar (mainMod + CTRL + setas)
-hl.bind(mainMod .. " + SHIFT + left",  hl.dsp.window.swap({ direction = "left" }),  { description = "Windows|Swap Left" })
-hl.bind(mainMod .. " + SHIFT + right", hl.dsp.window.swap({ direction = "right" }), { description = "Windows|Swap Right" })
-hl.bind(mainMod .. " + SHIFT + up",    hl.dsp.window.swap({ direction = "up" }),    { description = "Windows|Swap Up" })
-hl.bind(mainMod .. " + SHIFT + down",  hl.dsp.window.swap({ direction = "down" }),  { description = "Windows|Swap Down" })
+--
+-- Hyprland 0.57.2 bug: swapping a group across monitors (no neighbour on this workspace, so the
+-- swap goes to the window on the next monitor) moves the group's layout node into the other
+-- workspace's tree but leaves its windows on the old workspace: they are laid out on one monitor
+-- and drawn as part of the other, so the group vanishes. It hits whichever side of the swap is the
+-- group (a plain window swapped onto a monitor whose workspace holds one too). So when the swap
+-- would cross monitors (nothing that way on its own workspace) and a group is on either side, the
+-- window is moved to the active workspace of that monitor instead, which moves groups correctly;
+-- everything else is the plain swap.
+-- Logical box of a monitor (size / scale, sides swapped when rotated 90/270)
+local function monitorBox(m)
+    local w, h = m.width / m.scale, m.height / m.scale
+    if m.transform % 2 == 1 then w, h = h, w end
+    return m.x, m.y, w, h
+end
+-- The nearest monitor wholly on that side of `cur` and overlapping it on the other axis, as the
+-- swap itself finds it (a point probe misses it: the AW is shorter than the portrait monitor)
+local function monitorToward(cur, dir)
+    local cx, cy, cw, ch = monitorBox(cur)
+    local best, bestDist
+    for _, m in ipairs(hl.get_monitors()) do
+        if m.name ~= cur.name and m.enabled ~= false then
+            local x, y, w, h = monitorBox(m)
+            local vert = y < cy + ch and y + h > cy
+            local horiz = x < cx + cw and x + w > cx
+            local dist
+            if dir == "left" and vert and x + w <= cx then dist = cx - (x + w)
+            elseif dir == "right" and vert and x >= cx + cw then dist = x - (cx + cw)
+            elseif dir == "up" and horiz and y + h <= cy then dist = cy - (y + h)
+            elseif dir == "down" and horiz and y >= cy + ch then dist = y - (cy + ch) end
+            if dist and (not bestDist or dist < bestDist) then best, bestDist = m, dist end
+        end
+    end
+    return best
+end
+local function swapWindow(dir)
+    local plain = hl.dsp.window.swap({ direction = dir })
+    return function()
+        local w = hl.get_active_window()
+        if not (w and not w.floating and w.workspace) then
+            return hl.dispatch(plain)
+        end
+        local ax, ay, aw, ah = w.at.x, w.at.y, w.size.x, w.size.y
+        for _, o in ipairs(hl.get_windows({ workspace = w.workspace.id })) do
+            if o.address ~= w.address and not o.floating and not o.hidden and o.mapped then
+                local ox, oy, ow, oh = o.at.x, o.at.y, o.size.x, o.size.y
+                local vert = oy < ay + ah and oy + oh > ay
+                local horiz = ox < ax + aw and ox + ow > ax
+                if (dir == "left" and vert and ox + ow <= ax + 1)
+                    or (dir == "right" and vert and ox >= ax + aw - 1)
+                    or (dir == "up" and horiz and oy + oh <= ay + 1)
+                    or (dir == "down" and horiz and oy >= ay + ah - 1) then
+                    return hl.dispatch(plain)
+                end
+            end
+        end
+        -- Crossing monitors: the bug hits whichever side of the swap is a group
+        local m = w.monitor and monitorToward(w.monitor, dir)
+        local ws = m and m.active_workspace
+        if ws then
+            local grouped = w.group ~= nil
+            for _, o in ipairs(hl.get_windows({ workspace = ws.id })) do
+                if o.group and not o.floating then grouped = true end
+            end
+            if grouped then
+                return hl.dispatch(hl.dsp.window.move({ workspace = ws.id }))
+            end
+        end
+        return hl.dispatch(plain)
+    end
+end
+hl.bind(mainMod .. " + SHIFT + left",  swapWindow("left"),  { description = "Windows|Swap Left" })
+hl.bind(mainMod .. " + SHIFT + right", swapWindow("right"), { description = "Windows|Swap Right" })
+hl.bind(mainMod .. " + SHIFT + up",    swapWindow("up"),    { description = "Windows|Swap Up" })
+hl.bind(mainMod .. " + SHIFT + down",  swapWindow("down"),  { description = "Windows|Swap Down" })
 hl.bind(mainMod .. " + CTRL + left",  hl.dsp.window.resize({ x = -60, y = 0, relative = true }), { repeating = true, description = "Windows|Narrower" })
 hl.bind(mainMod .. " + CTRL + right", hl.dsp.window.resize({ x = 60, y = 0, relative = true }),  { repeating = true, description = "Windows|Wider" })
 hl.bind(mainMod .. " + CTRL + up",    hl.dsp.window.resize({ x = 0, y = -60, relative = true }), { repeating = true, description = "Windows|Shorter" })

@@ -23,6 +23,7 @@
 644 /etc/nftables.conf
 644 /etc/pacman.conf
 644 /etc/pacman.d/hooks/00-archnews.hook
+644 /etc/pacman.d/hooks/10-linux-modules-post.hook
 644 /etc/pacman.d/hooks/90-limine-copy.hook
 644 /etc/pacman.d/hooks/90-mkinitcpio-install.hook
 644 /etc/pam.d/barch-lock
