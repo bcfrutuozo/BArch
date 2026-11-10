@@ -40,26 +40,42 @@ Scope {
         if (mode === "projects") projProc.running = true
     }
 
-    // a cada tecla (o Launcher chama com os valores já atualizados)
-    function refresh(mode, arg) {
+    // a cada tecla (o Launcher chama via Qt.callLater, com mode/arg já atualizados)
+    function refresh() {
         qalcResult = ""
-        if (mode === "qalc" && hasQalc && arg.length > 0) qalcDebounce.restart()
+        qalcDebounce.stop()
+        if (mode === "qalc" && hasQalc && arg.length > 0) {
+            qalcDebounce.expr = arg
+            qalcDebounce.restart()
+        }
         if (mode === "files") filesDebounce.restart()
     }
 
     // ---------- calculadora ----------
+    // The expression is captured when typed, never read when the timer fires: by then the
+    // query may be empty (Esc clears it), and `qalc -t ""` drops into its interactive prompt,
+    // waits on stdin forever and keeps qalcProc "running", so every later run is ignored.
+    // `timeout` also caps a run that hangs (e.g. on an exchange-rate fetch).
     Timer {
         id: qalcDebounce
+        property string expr: ""
         interval: 150
         onTriggered: {
-            qalcProc.command = ["qalc", "-t", src.arg]
+            if (expr.trim() === "") return
+            qalcProc.running = false
+            qalcProc.expr = expr
+            qalcProc.command = ["timeout", "5", "qalc", "-t", "--", expr]
             qalcProc.running = true
         }
     }
     Process {
         id: qalcProc
+        property string expr: ""
         stdout: StdioCollector {
-            onStreamFinished: src.qalcResult = text.trim().split("\n").pop() || ""
+            onStreamFinished: {
+                // a result for an expression no longer on screen is dropped
+                if (qalcProc.expr === src.arg) src.qalcResult = text.trim().split("\n").pop() || ""
+            }
         }
     }
     Process {

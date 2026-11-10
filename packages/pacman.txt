@@ -68,6 +68,7 @@ lib32-gamemode
 lib32-mangohud
 lib32-nvidia-utils
 libnotify
+libqalculate
 libva-nvidia-driver
 libva-utils
 libvirt
@@ -142,7 +143,6 @@ tesseract-data-por
 thunar
 thunar-archive-plugin
 thunar-volman
-thunderbird
 tpm2-tss
 tree-sitter-cli
 ttf-jetbrains-mono-nerd

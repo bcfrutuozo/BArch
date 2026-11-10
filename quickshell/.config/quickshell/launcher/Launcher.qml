@@ -142,7 +142,9 @@ Scope {
 
     onQueryChanged: {
         wallPick = ""
-        src.refresh(mode, arg)
+        // mode and arg are bindings on query; this handler can run before they are
+        // re-evaluated (it read "apps"/"" for "= 2+3", so qalc never ran), so wait a tick
+        Qt.callLater(src.refresh)
     }
 
     // A config do Hyprland é em Lua: o dispatch usa a sintaxe hl.dsp.*
