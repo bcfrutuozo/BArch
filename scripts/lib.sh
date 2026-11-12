@@ -24,6 +24,7 @@ declare -A PACKAGES=(
   [audio]=".config/pipewire .config/wireplumber"
   [obs]=".local/share/applications/obs-stream.desktop .local/share/applications/obs-guitarra.desktop"
   [clip]=".local/share/applications/barch-clip.desktop"
+  [spotify]=".local/share/applications/spotify-launcher.desktop"
 )
 
 # User services to enable on a fresh install

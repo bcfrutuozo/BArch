@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Spotify (Launcher)
+GenericName=Music Player
+Icon=spotify-launcher
+TryExec=spotify-launcher
+# Spotify (CEF) runs under Xwayland and already scales by Xft.dpi (192); GDK_SCALE=2 on top
+# made it 4x, the same double scaling as Steam.
+Exec=env -u GDK_SCALE spotify-launcher %U
+Terminal=false
+MimeType=x-scheme-handler/spotify;
+Categories=Audio;Music;Player;AudioVideo;
+StartupWMClass=Spotify

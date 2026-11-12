@@ -1,0 +1,16 @@
+# BArch Drop: files, photos and links from the iPhone over the LAN (agent/drop.py, `barch drop`).
+# The iPhone's share sheet Shortcut or the page on :8350 posts them; they land in ~/Downloads/iPhone
+# with a notification, text goes to the clipboard. The firewall opens 8350 to the LAN only.
+[Unit]
+Description=BArch Drop: receive files from the iPhone (barch-drop)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/python3 -I %h/BArch/agent/drop.py serve
+Restart=on-failure
+RestartSec=5
+Nice=5
+
+[Install]
+WantedBy=graphical-session.target

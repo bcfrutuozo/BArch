@@ -35,17 +35,18 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
 | `mpv/` | `~/.config/mpv` | Video player (HDR, NVDEC) |
 | `uwsm/`, `environment/` | `~/.config/uwsm`, `~/.config/environment.d` | Session environment (Qt theme, cursor) |
-| `systemd/` | `~/.config/systemd/user` | User services (cliphist, replay, NAS mount, voice control) |
+| `systemd/` | `~/.config/systemd/user` | User services (cliphist, replay, NAS mount, voice control, BArch Drop) |
 | `bin/` | `~/.local/bin` | `barch` (CLI, below), `kernel-update`, `theme-auto`, `apps-theme`, `papirus-accent`, `nas-mount`, `keyring-wait`, `gsr-replay-saved` (the notification after a replay or recording is saved) |
 | `claude/` | `~/.claude/settings.json` | Claude Code settings: the hooks that take the safety snapshots (see Agent) |
 | `games/` | `~/Games/battle.net/run.sh`, `~/.config/gamemode.ini`, `~/.local/share/applications/steam.desktop` | Battle.net launcher (umu + Proton-GE), gamemode rules, Steam launcher without `GDK_SCALE` (Steam would scale twice) |
 | `clip/` | `~/.local/share/applications/barch-clip.desktop` | "Open with → BArch Clip" on any video in Thunar (hidden from menus; the launcher has its own entry); `install.sh` pins mpv as the player, or GIO would pick this entry by name |
+| `spotify/` | `~/.local/share/applications/spotify-launcher.desktop` | Spotify launcher without `GDK_SCALE` (it runs under Xwayland and already scales by `Xft.dpi`, so it scaled twice, like Steam) |
 | `obs/` | `~/.local/share/applications/obs-stream.desktop`, `obs-guitarra.desktop` | OBS launchers: **OBS Stream** (profile "Stream YouTube", scenes "Jogo": screen + BRIO corner, mic, PC audio) and **OBS Guitarra** (BRIO 1080p60, the room through the fifine, HEVC); the profiles and scenes go in the backup, the recordings in `~/Videos/OBS` do not |
 | `calendar/` | `~/.config/khal`, `~/.config/vdirsyncer/config` | iCloud calendar sync (the app password stays out of the repo) |
 | `audio/` | `~/.config/pipewire`, `~/.config/wireplumber` | PipeWire rates and resampler, onboard output at 32-bit/192 kHz, Bluetooth output-only at AAC (below), fifine mic as input only |
 | `backup/` | — | `barch backup`: what restic saves to the NAS (`include.txt`, `exclude.txt`), see Backup |
 | `finance/` | — | `barch finance import`: C6 Bank statements into Firefly III (data stays in `~/.config/firefly`) |
-| `agent/` | — | Scheduled agent tasks (`tasks/`), the reactive rules (`rules.json`) and their daemon (`events.py`), the NAS health collector (`nas.py`), the failure ignore list and the upstream watch list; used by `barch` |
+| `agent/` | — | Scheduled agent tasks (`tasks/`), the reactive rules (`rules.json`) and their daemon (`events.py`), the NAS health collector (`nas.py`), the iPhone receiver (`drop.py`), the failure ignore list and the upstream watch list; used by `barch` |
 | `server/` | NAS | `music/`: the music pipeline (its own container, `barch-music`), downloads to `/music` in the library's style with a review queue (`barch music`, see Music) and the catalog of `/music` the Player reads (`catalog.py`); `unraid/`: the SMBus driver OpenRGB needs there, built per Unraid kernel (see NAS); `books/`: the book stack's Unraid templates (Shelfmark requests, Calibre-Web-Automated for ebooks, Audiobookshelf), its README; `video/`: what Radarr and Sonarr accept (2160p HEVC HDR, a 1080p profile for what never came out in 4K, Recyclarr) and the pipeline that muxes the PT-BR dub from another release into each movie and episode, subtitles shifted along (`barch video`, its README); `torrents/`: qBittorrent's counters sampled every five minutes into SQLite (its own container, `barch-torrents`), so ratio, upload and download have a history (`barch torrents`, its README) |
 | `tools/` | — | Generators: wallpapers (`make_wallpapers.py`, sixteen scenes in the colors of each palette), Limine theme (`limine-theme.py`) |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
@@ -104,7 +105,7 @@ The main pieces:
   started, ping and the ICMPv6 that IPv6 needs, DHCP answers, libvirt guests and Docker containers
   talking to the host; the rest is dropped. Forward: guests and containers out; a published
   container port is reachable from the local networks only, never from the internet (what
-  ufw-docker gives Omarchy). Only its own table (`inet barch`) is managed, so libvirt's and Docker's
+  ufw-docker gives Omarchy). One port is open, from this LAN only: TCP 8350, BArch Drop. Only its own table (`inet barch`) is managed, so libvirt's and Docker's
   tables and the kill switch survive a reload. No SSH or LocalSend rules (sshd is off here,
   LocalSend is not installed); mDNS discovery (Chromecast) and Steam's local transfers are not
   opened either. `sudo nft list table inet barch` shows it with counters.
@@ -388,6 +389,16 @@ The main pieces:
   where there is no NVENC), decoded on the GPU, audio and subtitles copied, the container kept, chapters
   dropped. `barch clip info <file>` shows what it sees; `tests/test_clip.py` covers the crop math, the filter
   chains, the encoder choice, the probe summary and the progress lines.
+- **BArch Drop** (`agent/drop.py`, `barch-drop.service`, `barch drop`): AirDrop from the iPhone without
+  AirDrop (the AWDL radio it needs is out of reach of this Intel card). Share → **Send to BArch**, a Shortcut
+  that posts each item over the LAN (`Get Contents of URL`, form field `file`, the token as
+  `Authorization: Bearer`), or the page the service serves at `http://<desktop>:8350/` in Safari (any size,
+  with progress; Add to Home Screen makes it an app). Files land in `~/Downloads/iPhone` (never overwritten:
+  `name-2.ext`), streamed to disk, with one notification per batch (Open, Show in folder); a text or link
+  (form field `text`, the second Shortcut **Copy to BArch**) goes to the clipboard, with Open for a link.
+  `barch drop setup` prints the page's link as a QR code and the Shortcut step by step; the token, port,
+  folder and allowed networks are in `~/.config/barch/drop.json` (mode 600, made on the first run). The
+  firewall opens TCP 8350 to this LAN only (`100.100.0.0/24`), and the service checks the address again.
 - **Voice control** (`quickshell/voice/`, `barch voice`, tile **Voice** in the Control Center): the
   microphone is always open, like in a car, and nothing happens until a sentence starts with
   "barch" (see Voice below). A microphone shows in the bar while the service runs: dim while it
@@ -499,6 +510,7 @@ barch health [--refresh]           # .pacnew, failed services, TPM, backup, clea
 barch inbox [--refresh]            # what waits for a decision: music/video review, library, books, failures, health, agents
 barch claude [--refresh]           # the Claude plan's usage: 5-hour session, week, Fable share, resets, plan, agents' spend
 barch rgb [status]|apply|on|off|color <tone|#hex>|brightness <0-100>|flash [tone] [n]   # Corsair lighting (see Theme)
+barch drop [status]|setup|open     # BArch Drop: files and links from the iPhone (see The bar); setup = QR + Shortcut
 barch voice on|off|toggle|status   # always-on voice control (see Voice); pause|resume keep the service
 barch voice match "abre o terminal"  # which command a sentence hits, running nothing · test "..." runs it
 barch voice wake "Bartch, liga o HDR"  # would it wake the daemon · misses: near misses of the wake word, to tune it

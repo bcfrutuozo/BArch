@@ -256,6 +256,10 @@ Automation (agent/rules.json + agent/events.py, barch-events.service):
                               barch-rgb.service repaints on theme changes and after a resume)
   rgb color <tone|#hex>       a palette tone (accent, green, red...) or a fixed color
   rgb brightness <0-100>      rgb flash [tone|#hex] [times]   blink, then back (for rules)
+  drop [status]               BArch Drop (agent/drop.py, barch-drop.service): files and links from the iPhone over
+                              the LAN into ~/Downloads/iPhone (text to the clipboard); the last ones received
+  drop setup                  the page link (QR code) and the share sheet Shortcut, with the URL and token
+  drop open                   the folder they land in
 
 Agent:
   agent list                  scheduled tasks, last result and next run
@@ -2323,6 +2327,20 @@ cmd_rgb() {
   else python3 -I "$REPO/agent/rgb.py" "$@"; fi
 }
 
+# drop: agent/drop.py, the iPhone receiver (text, or JSON with --json)
+cmd_drop() {
+  local sub=${1:-status}
+  (($#)) && shift
+  need python3
+  case $sub in
+    status)
+      if [[ $JSON == 1 ]]; then python3 -I "$REPO/agent/drop.py" status --json | jq .; return "${PIPESTATUS[0]}"
+      else python3 -I "$REPO/agent/drop.py" status; fi ;;
+    setup | open) python3 -I "$REPO/agent/drop.py" "$sub" ;;
+    *) usage_error "drop status|setup|open" ;;
+  esac
+}
+
 # ---------------------------------------------------------------- agent
 
 # frontmatter field of a task file: task_field <file> <key>
@@ -2882,6 +2900,7 @@ case $cmd in
   disk) cmd_disk "$@" ;;
   fw | pfsense) cmd_fw "$@" ;;
   rgb) cmd_rgb "$@" ;;
+  drop) cmd_drop "$@" ;;
   voice) cmd_voice "$@" ;;
   snapshot) cmd_snapshot "$@" ;;
   failure) cmd_failure "$@" ;;

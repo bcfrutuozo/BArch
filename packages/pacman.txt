@@ -102,6 +102,7 @@ openssh
 pacman-contrib
 papirus-icon-theme
 pavucontrol
+perf
 perl-image-exiftool
 pipewire
 pipewire-alsa
@@ -153,6 +154,7 @@ tumbler
 umu-launcher
 unzip
 uwsm
+valgrind
 vdirsyncer
 vdpauinfo
 virt-manager
