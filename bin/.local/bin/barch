@@ -148,6 +148,13 @@ Desktop (through the bar):
   music library delete "<Artist/Album>" [<release>]   the files you have out of /music (/music/.library-trash, 30 days);
                               Lidarr monitors and searches the album again
   music library fix "<Artist/Album>" ["hint"]   Claude finds the release (lengths, catalogue, the web) and tags it
+  music artists [list|all]    the artist folders of /music against Lidarr's artists, the ones to decide (all: every one)
+  music artists show "<folder>"|find "<name>"   MusicBrainz artists for a folder (credited by its albums first) or a name
+  music artists link "<folder>" <artist mbid|URL>   the folder becomes that Lidarr artist (a wrong one removed, files kept)
+  music artists move "<folder>" "<into>" [--replace]   its album folders into the folder of the artist they are credited
+                              to (--replace: a same-name album there goes to /music/.library-trash and this one takes its place)
+  music artists add <mbid|URL> · remove <lidarr id> · skip|unskip "<folder>"   track an artist not in /music yet;
+                              drop a Lidarr artist that maps no file; leave a folder without one
   music agent-sweep [library|review|all] [--parallel N] [--limit N]   Claude over every album waiting
                               (Library tab: library fix; Review: music fix), detached; status|stop
   music retitle <Artist/Album> <title>   fix the ALBUM tag (as given) and the folder of an album in /music
@@ -825,6 +832,49 @@ music_library() {
   esac
 }
 
+# music artists: the artist folders of /music tied to Lidarr's MusicBrainz artists (server/music/barch_music/artists.py)
+music_artists() {
+  local sub=${1:-list} arg=${2:-} mbid=${3:-}
+  case $sub in
+    list|all)
+      music_api GET /api/artists
+      [[ $sub == all ]] || OUT=$(jq -c '.artists |= map(select(.state | IN("linked", "no-folder") | not))' <<<"$OUT")
+      show "$OUT" '"artists: " + (.counts | to_entries | map("\(.key) \(.value)") | join(", ")) + "\n" +
+        (.artists |
+         map("\(.state | . + (" " * (9 - length)))  \(if .folder != "" then .folder else .lidarr.name end)" +
+             (if .lidarr then "  [Lidarr \(.lidarr.id): \(.lidarr.name) \(.lidarr.mbid)]" else "" end) + "\n      \(.why)") | join("\n"))' ;;
+    show|find)
+      [[ -n $arg ]] || usage_error "music artists $sub \"<$([[ $sub == show ]] && echo folder || echo name)>\""
+      music_api GET "/api/artists/candidates?$([[ $sub == show ]] && echo folder || echo q)=$(jq -rn --arg v "$arg" '$v | @uri')"
+      show "$OUT" '"\(.query)" + (if .tied > 0 then " · \(.tied) tied album(s) looked at" else "" end) + "\n" +
+        (.candidates | map("  \(.mbid)  \(.name)" + (if .disambiguation != "" then " (\(.disambiguation))" else "" end) +
+          "  \([.type, .country, .years] | map(select(. != "")) | join(" · "))" +
+          (if .releases > 0 then "  credited on \(.releases) of your albums" else "" end) +
+          (if .lidarr then "  [Lidarr: \(.lidarr.path), \(.lidarr.files) files]" else "" end)) | join("\n"))' ;;
+    link)
+      [[ -n $arg && -n $mbid ]] || usage_error "music artists link \"<folder>\" <artist mbid or URL>"
+      music_api POST /api/artists/link "$(jq -cn --arg f "$arg" --arg m "$mbid" '{folder: $f, mbid: $m}')"
+      show "$OUT" '.result' ;;
+    add)
+      [[ -n $arg ]] || usage_error "music artists add <artist mbid or URL>"
+      music_api POST /api/artists/add "$(jq -cn --arg m "$arg" '{mbid: $m}')"
+      show "$OUT" '.result' ;;
+    remove)
+      [[ $arg =~ ^[0-9]+$ ]] || usage_error "music artists remove <lidarr artist id>"
+      music_api POST /api/artists/remove "$(jq -cn --argjson i "$arg" '{id: $i}')"
+      show "$OUT" '.result' ;;
+    skip|unskip)
+      [[ -n $arg ]] || usage_error "music artists $sub \"<folder>\""
+      music_api POST "/api/artists/$sub" "$(jq -cn --arg f "$arg" '{folder: $f}')"
+      show "$OUT" '.result' ;;
+    move)
+      [[ -n $arg && -n $mbid ]] || usage_error "music artists move \"<folder>\" \"<into folder>\" [--replace]"
+      music_api POST /api/artists/move "$(jq -cn --arg f "$arg" --arg i "$mbid" --argjson r "$([[ ${4:-} == --replace ]] && echo true || echo false)" '{folder: $f, into: $i, replace: $r}')"
+      show "$OUT" '.result' ;;
+    *) usage_error "music artists [list|all|show|find|link|add|remove|move|skip|unskip] ..." ;;
+  esac
+}
+
 # music library fix "<Artist/Album>" ["hint"]: Claude ties one library album to MusicBrainz (library-fix.md):
 # the entry (why, candidates, the files' lengths and titles) as context, compare/tag as tools.
 music_library_fix() {
@@ -1007,6 +1057,7 @@ cmd_music() {
       show "$OUT" '.result + ": " + (.jobs | map(.id + "  " + .name) | join(", "))' ;;
     fix) music_fix_job "$@" ;;
     library) music_library "$@" ;;
+    artists) music_artists "$@" ;;
     agent-sweep) music_agent_sweep "$@" ;;
     agent-sweep-run) music_agent_sweep_run "$@" ;;
     agent-sweep-item) music_agent_sweep_item "$@" ;;

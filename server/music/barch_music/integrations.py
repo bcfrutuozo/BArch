@@ -179,7 +179,7 @@ class Lidarr:
                 continue
             st = a.get("statistics") or {}
             out.append({"id": a["id"], "name": a.get("artistName", ""), "mbid": a.get("foreignArtistId", ""),
-                        "monitored": a.get("monitored", False), "metadata_profile": a.get("metadataProfileId"),
+                        "path": a.get("path", ""), "monitored": a.get("monitored", False), "metadata_profile": a.get("metadataProfileId"),
                         "quality_profile": a.get("qualityProfileId"), "albums": st.get("albumCount", 0),
                         "tracks": st.get("totalTrackCount", 0), "files": st.get("trackFileCount", 0)})
         return sorted(out, key=lambda x: x["name"].lower())
@@ -461,6 +461,25 @@ class Lidarr:
             # addOptions "none" leaves the artist itself unmonitored, and Lidarr searches no album of it then
             self.h.call("PUT", "/api/v1/artist/editor", body={"artistIds": [saved["id"]], "monitored": True})
         return f"Lidarr: {art.get('artistName', folder)} added at {art['path']} (id {saved.get('id', '?')})"
+
+    def delete_artist(self, artist_id: int) -> str:
+        """An artist out of Lidarr, its files left where they are and no import list exclusion (an import
+        list may add the right one again)."""
+        if not self.enabled:
+            return "Lidarr: no API key configured"
+        a = self.h.call("GET", f"/api/v1/artist/{int(artist_id)}") or {}
+        self.h.call("DELETE", f"/api/v1/artist/{int(artist_id)}", params={"deleteFiles": "false", "addImportListExclusion": "false"})
+        return f"Lidarr: {a.get('artistName', artist_id)} removed (files kept)"
+
+    def set_artist_path(self, artist_id: int, folder: str) -> str:
+        """The artist's path moved to `folder` of its root folder, no file moved (the folder is already there)."""
+        if not self.enabled:
+            return "Lidarr: no API key configured"
+        a = self.h.call("GET", f"/api/v1/artist/{int(artist_id)}") or {}
+        root = (a.get("rootFolderPath") or str(Path(a.get("path", "/music/x")).parent)).rstrip("/")
+        a["path"] = f"{root}/{folder}"
+        self.h.call("PUT", f"/api/v1/artist/{int(artist_id)}", params={"moveFiles": "false"}, body=a)
+        return f"Lidarr: {a.get('artistName', artist_id)} now at {a['path']}"
 
     def set_artists(self, ids: list[int] | str, monitored: bool | None = None, monitor_new_items: str = "") -> str:
         """Artist settings in bulk ("all" or Lidarr ids): `monitored`, and what Lidarr does with an album

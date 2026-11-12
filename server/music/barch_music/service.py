@@ -66,6 +66,14 @@ HTTP API (port 8338, header X-Barch-Token or ?token=, except /done and the page)
                                          release (MusicBrainz ids and the library's rules on its files; a copy goes through the inbox)
     POST /api/lidarr/add-artists         {"artists": [{"mbid", "folder"}]}: artists of /music tracked at their own folder (one Lidarr
                                          does not know yet waits in GET /api/lidarr/pending, tried again every hour)
+    GET  /api/artists                    every artist folder of /music against Lidarr's artists, with a state each
+                                         (linked, suspect, missing, pending, skipped, no-folder: artists.py)
+    GET  /api/artists/candidates?folder=X|q=name   MusicBrainz artists for a folder (who its tied albums credit first) or a name/id
+    POST /api/artists/link {"folder", "mbid"}   the folder becomes that Lidarr artist (a wrong one at it removed, files kept)
+    POST /api/artists/add {"mbid"} · remove {"id"} · skip|unskip {"folder"}   an artist not in /music yet tracked; a Lidarr
+                                         artist that maps no file removed; a folder left alone
+    POST /api/artists/move {"folder", "into"}   the album folders of one artist folder moved into another's (the artist
+                                         MusicBrainz credits them to); same-name albums stay ("replace": true trashes the one there instead); Lidarr, Plex, the catalog told
     GET  /api/library/artists            the artist folders of /music with their album count (the Covers page's list)
     GET  /api/library/albums?artist=X    the album folders of one artist, and whether each has a cover.jpg
     POST /api/library/retitle            {"folder": "Artist/Album", "album": "New Title"}: ALBUM on every track and the folder renamed
@@ -279,6 +287,20 @@ def make_handler(p: Pipeline, token: str):
                     return self._send(200, {"ok": True, **p.library.compare((q.get("folder") or [""])[0], (q.get("release") or [""])[0])})
                 except Exception as e:  # noqa: BLE001
                     return self._send(400, {"ok": False, "error": str(e)})
+            if parts == ["api", "artists"]:
+                # every artist folder of /music against Lidarr's artists (artists.py)
+                try:
+                    return self._send(200, {"ok": True, **p.artists.overview()})
+                except Exception as e:  # noqa: BLE001
+                    return self._send(502, {"ok": False, "error": str(e)})
+            if parts == ["api", "artists", "candidates"]:
+                # ?folder=<artist folder> or ?q=<name, id or URL>: MusicBrainz artists, the credited ones first
+                try:
+                    return self._send(200, {"ok": True, **p.artists.candidates((q.get("folder") or [""])[0], (q.get("q") or [""])[0])})
+                except ValueError as e:
+                    return self._send(400, {"ok": False, "error": str(e)})
+                except Exception as e:  # noqa: BLE001
+                    return self._send(502, {"ok": False, "error": f"MusicBrainz: {e}"})
             if parts == ["api", "library", "artists"]:
                 return self._send(200, {"ok": True, "artists": p.library_artists()})
             if parts == ["api", "library", "albums"]:
@@ -448,6 +470,18 @@ def make_handler(p: Pipeline, token: str):
                     except Exception as e:  # noqa: BLE001
                         return self._send(400, {"ok": False, "error": str(e)})
                     return self._send(200, {"ok": True, "result": r})
+                if parts[:2] == ["api", "artists"] and len(parts) == 3 and parts[2] in ("link", "add", "remove", "skip", "unskip", "move"):
+                    # link {"folder", "mbid"} · add {"mbid"} · remove {"id"} · skip/unskip {"folder"} · move {"folder", "into"}
+                    try:
+                        a = p.artists
+                        r = (a.link(str(body.get("folder", "")), str(body.get("mbid", ""))) if parts[2] == "link"
+                             else a.move(str(body.get("folder", "")), str(body.get("into", "")), bool(body.get("replace"))) if parts[2] == "move"
+                             else a.add(str(body.get("mbid", ""))) if parts[2] == "add"
+                             else a.remove(int(body.get("id", 0))) if parts[2] == "remove"
+                             else getattr(a, parts[2])(str(body.get("folder", ""))))
+                    except ValueError as e:
+                        return self._send(400, {"ok": False, "error": str(e)})
+                    return self._send(200, {"ok": True, "result": r or "nothing to change"})
                 if parts == ["api", "library", "adopt"]:
                     # {"folder": "Artist/Album", "release": mbid or URL}: the album merged into itself with that release
                     try:

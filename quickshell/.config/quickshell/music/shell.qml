@@ -4,7 +4,7 @@
 // library's covers (scans with a frame -> the clean artwork), Lidarr.
 // Talks to the pipeline's API with ~/.config/barch/music.json. Own Shell ID; controls from ../ui.
 //
-//   qs -p ~/.config/quickshell/music          barch music browse [review|albums|covers|lidarr]
+//   qs -p ~/.config/quickshell/music          barch music browse [review|albums|covers|library|artists|lidarr]
 
 import QtQuick
 import QtQuick.Controls
@@ -21,6 +21,7 @@ ShellRoot {
         { id: "albums", label: "Albums",  icon: "󰀥" },
         { id: "covers", label: "Covers",  icon: "󰋩" },
         { id: "library", label: "Library", icon: "󰌱" },
+        { id: "artists", label: "Artists", icon: "󰠃" },
         { id: "lidarr", label: "Lidarr & scan", icon: "󰒓" }
     ]
     function open(p) { if (p && pages.some(x => x.id === p)) page = p; win.visible = true }
@@ -70,7 +71,7 @@ ShellRoot {
                             id: nav
                             required property var modelData
                             readonly property bool current: root.page === modelData.id
-                            readonly property int marks: modelData.id === "review" ? Store.reviewCount : modelData.id === "albums" ? (Store.status.counts.failed || 0) : modelData.id === "covers" ? Store.coversToLook : modelData.id === "library" ? Store.libraryToDecide : 0
+                            readonly property int marks: modelData.id === "review" ? Store.reviewCount : modelData.id === "albums" ? (Store.status.counts.failed || 0) : modelData.id === "covers" ? Store.coversToLook : modelData.id === "library" ? Store.libraryToDecide : modelData.id === "artists" ? Store.artistsToDecide : 0
                             Layout.fillWidth: true
                             implicitHeight: 32
                             radius: Ui.radius
@@ -121,13 +122,14 @@ ShellRoot {
                 Loader {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    sourceComponent: root.page === "albums" ? albumsC : root.page === "covers" ? coversC : root.page === "library" ? libraryC : root.page === "lidarr" ? lidarrC : reviewC
+                    sourceComponent: root.page === "albums" ? albumsC : root.page === "covers" ? coversC : root.page === "library" ? libraryC : root.page === "artists" ? artistsC : root.page === "lidarr" ? lidarrC : reviewC
                 }
                 Component { id: reviewC; JobsPage { fixedState: "review" } }
                 Component { id: albumsC; JobsPage {} }
                 Component { id: lidarrC; LidarrPage {} }
                 Component { id: coversC; CoversPage {} }
                 Component { id: libraryC; LibraryPage {} }
+                Component { id: artistsC; ArtistsPage {} }
                 Rectangle {
                     Layout.fillWidth: true
                     implicitHeight: 30

@@ -251,6 +251,22 @@ Singleton {
     function libraryAct(action, body) { api("POST", "/api/library/" + action, body, d => { say(d.result); refreshLibrary() }) }
     function libraryMbAdd(folder) { run([home + "/.local/bin/barch", "music", "mb-add", folder], (out, err, code) => say((out || err).trim().split("\n")[0], code !== 0)) }
 
+    // ---------- the library's artists tied to Lidarr's MusicBrainz artists (artists.py) ----------
+    property var artistsData: ({ counts: {}, artists: [] })
+    readonly property var decideStates: ["missing", "suspect"]
+    readonly property int artistsToDecide: (artistsData.artists || []).filter(a => decideStates.indexOf(a.state) !== -1).length
+    Timer { interval: 60000; running: store.configured; repeat: true; triggeredOnStart: true; onTriggered: store.refreshArtists() }
+    function refreshArtists() { api("GET", "/api/artists", null, d => { if (JSON.stringify(d) !== JSON.stringify(artistsData)) artistsData = d }, true) }
+    // candidates for a folder (who its albums credit first) or a name typed: cb(d) with { query, tied, candidates }
+    function artistCandidates(folder, q, cb) {
+        const qs = folder && !q ? "folder=" + encodeURIComponent(folder) : "q=" + encodeURIComponent(q || folder)
+        api("GET", "/api/artists/candidates?" + qs, null, cb)
+    }
+    function artistAct(action, body, cb) {
+        say(action + "…")
+        api("POST", "/api/artists/" + action, body, d => { say(d.result.split("\n").join(" · ")); refreshArtists(); if (cb) cb(d) })
+    }
+
     // ---------- MusicBrainz (by hand) ----------
     function mbSearch(artist, album) {
         const q = []

@@ -1,5 +1,6 @@
 singleton Ui Ui.qml
 singleton Store Store.qml
+ArtistsPage 1.0 ArtistsPage.qml
 Badge 1.0 Badge.qml
 Card 1.0 Card.qml
 CompareTable 1.0 CompareTable.qml

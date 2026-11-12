@@ -25,6 +25,7 @@ from .canon import Canon
 from .catalog import Catalog
 from .plexplay import PlexPlay
 from .library import Library
+from .artists import Artists
 from .libcovers import LibraryCovers
 from .seeds import SeedKeeper, SeedLog
 from .integrations import Lidarr, Plex, QBit, Telegram
@@ -234,6 +235,8 @@ class Pipeline:
         self.library = Library(self.music, self.store.root, self.lidarr)
         self.catalog = Catalog(self.music, self.store.root)       # what the player reads (catalog.py)
         self.plexplay = PlexPlay(self.plex, self.store.root)       # what the player plays, told to Plex (plexplay.py)
+        self.artists = Artists(self.music, self.store.root, self.lidarr, self.library, self.add_artists, self.pending_artists,
+                               self.covers, self.plex, self.catalog)    # the artist folders tied to Lidarr (artists.py)
         self.seeds = SeedLog(self.store.root)
         self.seeding = SeedKeeper(self.store.root, cfg, self.qbit, self.seeds)
 

@@ -207,7 +207,7 @@ The main pieces:
   bar's flow), `.pacnew` files (pacdiff in a terminal) and whether `packages/pacman.txt` and
   `aur.txt` match what is explicitly installed, with a button that regenerates them (the
   removal does it by itself). **History**: the pacman log, newest first, by action and name.
-- **Music** (`quickshell/music/`, "Music" in the launcher, `barch music browse [review|albums|lidarr]`): the
+- **Music** (`quickshell/music/`, "Music" in the launcher, `barch music browse [review|albums|covers|library|artists|lidarr]`): the
   music pipeline on the NAS (see Music) through its API. **Review**: the queue, and for each album what
   the pipeline found (the download, the problems, the MusicBrainz candidates with why they fit, the
   merge plan for an album already in the library, the proposed files, the log, the cover) and the
@@ -257,6 +257,18 @@ The main pieces:
   the Claude plan's week. A sweep over 308 albums ran on 2026-11-08. The sweep also puts MusicBrainz ids an old
   tagger wrote in title case (`B15d9a20-…-Ad58`, 15 albums of Taylor Swift, Maroon 5, Tina Turner, Jeremy Soule)
   back in lower case, since Lidarr compares them exactly and never mapped those files.
+  **Artists**: the same for the artist folders of `/music`: Lidarr knows an artist by its MusicBrainz id and keeps one
+  folder for it, and an album's files only map in the folder of the artist MusicBrainz credits the release to. Each
+  folder is checked against Lidarr's artists (linked; missing; suspect, when the folder's tied albums are credited to
+  another MusicBrainz artist than Lidarr's, a namesake; skipped; waiting for Lidarr's metadata server) with the
+  MusicBrainz artists its own albums are credited to first: **Link** makes the folder that Lidarr artist (a wrong one
+  leaves Lidarr, files kept), **Move into** puts the albums of a second folder of one artist (`THE SQUARE`, a credit
+  under another name) into the folder Lidarr tracks it at (an album whose name is there already stays; `--replace` sends that one to
+  `/music/.library-trash` instead, for the edition you keep), **Skip**.
+  The Lidarr artists with nothing in `/music` yet (the import lists' ones) can be **Replaced** by the right artist or
+  removed, and **Add an artist** tracks one the library does not have (one the Spotify lists could not map): the
+  hourly enforce brings its official albums. A game composer whose albums Lidarr does not list is linked, not
+  suspect: the BArch metadata profile leaves Soundtrack out. `barch music artists [list|show|find|link|move|add|remove|skip]`.
   **Lidarr & scan**: scan now, FLAC only, monitor / search album ids.
 - **Player** (`quickshell/player/`, "Player" in the launcher, `barch player [page]`): the music library on the
   NAS played on this desktop, in the bar's theme, in the spirit of [omaTUNES](https://github.com/Balthazzahr/omatunes).
@@ -543,6 +555,8 @@ barch music library [list|show|compare|tag|skip|retry] "<Artist/Album>" [<releas
 barch music library reorder "<Artist/Album>" <release>   # the same songs in another order: files renumbered and renamed to MusicBrainz's, tagged
 barch music library delete "<Artist/Album>" [<release>]  # the files out of /music (/music/.library-trash, 30 days); Lidarr searches the album again
 barch music library fix "<Artist/Album>" ["hint"]   # Claude ties one library album to MusicBrainz (compare, then tag)
+barch music artists [all] · show "<folder>" · find "<name>"   # the artist folders against Lidarr's artists (the Artists tab)
+barch music artists link "<folder>" <mbid> · move "<folder>" "<into>" [--replace] · add <mbid> · remove <id> · skip "<folder>"
 barch music agent-sweep [library|review|all] [--parallel N] [--limit N] · status · stop   # Claude over everything waiting, detached
 barch music covers check [artist]|list|apply|undo|keep|pick|propose <Artist/Album>   # scans with a frame -> the clean artwork
 barch music covers ask <Artist/Album> "keep the red frame"   # Claude adapts one or finds another, as a proposal
@@ -753,7 +767,11 @@ is only swapped with his ok. Anything it cannot do completely (no match, a year-
 cover) waits in a review queue with the reason and the candidates:
 `barch music list`, `barch music show <id>`, `barch music resolve <id> --release …|--date …|--cover …`,
 all of it in the **Music** app (`barch music browse`), or from the phone: the pipeline serves the same
-review queue and resolve form as a page at `http://<nas>:8338/` (asks for the `barch music` token once). On the Lidarr side it enforces the library's rule every
+review queue and resolve form as a page at `http://<nas>:8338/` (asks for the `barch music` token once). What comes in starts
+in Spotify too: three Lidarr import lists (since 2026-11-12) add the albums saved there, the artists followed and the
+albums of the tracks of the playlist 🫧 (`barch music lidarr-lists`); a new artist gets the official discography like any
+other (below), nothing is removed when it leaves Spotify (Lidarr 3 has no list cleaning). Their OAuth goes through
+`spotify.lidarr.audio`, which also renews the token at each daily sync. On the Lidarr side it enforces the library's rule every
 hour: every artist on the `BArch` metadata profile (every distinct album: studio, EP, live, compilation), and every
 official album without a file monitored once, new ones too. "Without a file" is checked against `/music`, not only
 against Lidarr's count: an album whose folder exists in the library is never monitored or searched (and is unmonitored
