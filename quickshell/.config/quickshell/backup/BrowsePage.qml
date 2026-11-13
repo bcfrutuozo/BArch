@@ -32,7 +32,7 @@ Item {
         const walk = (entry, depth) => {
             out.push({ e: entry, depth: depth })
             if (entry.type === "dir" && expanded[entry.path]) {
-                const kids = Store.children[Store.key(snapshot, entry.path)]
+                const kids = Store.listing[Store.key(snapshot, entry.path)]
                 if (kids === null || kids === undefined) out.push({ e: { name: "loading…", path: entry.path + "/\u0000", type: "loading" }, depth: depth + 1 })
                 else if (kids.length === 0) out.push({ e: { name: "(empty)", path: entry.path + "/\u0000", type: "loading" }, depth: depth + 1 })
                 else for (const k of kids) walk(k, depth + 1)

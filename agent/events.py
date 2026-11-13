@@ -98,6 +98,28 @@ def since_arg(s: str) -> int:
     return int(time.time()) - duration(s, 86400)
 
 
+FAILURE_GAP_S = 1800   # what `barch failure` already folds into one notification
+
+
+def failure_incidents(events: list[dict], gap: int = FAILURE_GAP_S) -> list[dict]:
+    """Fold `failure` events into incidents: a unit failing again within `gap` seconds of its
+    previous failure is the same incident (a Restart= loop, a .path unit firing five times in a
+    row, a crash taking several logs with it). Returns [{unit, start, end, count}], oldest first."""
+    last: dict[str, dict] = {}
+    out: list[dict] = []
+    for e in sorted((e for e in events if e.get("event") == "failure"), key=lambda e: e["ts"]):
+        unit = str((e.get("data") or {}).get("unit") or "?")
+        cur = last.get(unit)
+        if cur and e["ts"] - cur["end"] <= gap:
+            cur["end"] = e["ts"]
+            cur["count"] += 1
+        else:
+            cur = {"unit": unit, "start": e["ts"], "end": e["ts"], "count": 1}
+            last[unit] = cur
+            out.append(cur)
+    return out
+
+
 def fmt_value(v) -> str:
     if v is None:
         return ""
@@ -1190,7 +1212,7 @@ def cli(argv: list[str]) -> int:
         week = now - 7 * 86400
         month = now - 30 * 86400
         boot = store.last_event("boot")
-        boots = [e for e in store.events(20, since=now - 90 * 86400) if e["event"] == "boot"]
+        boots = [e for e in store.events(100000, pattern="boot", since=now - 90 * 86400) if e["event"] == "boot"]
         boot_avg = round(sum(float(b["data"].get("seconds") or 0) for b in boots) / len(boots), 1) if boots else None
         latest = {m["metric"]: m["value"] for m in store.metrics() if m["value"] is not None}
         with open("/proc/uptime") as f:
@@ -1200,13 +1222,23 @@ def cli(argv: list[str]) -> int:
             if e["event"] == "claude.cost":
                 src = str(e["data"].get("source", "?"))
                 cost_sources[src] = round(cost_sources.get(src, 0) + float(e["data"].get("usd") or 0), 4)
+        incidents = [i for i in failure_incidents(store.events(100000, pattern="failure", since=month - FAILURE_GAP_S))
+                     if i["start"] >= month]
         out = {
             "ok": True,
             "boot": {"seconds": boot["data"].get("seconds") if boot else None, "text": boot["data"].get("text") if boot else "",
                      "kernel": boot["data"].get("kernel") if boot else "", "at": boot["ts"] if boot else None,
                      "avg_seconds": boot_avg, "count_90d": len(boots), "uptime_s": int(uptime)},
-            "failures": {"today": store.count("failure", day), "week": store.count("failure", week),
-                         "last_week": store.count("failure", week - 7 * 86400, week), "month": store.count("failure", month)},
+            # incidents, not log files: one unit failing in a loop counts once (`logs` keeps the raw count)
+            "failures": {
+                "today": sum(1 for i in incidents if i["start"] >= day),
+                "week": sum(1 for i in incidents if i["start"] >= week),
+                "last_week": sum(1 for i in incidents if week - 7 * 86400 <= i["start"] < week),
+                "month": len(incidents),
+                "logs": {"today": store.count("failure", day), "week": store.count("failure", week),
+                         "month": store.count("failure", month)},
+                "units_week": sorted({i["unit"] for i in incidents if i["start"] >= week}),
+            },
             "claude": {"today": store.sum_field("claude.cost", "usd", day), "week": store.sum_field("claude.cost", "usd", week),
                        "month": store.sum_field("claude.cost", "usd", month), "by_source_30d": cost_sources},
             "rules": {"fired_24h": sum(1 for e in store.events(100000, since=day) if e["event"].startswith("rule:")),

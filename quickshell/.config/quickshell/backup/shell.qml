@@ -31,7 +31,7 @@ ShellRoot {
         // scripting: list a folder of a snapshot (loaded on demand), restore paths (one per line)
         function ls(id: string, path: string): string {
             Store.loadDir(id, path)
-            const k = Store.children[Store.key(id, path)]
+            const k = Store.listing[Store.key(id, path)]
             return JSON.stringify(k === undefined || k === null ? { ok: true, loading: true } : { ok: true, entries: k })
         }
         function restore(id: string, paths: string): string {       // paths separated by newlines

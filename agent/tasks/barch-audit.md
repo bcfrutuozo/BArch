@@ -6,7 +6,7 @@ notify: always
 Audit this repository the way a fresh install would exercise it — a light, automatic version of
 the VM test. context.md has the precomputed facts; read the code to confirm before reporting.
 
-1. **Docs vs code.** README.md and CLAUDE.md: every folder, script, command, keybinding, service
+1. **Docs vs code.** README.md, docs/*.md and CLAUDE.md: every folder, script, command, keybinding, service
    and path they mention still exists and works as described; user-visible features in the code
    (bar widgets, `barch` subcommands, keybindings in binds.lua) are documented.
 2. **Unused things.** Scripts, QML files, units and generators that nothing references (no

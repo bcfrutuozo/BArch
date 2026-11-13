@@ -1,0 +1,12 @@
+# Applio (RVC voice conversion, installed in ~/Applications/Applio, outside the repo): starts its
+# web server in the background and opens it in the browser; the bar's tray icon stops it.
+[Desktop Entry]
+Type=Application
+Name=Applio
+GenericName=Voice Changer
+Comment=Convert recorded voices with RVC models (web interface)
+Exec=barch applio open
+Icon=audio-input-microphone
+Terminal=false
+Categories=AudioVideo;Audio;
+Keywords=voice;rvc;voz;changer;

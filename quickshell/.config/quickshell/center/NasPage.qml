@@ -24,7 +24,7 @@ Item {
     property string range: "24h"
     readonly property var ranges: ["24h", "7d", "30d"]
     function spanOf(r) { return parseInt(r) * (r.slice(-1) === "d" ? 86400 : 3600) }
-    readonly property var palette: [Ui.accent, Ui.green, Ui.yellow]
+    readonly property var seriesColors: [Ui.accent, Ui.green, Ui.yellow]
 
     function tb(gb) { return gb === undefined || gb === null ? "—" : (gb / 1000).toFixed(1) + " TB" }
     function pctTint(p) { return p === null || p === undefined ? Ui.subtext : p > 85 ? Ui.red : p > 70 ? Ui.yellow : Ui.green }
@@ -68,7 +68,7 @@ Item {
             pending = left
             metrics.forEach((m, i) => Store.series(m, page.range, d => {
                 if (mine !== generation) return
-                out[i] = { label: labels[i] || m, color: page.palette[i % page.palette.length], points: d.points || [] }
+                out[i] = { label: labels[i] || m, color: page.seriesColors[i % page.seriesColors.length], points: d.points || [] }
                 pending = --left
                 if (left === 0) { axisFrom = from; axisTo = to; series = out }
             }))

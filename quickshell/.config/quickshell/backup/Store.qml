@@ -23,7 +23,7 @@ Singleton {
     property bool configured: false
     property var snapshots: []           // restic snapshots --json, newest first
     property var stats: ({})             // id -> { total_size, total_file_count }
-    property var children: ({})          // snapshot id + "\u0001" + dir path -> [entries]
+    property var listing: ({})           // snapshot id + "\u0001" + dir path -> [entries]
     property var findResults: []
     property string status: ""
     property bool statusBad: false
@@ -105,11 +105,11 @@ Singleton {
 
     // ---------- browsing ----------
     function key(id, path) { return id + "\u0001" + path }
-    function loaded(id, path) { return key(id, path) in children }
+    function loaded(id, path) { return key(id, path) in listing }
     function loadDir(id, path) {
         const k = key(id, path)
-        if (k in children) return
-        const m = Object.assign({}, children); m[k] = null; children = m      // loading
+        if (k in listing) return
+        const m = Object.assign({}, listing); m[k] = null; listing = m      // loading
         restic(["ls", id, path, "--json"], out => {
             const list = []
             for (const line of out.split("\n")) {
@@ -119,7 +119,7 @@ Singleton {
                 list.push({ name: n.name, path: n.path, type: n.type, size: n.size || 0, mtime: n.mtime || "" })
             }
             list.sort((a, b) => (a.type === "dir" ? 0 : 1) - (b.type === "dir" ? 0 : 1) || a.name.localeCompare(b.name))
-            const m2 = Object.assign({}, children); m2[k] = list; children = m2
+            const m2 = Object.assign({}, listing); m2[k] = list; listing = m2
         })
     }
     function find(id, pattern) {

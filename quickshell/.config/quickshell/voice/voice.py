@@ -1713,7 +1713,7 @@ class Voice:
         log("whisper:", self.whisper.model or "no model", "| piper:", "yes" if self.speaker.available else "no",
             "| claude:", "on" if self.cfg["claude"] else "off")
         if not self.whisper.available:
-            self.write_state("error", error="whisper.cpp or its model is missing (see README: Voice)")
+            self.write_state("error", error="whisper.cpp or its model is missing (see docs/voice.md)")
         self.whisper.start()
         self.ensure_voice(self.language)
         threading.Thread(target=self.serve, daemon=True).start()

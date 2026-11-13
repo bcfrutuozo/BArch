@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Checks the repo before a save. sync.sh runs it first (BARCH_NO_CHECK=1 skips it); on its own:
 #   ./scripts/check.sh
-# - every shell script: bash -n and shellcheck (warnings and up)
+# - every shell script: bash -n and shellcheck (warnings and up), barch's sourced modules included
+# - QML: scripts/qml-check.sh (qmldir complete, no broken links, the reliable part of qmllint)
 # - every Lua file (the Hyprland config): luac -p
 # - every JSON file: jq
 # - the user units in systemd/: systemd-analyze --user verify
@@ -9,7 +10,7 @@
 # - the automation code (agent/events.py, agent/nas.py) compiles and its unit tests pass
 # - the music pipeline (server/music): its Python compiles and its unit tests pass
 # - hyprctl configerrors, when Hyprland is running
-# Exit 1 when anything fails. QML is not checked here: Quickshell reloads on save and logs errors.
+# Exit 1 when anything fails. Quickshell still reloads on save: its log has the runtime errors.
 set -uo pipefail
 source "$(dirname "$0")/lib.sh"
 cd "$REPO" || exit 1
@@ -20,9 +21,12 @@ files() { git ls-files -co --exclude-standard -z -- "$@"; }
 
 step "Shell scripts"
 mapfile -t scripts < <(files | xargs -0 file --mime-type 2>/dev/null | awk -F': +' '$2 == "text/x-shellscript" {print $1}')
+# sourced modules have no shebang (`# shellcheck shell=bash`): barch's commands in bin/.local/lib/barch
+mapfile -t -O "${#scripts[@]}" scripts < <(files 'bin/.local/lib/barch/*.sh' | tr '\0' '\n')
 for s in "${scripts[@]}"; do bash -n "$s" || problem "syntax error: $s"; done
 if command -v shellcheck >/dev/null; then
-  shellcheck -S warning "${scripts[@]}" || problem "shellcheck"
+  # -x follows `source` (barch → its modules); only the files listed are reported, so the modules are listed too
+  shellcheck -x -S warning "${scripts[@]}" || problem "shellcheck"
 else
   warn "shellcheck not installed (pacman -S shellcheck): only bash -n"
 fi
@@ -35,6 +39,9 @@ while IFS= read -r -d '' f; do
   n=$((n + 1))
 done < <(files '*.lua')
 ok "$n files"
+
+step "QML (quickshell)"
+if "$REPO/scripts/qml-check.sh"; then ok "qmldir complete, no broken links, qmllint clean"; else problem "qml (./scripts/qml-check.sh -v for qmllint's whole output)"; fi
 
 step "JSON"
 n=0

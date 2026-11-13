@@ -51,6 +51,7 @@ import "anon"
 import "wallpaper"
 import "polkit"
 import "voice"
+import "applio"
 
 ShellRoot {
   id: shell
@@ -573,12 +574,15 @@ ShellRoot {
 
         // o BArch Player tocando sem janela (media/PlayerTray.qml): some quando a janela está aberta
         PlayerTray {}
+        // Applio's web server while it runs (applio/ApplioTray.qml): click opens, right click stops
+        ApplioTray {}
 
         // Monitor de recursos
         PrivacyWidget {}
         PinWidget {}
         MinimizedWidget {}
         RecordWidget {}
+        MicRecordWidget {}
         ReplayWidget {}
         SysMonitor {}
 

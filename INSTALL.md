@@ -60,7 +60,7 @@ cryptsetup open /dev/disk/by-partlabel/cryptroot cryptroot
 ```
 
 Choose a real passphrase: the TPM unlock comes later and the passphrase is what you type
-whenever the TPM refuses (firmware or Secure Boot changes, see the README).
+whenever the TPM refuses (firmware or Secure Boot changes, see [docs/machine.md](docs/machine.md)).
 
 ## 4. btrfs and the subvolumes
 
@@ -362,7 +362,7 @@ sudo systemd-cryptenroll /dev/disk/by-partlabel/cryptroot --tpm2-device=auto --t
 
 Reboot: the disk opens without the passphrase. After a firmware update, a dbx update or any
 Secure Boot change the TPM refuses and the passphrase is asked again; re-enroll with the same
-command plus `--wipe-slot=tpm2` (the bar warns about this, see the README).
+command plus `--wipe-slot=tpm2` (the bar warns about this, see [docs/machine.md](docs/machine.md)).
 
 ## 14. The CachyOS kernel (this machine)
 

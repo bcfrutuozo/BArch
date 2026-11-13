@@ -162,7 +162,7 @@ ShellRoot {
             Shortcut { sequence: "Ctrl+W"; onActivated: root.hide() }
             Shortcut { sequence: "Ctrl+Q"; onActivated: Qt.quit() }
 
-            RowMenu { id: menu }
+            RowMenu { id: rowMenu }
             PlaylistDialog { id: dialog }
 
             ColumnLayout {
@@ -237,7 +237,7 @@ ShellRoot {
                             RowLayout {
                                 Layout.leftMargin: 10; Layout.topMargin: 10; Layout.rightMargin: 2
                                 Text { Layout.fillWidth: true; text: "PLAYLISTS"; color: Ui.overlay; font.family: Ui.font; font.pixelSize: Ui.fontSize - 4; font.bold: true }
-                                IconButton { size: 22; glyphSize: Ui.fontSize; icon: "󰐕"; tint: Ui.subtext; tooltip: "new playlist"; onClicked: { const p = mapToItem(null, 0, height); menu.show(p.x, p.y, [{ label: "New playlist", icon: "󰲸", action: () => dialog.create([]) }, { label: "New smart playlist", icon: "󰛨", action: () => dialog.createSmart() }]) } }
+                                IconButton { size: 22; glyphSize: Ui.fontSize; icon: "󰐕"; tint: Ui.subtext; tooltip: "new playlist"; onClicked: { const p = mapToItem(null, 0, height); rowMenu.show(p.x, p.y, [{ label: "New playlist", icon: "󰲸", action: () => dialog.create([]) }, { label: "New smart playlist", icon: "󰛨", action: () => dialog.createSmart() }]) } }
                             }
                             ListView {
                                 Layout.fillWidth: true
@@ -256,7 +256,7 @@ ShellRoot {
                                     icon: modelData.smart ? "󰛨" : "󰲸"
                                     marks: modelData.smart ? 0 : modelData.tracks.length
                                     onClicked: root.goPlaylist(modelData.id)
-                                    onMenuAt: (x, y) => menu.show(x, y, [
+                                    onMenuAt: (x, y) => rowMenu.show(x, y, [
                                         { label: "Play", icon: "󰐊", action: () => Player.playList(Store.playlistTracks(modelData), 0) },
                                         { label: "Shuffle", icon: "󰒝", action: () => Player.playShuffled(Store.playlistTracks(modelData)) },
                                         { label: "Add to queue", icon: "󰐕", action: () => Player.enqueue(Store.playlistTracks(modelData)) },
@@ -316,25 +316,25 @@ ShellRoot {
                                 anchors.fill: parent
                                 visible: !root.album
                                 currentIndex: root.page === "search" ? 10 : root.page === "playlist" ? 4 : root.pageDef.index
-                                Page { sourceComponent: AlbumsPage { menu: menu } }
-                                Page { id: artistsLoader; sourceComponent: ArtistsPage { menu: menu } }
-                                Page { sourceComponent: TracksPage { menu: menu } }
-                                Page { sourceComponent: GenresPage { menu: menu } }
-                                Page { sourceComponent: ListPage { menu: menu; dialog: dialog; kind: root.page === "playlist" ? "playlist" : (root.pageDef.kind || "queue"); playlistId: root.playlistId } }
+                                Page { sourceComponent: AlbumsPage { menu: rowMenu } }
+                                Page { id: artistsLoader; sourceComponent: ArtistsPage { menu: rowMenu } }
+                                Page { sourceComponent: TracksPage { menu: rowMenu } }
+                                Page { sourceComponent: GenresPage { menu: rowMenu } }
+                                Page { sourceComponent: ListPage { menu: rowMenu; dialog: dialog; kind: root.page === "playlist" ? "playlist" : (root.pageDef.kind || "queue"); playlistId: root.playlistId } }
                                 Page { sourceComponent: LyricsPage {} }
-                                Page { sourceComponent: StatsPage { menu: menu } }
+                                Page { sourceComponent: StatsPage { menu: rowMenu } }
                                 Page { sourceComponent: SettingsPage {} }
                                 Page { sourceComponent: VizPage { active: root.page === "viz" && !root.album && win.visible } }
                                 Page { sourceComponent: EqPage {} }
-                                Page { sourceComponent: SearchPage { menu: menu; query: root.query } }
+                                Page { sourceComponent: SearchPage { menu: rowMenu; query: root.query } }
                             }
-                            AlbumView { anchors.fill: parent; visible: root.album !== ""; album: Store.albumByKey[root.album] || null; menu: menu }
+                            AlbumView { anchors.fill: parent; visible: root.album !== ""; album: Store.albumByKey[root.album] || null; menu: rowMenu }
                         }
                     }
                 }
                 NowPlaying {
                     Layout.fillWidth: true
-                    menu: menu
+                    menu: rowMenu
                     queueOn: root.page === "queue" && !root.album
                     lyricsOn: root.page === "lyrics" && !root.album
                     onShowQueue: root.page === "queue" && !root.album ? root.open("albums") : root.open("queue")

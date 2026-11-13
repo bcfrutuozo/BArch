@@ -25,6 +25,7 @@ declare -A PACKAGES=(
   [obs]=".local/share/applications/obs-stream.desktop .local/share/applications/obs-guitarra.desktop"
   [clip]=".local/share/applications/barch-clip.desktop"
   [spotify]=".local/share/applications/spotify-launcher.desktop"
+  [applio]=".local/share/applications/applio.desktop"
 )
 
 # User services to enable on a fresh install

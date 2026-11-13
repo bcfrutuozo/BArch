@@ -4,7 +4,6 @@ Badge 1.0 Badge.qml
 BrowsePage 1.0 BrowsePage.qml
 Card 1.0 Card.qml
 ColorButton 1.0 ColorButton.qml
-* 1.0 *.qml
 SnapshotsPage 1.0 SnapshotsPage.qml
 StatusPage 1.0 StatusPage.qml
 Tip 1.0 Tip.qml

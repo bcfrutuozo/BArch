@@ -82,6 +82,7 @@ mangohud
 memtest86+-efi
 mingw-w64-gcc
 mono
+mousepad
 mpv
 mpv-mpris
 neovim
@@ -150,6 +151,7 @@ tpm2-tss
 tree-sitter-cli
 ttf-jetbrains-mono-nerd
 ttf-nerd-fonts-symbols
+ttf-roboto
 tumbler
 umu-launcher
 unzip

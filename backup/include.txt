@@ -5,7 +5,7 @@
 # stores the link, not the files. The repo already has them.
 # Exclusions (caches, sockets, the restic password itself) are in exclude.txt.
 
-# secrets and credentials (see README "Not stored here")
+# secrets and credentials (see README "Not stored here", docs/backup.md)
 .ssh
 .gnupg
 .config/pia

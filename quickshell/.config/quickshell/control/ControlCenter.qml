@@ -227,7 +227,7 @@ Item {
     // ---------- IPC (barch) ----------
     // Todas respondem JSON: {"ok": true, ...estado} ou {"ok": false, "error": "..."}.
     // O estado do monitor é relido a cada 15 s e logo depois de cada mudança.
-    function state() {
+    function snapshot() {
         return {
             ok: true, hdr: hdrOn, sdrWhite: sdrWhite, sdrMin: sdrMin, sdrMax: sdrMax, side: sideOn,
             caffeine: caffeine, nightLight: nightLight, nightTemp: nightTemp, hasHyprsunset: hasHyprsunset,
@@ -238,29 +238,29 @@ Item {
     IpcHandler {
         target: "control"
         enabled: root.ipcEnabled
-        function status(): string { root.refresh(); return JSON.stringify(root.state()) }
+        function status(): string { root.refresh(); return JSON.stringify(root.snapshot()) }
         // abre / fecha o painel (scripts e capturas); "themes" abre já nas paletas
         function open(): string { if (!Popups.isOpen(popup)) { Popups.show(popup); root.refresh() } return JSON.stringify({ ok: true }) }
         function close(): string { Popups.hide(popup); return JSON.stringify({ ok: true }) }
         function themes(): string { root.chooseTheme = true; return this.open() }
-        function hdr(on: bool): string { root.setHdr(on); return JSON.stringify(root.state()) }
+        function hdr(on: bool): string { root.setHdr(on); return JSON.stringify(root.snapshot()) }
         function sdr(nits: int): string {
             if (!root.hdrOn) return root.fail("HDR is off; the SDR brightness only applies in HDR")
             if (nits < root.sdrMin || nits > root.sdrMax)
                 return root.fail("SDR brightness must be between " + root.sdrMin + " and " + root.sdrMax + " nits")
             root.setSdr(nits)
-            return JSON.stringify(root.state())
+            return JSON.stringify(root.snapshot())
         }
-        function side(on: bool): string { root.setSide(on); return JSON.stringify(root.state()) }
+        function side(on: bool): string { root.setSide(on); return JSON.stringify(root.snapshot()) }
         function caffeine(on: bool): string {
             if (root.window === null) return root.fail("no bar window to hold the idle inhibitor")
             root.caffeine = on
-            return JSON.stringify(root.state())
+            return JSON.stringify(root.snapshot())
         }
         function nightLight(on: bool): string {
             if (!root.hasHyprsunset) return root.fail("hyprsunset is not installed")
             if (on !== root.nightLight) root.setNight(on)
-            return JSON.stringify(root.state())
+            return JSON.stringify(root.snapshot())
         }
     }
 

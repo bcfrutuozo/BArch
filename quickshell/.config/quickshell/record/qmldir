@@ -1,2 +1,4 @@
 singleton Recorder Recorder.qml
 RecordWidget 1.0 RecordWidget.qml
+singleton MicRecorder MicRecorder.qml
+MicRecordWidget 1.0 MicRecordWidget.qml

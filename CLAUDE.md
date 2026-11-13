@@ -7,6 +7,9 @@ and commit messages stay in English, like the rest of the repo.
 
 @README.md
 
+The README is the overview; each area has its page in `docs/` (`docs/music.md`, `docs/agent.md`,
+`docs/cli.md`...). Read the page of the area you are about to touch before changing it.
+
 ## Hard rules
 
 - **Never run anything with sudo yourself.** When a step needs root (`/etc`, `/boot`,
@@ -28,8 +31,9 @@ and commit messages stay in English, like the rest of the repo.
 
 ## Controlling the desktop: `barch`
 
-Prefer `barch` (`bin/.local/bin/barch`, see `barch help`) over editing state files, calling
-`hyprctl`/`gsettings` or `notify-send` whenever a subcommand exists: notifications, theme, HDR and
+Prefer `barch` (`bin/.local/bin/barch`, its commands in `bin/.local/lib/barch/<area>.sh`, see
+`barch help`) over editing state files, calling `hyprctl`/`gsettings` or `notify-send` whenever a
+subcommand exists: notifications, theme, HDR and
 SDR brightness, side monitor, caffeine, night light, Do Not Disturb, system health, Claude plan usage, agent tasks,
 AUR review, safety snapshots, voice control (`barch voice`). Use `--json` to
 read state and check the exit code (`3` = the bar is not running). A new bar feature that scripts
@@ -52,7 +56,7 @@ reusing the widget's own functions.
   `tools`. Reports: `barch agent report <task>`.
 - **Reactive rules and metrics:** `agent/events.py` (`barch-events.service`) samples the machine
   into `~/.local/state/barch/metrics.db`, turns Hyprland/VPN/network/AirPods/lock/failure changes
-  into events and runs `agent/rules.json` (`barch rules|events|metrics`, README "Automation").
+  into events and runs `agent/rules.json` (`barch rules|events|metrics`, `docs/agent.md` "Automation").
   A new automatic reaction is a rule there, not a new timer or script; a new source of events or
   metrics is a sampler in `events.py` (and its name in the `_doc` of `rules.json`). The NAS is one:
   `agent/nas.py` (`barch nas status`) reads Unraid's API, read only; `summarize()` and `changes()`
@@ -119,7 +123,7 @@ reusing the widget's own functions.
   templates in `templates/` are the configuration; keys go in the Unraid form, never in them. The Books app
   (`quickshell/books/`, `barch books`) talks only to Shelfmark's API (`books.py`, key in `~/.config/barch/books.json`).
 - **NAS kernel module** (`server/unraid/`): the `i2c-nct6793` build script for OpenRGB on the NAS
-  (README "NAS"). It runs on the NAS, never here; the package is per Unraid kernel.
+  (`docs/nas.md`). It runs on the NAS, never here; the package is per Unraid kernel.
 - **Theme:** `quickshell/.config/quickshell/theme/palettes.json` holds the palettes (ten tones
   each) and `theme/Theme.qml` derives everything else from them. Change colors there (or with
   `barch theme edit`), never in the generated files (they are git-ignored and get overwritten).
@@ -134,12 +138,15 @@ reusing the widget's own functions.
 - Hyprland: `hyprctl reload`, then `hyprctl configerrors` must be empty. Live values:
   `hyprctl -j monitors`, `hyprctl binds -j`, `hyprctl eval '...'` (e.g. `BArch.monitors`).
 - Quickshell reloads QML on save; check its log for errors after every QML change.
+  `./scripts/qml-check.sh` checks every qmldir and the reliable part of qmllint (`-v`: all of it).
+  Never name a property or function after one of the base type (`state`, `children`, `palette`).
 - Shell scripts: `bash -n` and, if installed, `shellcheck`. `./scripts/check.sh` runs every static
-  check of the repo at once (scripts, Lua, JSON, user units, agent timers, `hyprctl configerrors`);
-  `sync.sh` runs it before committing.
+  check of the repo at once (scripts, barch's modules, QML, Lua, JSON, user units, agent timers,
+  the unit tests, `hyprctl configerrors`); `sync.sh` runs it before committing.
 - Keybindings: a new bind needs a `"Group|Description"` in `binds.lua` so it shows in the
   shortcut sheet (Super+/); group `Hidden` keeps it out.
-- When a user-visible feature changes, update `README.md` in the same change.
+- When a user-visible feature changes, update its page in `docs/` in the same change (and the
+  README's summary when it is a new piece or app).
 - Lock screen: look at it only through `quickshell/lock/preview.sh` (own Shell ID). Never start,
   kill or reload the real lock (`lock/shell.qml`): it is a resident process and may be what is
   holding the session. It does not watch files, so an edit under `lock/` only applies after

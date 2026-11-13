@@ -12,7 +12,7 @@ Item {
     function spanOf(r) { return parseInt(r) * (r.slice(-1) === "d" ? 86400 : 3600) }
     readonly property var s: Store.summary
     readonly property var now: s.now || ({})
-    readonly property var palette: [Ui.accent, Ui.green, Ui.yellow, Ui.red, Ui.overlay]
+    readonly property var seriesColors: [Ui.accent, Ui.green, Ui.yellow, Ui.red, Ui.overlay]
 
     function n(v, d) { return v === null || v === undefined ? "—" : Number(v).toFixed(d === undefined ? 0 : d) }
     function usd(v) { return v === null || v === undefined ? "—" : "US$ " + Number(v).toFixed(2) }
@@ -42,7 +42,7 @@ Item {
             pending = left
             metrics.forEach((m, i) => Store.series(m, page.range, d => {
                 if (mine !== generation) return
-                out[i] = { label: labels[i] || m, color: page.palette[i % page.palette.length], points: d.points || [] }
+                out[i] = { label: labels[i] || m, color: page.seriesColors[i % page.seriesColors.length], points: d.points || [] }
                 pending = --left
                 if (left === 0) { axisFrom = from; axisTo = to; series = out }
             }))
