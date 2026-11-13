@@ -4,6 +4,7 @@
 // Clique em qualquer valor para copiá-lo.
 // Depende do NetworkManager (nmcli), do net-info.sh (nesta pasta) e do wl-clipboard.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

@@ -3,6 +3,7 @@
 // follows at once; the slow poll covers a recording started while the bar was down.
 pragma Singleton
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

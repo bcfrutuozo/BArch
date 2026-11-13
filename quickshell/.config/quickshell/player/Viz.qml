@@ -3,6 +3,7 @@
 // levels per frame (60 a second); it only runs while something wants the frames (`wanted` > 0) and a track is loaded.
 // Settings live in Store.state.viz: { mode, bands, sensitivity, color, cover, trails, mini }.
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

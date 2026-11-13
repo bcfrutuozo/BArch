@@ -6,6 +6,7 @@
 //
 //   qs -p ~/.config/quickshell/books          barch books browse [search|shelf|requests|rejected|downloads]
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

@@ -1,6 +1,7 @@
 // DetailRow.qml — linha de detalhe dos widgets de rede.
 // Rótulo à esquerda, valor à direita; clique copia o valor.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import "../theme"

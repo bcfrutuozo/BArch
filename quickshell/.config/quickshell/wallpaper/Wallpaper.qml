@@ -3,6 +3,7 @@
 // do tema (Wallpapers.path) com um crossfade: a imagem nova carrega atrás, em segundo plano, e
 // só então aparece por cima da antiga. Sem arquivo, fica a cor de fundo do tema.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Wayland

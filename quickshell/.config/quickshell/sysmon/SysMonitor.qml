@@ -9,6 +9,7 @@
 // lo, virbr/vnet, Docker e o túnel da VPN ficam de fora e nada conta duas vezes. As barrinhas são
 // logarítmicas, de 1 KB/s até a velocidade do link, para um tráfego pequeno já aparecer.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

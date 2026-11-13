@@ -2,6 +2,7 @@
 // snapshots, the files inside each one (listed on demand) and restores into ~/Restore.
 // Same repository, password file and cache as barch (bin/barch: BACKUP_*); never deletes anything.
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

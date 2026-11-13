@@ -2,6 +2,7 @@
 // (the same keys `barch video` uses, ~/.config/barch/video.json): search and add, the library with the
 // checklist of every file, interactive releases, the download queue, the dub jobs.
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

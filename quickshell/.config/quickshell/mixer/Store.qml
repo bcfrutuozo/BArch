@@ -3,6 +3,7 @@
 // object serials PipeWire gives), the clock settings (pw-metadata) and the Bluetooth codec
 // (node properties).
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

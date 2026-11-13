@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 
 // a bar chart on a Canvas, one bar per bucket of time: points = [{ t, v }], `kind` says what a bucket

@@ -6,6 +6,7 @@
 //   state:   likes, play counts, the listening history, playlists (hand-made and smart), volume, shuffle, repeat
 //            and the last queue, in ~/.local/state/barch/player/state.json (one JSON, like omaTUNES)
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

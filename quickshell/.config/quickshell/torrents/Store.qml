@@ -2,6 +2,7 @@
 // through its HTTP API, with the URL and token `barch torrents install` left in
 // ~/.config/barch/torrents.json. One range for the whole window; everything is read only.
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

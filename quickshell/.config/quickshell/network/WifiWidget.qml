@@ -4,6 +4,7 @@
 // e o botão de desconectar) e a lista de redes disponíveis, com campo de senha.
 // Depende do NetworkManager (nmcli), do net-info.sh (nesta pasta) e do wl-clipboard.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls

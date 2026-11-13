@@ -1,6 +1,7 @@
 // RecordWidget.qml — indicador de gravação de tela na barra.
 // Só aparece gravando: ponto vermelho pulsando + tempo. Clique para parar e salvar.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import "../theme"

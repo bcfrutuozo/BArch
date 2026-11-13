@@ -1,5 +1,6 @@
 // PanelButton.qml — botão em contorno dos painéis da VPN (largura da linha, cor em `tint`).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import "../theme"

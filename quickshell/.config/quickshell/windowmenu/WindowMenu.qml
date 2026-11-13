@@ -4,6 +4,7 @@
 //       menu.show(item, x, y, { address, title, ws, floating, pinned, minimized })
 // Ações: Restore (se minimizada) ou Minimize, Always on Top, Fullscreen, Move to Workspace 1–10, Close.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

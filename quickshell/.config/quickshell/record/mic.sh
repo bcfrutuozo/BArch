@@ -29,7 +29,8 @@ start() {
   printf '%s' "$file" > "$last"
   systemctl --user reset-failed "$unit" 2>/dev/null
   # media.name names the stream in the mixer and the privacy indicator (which then shows the mic in use)
-  systemd-run --user --unit="$unit" --collect -p KillSignal=SIGINT -p TimeoutStopSec=10 \
+  # pw-record exits 1 on the SIGINT that stops it, with the file complete: not a failure
+  systemd-run --user --unit="$unit" --collect -p KillSignal=SIGINT -p SuccessExitStatus=1 -p TimeoutStopSec=10 \
     pw-record --rate 48000 --channels 1 --format s24 \
       -P '{ media.name = "BArch mic recording" node.name = "barch-mic-record" }' "$file" >/dev/null 2>&1 || {
     rm -f "$last"; notify "Microphone recording" "could not start pw-record"; exit 1; }

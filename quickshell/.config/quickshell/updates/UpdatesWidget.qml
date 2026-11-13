@@ -7,6 +7,7 @@
 //   "Kernel Only"    → terminal só com o script do kernel
 // Depende de updates-check.sh e run-update.sh (nesta pasta), pacman-contrib (checkupdates), paru e foot.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

@@ -2,6 +2,7 @@
 // Uso: dentro de qualquer PopupWindow, "PanelAnim { win: popup }".
 // Abrir/fechar sempre por Popups.show/hide/toggle, para o fechamento também ser animado.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import "."
 

@@ -1,4 +1,6 @@
+pragma ComponentBehavior: Bound
 import QtQuick
+import Quickshell
 import QtQuick.Controls
 import QtQuick.Layouts
 
@@ -56,9 +58,10 @@ Item {
                     Repeater {
                         model: Object.keys(Store.deviceFormats)
                         RowLayout {
+                            id: entry
                             required property var modelData
-                            Text { Layout.preferredWidth: 520; text: modelData; color: Ui.text; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3; elide: Text.ElideMiddle }
-                            Text { text: Store.deviceFormats[modelData]; color: Ui.accent; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3 }
+                            Text { Layout.preferredWidth: 520; text: entry.modelData; color: Ui.text; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3; elide: Text.ElideMiddle }
+                            Text { text: Store.deviceFormats[entry.modelData]; color: Ui.accent; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3 }
                         }
                     }
                 }

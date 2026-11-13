@@ -10,6 +10,7 @@
 // Abre com:  qs ipc call overview toggle
 // As miniaturas usam o protocolo de captura de janelas do Hyprland (ScreencopyView).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

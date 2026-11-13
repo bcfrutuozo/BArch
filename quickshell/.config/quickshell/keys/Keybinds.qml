@@ -14,6 +14,7 @@
 // Abre no monitor em foco com:  qs ipc call keys toggle   (Tab troca de aba)
 // Teclas: digite para filtrar · Esc fecha.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

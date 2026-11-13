@@ -3,6 +3,7 @@
 // Clique: painel com o histórico (mais novas em cima), Do Not Disturb e Clear All.
 // Botão direito no sino: liga/desliga o não perturbe.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

@@ -6,6 +6,7 @@
 //
 //   qs -p ~/.config/quickshell/clip             barch clip [file]
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

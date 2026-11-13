@@ -3,6 +3,7 @@
 // pela interface...), o polkitd chama este agente e o diálogo aparece no monitor principal,
 // com o tema do bar. Enter envia a senha, Esc cancela. Uma falha reabre o campo com o erro.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

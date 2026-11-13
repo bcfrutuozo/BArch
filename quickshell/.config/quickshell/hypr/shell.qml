@@ -11,6 +11,7 @@
 // Options, monitors, animations and devices apply live (hyprctl eval); binds, rules, gestures
 // reload Hyprland; environment waits for the next start.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

@@ -6,6 +6,7 @@
 //
 //   qs -p ~/.config/quickshell/music          barch music browse [review|albums|covers|library|artists|lidarr]
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

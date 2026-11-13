@@ -6,6 +6,7 @@
 // resposta, o idioma (lista com filtro: todos os do whisper; fora do português tudo vai ao
 // Claude), pausa e desligar. Estado no singleton Voice (voice/Voice.qml).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

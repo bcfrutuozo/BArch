@@ -4,6 +4,7 @@
 // barra de uso, usado/total/livre). Clicar num item abre a pasta no gerenciador de arquivos.
 // Depende do disk-info.sh (nesta mesma pasta), findmnt, df, lsblk e jq.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -61,11 +62,12 @@ Item {
                         { label: "in aur.txt, not installed", list: Store.unsaved.goneAur, tint: Ui.red }
                     ]
                     RowLayout {
+                        id: entry
                         required property var modelData
                         visible: modelData.list.length > 0
                         spacing: 8
-                        Text { Layout.preferredWidth: 220; text: modelData.label; color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2 }
-                        Text { Layout.fillWidth: true; text: modelData.list.join("  "); color: modelData.tint; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 2; wrapMode: Text.Wrap }
+                        Text { Layout.preferredWidth: 220; text: entry.modelData.label; color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2 }
+                        Text { Layout.fillWidth: true; text: entry.modelData.list.join("  "); color: entry.modelData.tint; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 2; wrapMode: Text.Wrap }
                     }
                 }
                 RowLayout {

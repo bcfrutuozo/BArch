@@ -25,6 +25,7 @@ pragma Singleton
 // O barch (~/.local/bin) usa mode, status, flavor e palettes: theme light | dark | auto | status |
 // dark <paleta> | light <paleta> | palettes.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

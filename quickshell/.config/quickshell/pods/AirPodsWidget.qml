@@ -2,6 +2,7 @@
 // Fica na mesma pasta que Service.qml e Model.js (copiados do omarchy-pods).
 // Clique esquerdo: abre/fecha o painel. Clique direito: alterna o modo de escuta.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
@@ -116,26 +117,27 @@ Item {
     }
 
     component Battery: ColumnLayout {
+        id: cell
         property string label: ""
         property int level: Model.LEVEL_UNKNOWN
         property string meta: ""
         spacing: 2
         Layout.fillWidth: true
-        Label { text: label; color: root.dim; Layout.alignment: Qt.AlignHCenter }
-        Label { text: Model.levelText(level); font.pixelSize: root.fontSize + 4; Layout.alignment: Qt.AlignHCenter }
+        Label { text: cell.label; color: root.dim; Layout.alignment: Qt.AlignHCenter }
+        Label { text: Model.levelText(cell.level); font.pixelSize: root.fontSize + 4; Layout.alignment: Qt.AlignHCenter }
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 4
             radius: 2
             color: root.border
             Rectangle {
-                width: parent.width * Model.levelFraction(level)
+                width: parent.width * Model.levelFraction(cell.level)
                 height: parent.height
                 radius: 2
-                color: level !== Model.LEVEL_UNKNOWN && level <= 20 ? Theme.crit : root.accent
+                color: cell.level !== Model.LEVEL_UNKNOWN && cell.level <= 20 ? Theme.crit : root.accent
             }
         }
-        Label { text: meta; color: root.dim; font.pixelSize: root.fontSize - 2; Layout.alignment: Qt.AlignHCenter }
+        Label { text: cell.meta; color: root.dim; font.pixelSize: root.fontSize - 2; Layout.alignment: Qt.AlignHCenter }
     }
 
     component Divider: Rectangle {

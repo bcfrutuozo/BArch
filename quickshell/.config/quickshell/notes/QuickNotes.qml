@@ -3,6 +3,7 @@
 // (dá para abrir em qualquer editor). Esc ou clicar fora fecha; o texto continua lá.
 // Abre com:  qs ipc call notes toggle
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

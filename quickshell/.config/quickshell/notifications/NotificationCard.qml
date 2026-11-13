@@ -3,6 +3,7 @@
 // × (ou botão do meio): no balão, só tira da tela; na central, apaga do histórico.
 // Botões: ações que o app ofereceu (enquanto a notificação está aberta). No balão, o mouse em cima pausa o tempo.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

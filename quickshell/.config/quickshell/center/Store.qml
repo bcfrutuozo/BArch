@@ -3,6 +3,7 @@
 // the bar's health check and the journal. Actions run the same commands `barch` and systemctl
 // would; system units go through polkit (the bar's agent asks the password).
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

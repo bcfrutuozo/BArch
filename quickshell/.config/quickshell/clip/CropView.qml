@@ -2,6 +2,7 @@
 // the rectangle dimmed, a rule-of-thirds grid inside, corners and edges to drag, the inside to
 // move it, the picture turned and mirrored as chosen. Coordinates are pixels of the rotated frame
 // (Store.rotW x Store.rotH); `s` maps them to the screen.
+pragma ComponentBehavior: Bound
 import QtQuick
 
 Item {
@@ -74,14 +75,15 @@ Item {
         Repeater {
             model: [[0, 0], [1, 0], [0, 1], [1, 1]]
             Item {
+                id: entry
                 required property var modelData
                 readonly property bool atRight: modelData[0] === 1
                 readonly property bool atBottom: modelData[1] === 1
                 x: atRight ? box.width - 22 : -2
                 y: atBottom ? box.height - 22 : -2
                 width: 24; height: 24
-                Rectangle { x: 0; y: atBottom ? 20 : 0; width: 24; height: 4; radius: 1; color: "white" }
-                Rectangle { x: atRight ? 20 : 0; y: 0; width: 4; height: 24; radius: 1; color: "white" }
+                Rectangle { x: 0; y: entry.atBottom ? 20 : 0; width: 24; height: 4; radius: 1; color: "white" }
+                Rectangle { x: entry.atRight ? 20 : 0; y: 0; width: 4; height: 24; radius: 1; color: "white" }
             }
         }
         // edge marks

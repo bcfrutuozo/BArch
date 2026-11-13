@@ -3,6 +3,7 @@
 // pisca em destaque quando um replay é salvo. Some se o serviço não estiver instalado.
 // Clique: salva os últimos 30 s · Botão direito: liga/desliga o replay (amarelo pulsando = ligando/desligando).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

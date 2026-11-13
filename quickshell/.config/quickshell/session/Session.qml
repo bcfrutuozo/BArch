@@ -10,6 +10,7 @@
 // Ficam de fora: jogos, diálogos, PiP, portais e janelas sem app conhecido (sem .desktop).
 pragma Singleton
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

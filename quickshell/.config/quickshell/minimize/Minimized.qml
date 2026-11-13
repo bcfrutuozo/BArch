@@ -11,6 +11,7 @@
 //   qs ipc call minimize restoreLast   restaura a última minimizada (Super+Shift+M)
 pragma Singleton
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

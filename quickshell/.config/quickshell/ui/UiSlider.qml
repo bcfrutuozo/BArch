@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 
 // a slider for a bounded number; `moved` while dragging, `released` at the end

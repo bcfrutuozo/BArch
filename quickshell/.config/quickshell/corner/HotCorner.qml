@@ -4,6 +4,7 @@
 // por ele ao trocar de monitor). Espera um instante antes de abrir e não age com uma
 // janela em tela cheia (jogos).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

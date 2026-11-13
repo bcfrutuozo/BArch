@@ -5,6 +5,7 @@
 // túnel caído, o escudo avisa: laranja se o kill switch está segurando o tráfego, vermelho se
 // não há kill switch e o tráfego está saindo pelo IP real.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
@@ -42,6 +43,7 @@ Item {
         anchors.centerIn: parent
         spacing: 5
         Text {
+            id: shield
             anchors.verticalCenter: parent.verticalCenter
             text: Vpn.connected ? root.glyph(0xF099D) : Anon.holding ? root.glyph(0xF0ECC) : Anon.exposed ? root.glyph(0xF099E) : root.glyph(0xF0499)     // shield_lock / shield_alert / shield_off / shield_outline
             color: Vpn.connected ? Theme.good : Anon.exposed ? Theme.red : Theme.warn
@@ -50,7 +52,7 @@ Item {
             SequentialAnimation on opacity {
                 running: Vpn.connecting; loops: Animation.Infinite
                 NumberAnimation { to: 0.3; duration: 600 } NumberAnimation { to: 1; duration: 600 }
-                onRunningChanged: if (!running) parent.opacity = 1
+                onRunningChanged: if (!running) shield.opacity = 1   // `parent` here was the widget's parent, not the icon
             }
         }
         Text {

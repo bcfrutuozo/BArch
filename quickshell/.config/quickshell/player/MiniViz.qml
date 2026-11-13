@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 
 // a few spectrum bars for the bottom bar (Viz.settings.mini): plain rectangles the scene graph animates

@@ -3,6 +3,7 @@
 // Dim while it starts, accent once it answers; gone when stopped. applio.sh pokes `refresh`
 // over IPC on every change, the poll only covers a server started or killed some other way.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -47,6 +48,7 @@ Item {
         color: mouse.containsMouse ? Theme.hover : "transparent"
     }
     Text {
+        id: icon
         anchors.centerIn: parent
         text: String.fromCodePoint(0xF05CB)   // account-voice
         color: root.phase === "running" ? Theme.accent : Theme.dim
@@ -56,7 +58,7 @@ Item {
         SequentialAnimation on opacity {
             running: root.phase === "starting"
             loops: Animation.Infinite
-            onRunningChanged: if (!running) parent.opacity = 1
+            onRunningChanged: if (!running) icon.opacity = 1   // `parent` here was the widget's parent, not the icon
             NumberAnimation { to: 0.35; duration: 700; easing.type: Easing.InOutSine }
             NumberAnimation { to: 1; duration: 700; easing.type: Easing.InOutSine }
         }

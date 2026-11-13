@@ -2,6 +2,7 @@
 // Os ícones de sinal da Nerd Font são leques preenchidos (ruins para OLED);
 // aqui são três arcos finos e um ponto: os acesos mostram o nível, os apagados ficam escuros.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Shapes
 

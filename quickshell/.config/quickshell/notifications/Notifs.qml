@@ -19,6 +19,7 @@ pragma Singleton
 // IPC:  qs ipc call notifs dnd | clear | test | dndSet <bool> | dndStatus | post <title> <body> <urgency> <app> <{actions: [...]}>
 //       (as que respondem JSON são usadas pelo barch, em ~/.local/bin)
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

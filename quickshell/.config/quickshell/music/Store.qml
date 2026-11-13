@@ -3,6 +3,7 @@
 // makes): status, the jobs, one job in full, resolve / retry / reject / undo, scan, Lidarr.
 // MusicBrainz is searched from here too (curl, one request at a time) to find a release by hand.
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

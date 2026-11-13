@@ -4,6 +4,7 @@
 // from mpv-mpris when it is installed (mpv.sh loads it), so the bar's media island and playerctl see it.
 // A play is counted (Store.countPlay) once a track passes half its length or four minutes.
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

@@ -1,6 +1,7 @@
 // VolumeSlider.qml — controle deslizante usado pelo VolumeWidget.
 // Arraste ou clique para definir; roda do mouse ajusta de 5 em 5% (Shift: de 1 em 1%).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 
 Item {

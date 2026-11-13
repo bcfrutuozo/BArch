@@ -6,6 +6,7 @@
 // Cada resultado é { kind, title, subtitle, ... } com o que a ação do kind precisa (entry, cmd,
 // address, line, emoji, url, path, scene...). kind "info" é só uma linha de aviso.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

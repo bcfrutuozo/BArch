@@ -5,6 +5,7 @@
 // × esquece) e "Other Devices" (encontrados na busca: clique pareia e conecta). Um dispositivo
 // conectado mostra bateria e o codec de áudio negociado (AAC, SBC-XQ, SBC), lido do nó do PipeWire.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

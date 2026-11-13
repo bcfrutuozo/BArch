@@ -7,6 +7,7 @@
 // Writes: only settings.json. Live changes go through `hyprctl eval` into conf/settings.lua
 // (BArch.settings.apply), the rest through `hyprctl reload`.
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -83,8 +84,9 @@ Singleton {
 
     // ---------- hyprctl ----------
     component Cmd: Process {
+        id: entry
         property var handler: null
-        stdout: StdioCollector { onStreamFinished: if (handler) handler(text) }
+        stdout: StdioCollector { onStreamFinished: if (entry.handler) entry.handler(text) }
     }
     Cmd {
         id: descProc

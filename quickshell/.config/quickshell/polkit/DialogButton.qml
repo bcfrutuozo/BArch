@@ -1,5 +1,6 @@
 // DialogButton.qml — botão do diálogo polkit (primary: preenchido com a cor de destaque).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import "../theme"
 

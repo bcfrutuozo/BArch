@@ -2,6 +2,7 @@
 // Aparece só quando há janela fixada: alfinete + quantidade. Passar o mouse lista as janelas;
 // clique desafixa todas (as que estavam no tiling voltam para ele).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import "../theme"

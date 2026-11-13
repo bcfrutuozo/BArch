@@ -20,6 +20,7 @@
 // em LauncherSources.qml (`src`).
 // Depende de: wl-clipboard; opcionais: qalc (libqalculate), cliphist, wtype, fd; foot (terminal).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls

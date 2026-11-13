@@ -6,6 +6,7 @@
 // O shell.qml passa a janela da barra em "window" (usada pela cafeína) e "ipcEnabled"
 // (só a barra da tela principal responde ao IPC "control", usado pelo barch em ~/.local/bin).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
@@ -54,7 +55,7 @@ Item {
     function regionTile() {
         chooseRegion = !chooseRegion
         regionFilter = ""
-        if (chooseRegion) { Vpn.loadRegions(); Vpn.measure(); regionField.forceActiveFocus() }
+        if (chooseRegion) { Vpn.loadRegions(); Vpn.measure(); regionPicker.focusField() }
     }
     // "Change region" no painel do escudo da barra: abre este painel já na lista
     Connections {
@@ -234,6 +235,7 @@ Item {
             mainOutput: mainOutput, sideOutput: sideOutput
         }
     }
+    function closePanel() { Popups.hide(popup) }      // for the pickers (ThemePicker.qml...)
     function fail(msg) { return JSON.stringify({ ok: false, error: msg }) }
     IpcHandler {
         target: "control"
@@ -539,101 +541,7 @@ Item {
                 }
 
                 // paletas (aparece ao clicar em Themes): as escuras e as claras, uma de cada fica fixa
-                ColumnLayout {
-                    visible: root.chooseTheme
-                    Layout.fillWidth: true
-                    spacing: 6
-                    Repeater {
-                        model: [
-                            { title: "Dark", mode: "dark", ids: Theme.darkFlavors },
-                            { title: "Light", mode: "light", ids: Theme.lightFlavors }
-                        ]
-                        ColumnLayout {
-                            id: group
-                            required property var modelData
-                            Layout.fillWidth: true
-                            spacing: 4
-                            Text {
-                                text: group.modelData.title
-                                color: Theme.dim
-                                font.family: Theme.font
-                                font.pixelSize: Theme.fontSize - 2
-                            }
-                            Flow {
-                                Layout.fillWidth: true
-                                spacing: 6
-                                Repeater {
-                                    model: group.modelData.ids
-                                    Rectangle {
-                                        id: chip
-                                        required property string modelData
-                                        readonly property var info: Theme.flavorInfo(modelData)
-                                        readonly property bool selected: info.active
-                                        implicitWidth: chipRow.implicitWidth + 20
-                                        implicitHeight: 30
-                                        radius: 15
-                                        color: chipMouse.containsMouse ? Theme.hover : "transparent"
-                                        border.width: selected ? 1.5 : 1
-                                        border.color: selected ? Theme.accent : Theme.border
-                                        RowLayout {
-                                            id: chipRow
-                                            anchors.centerIn: parent
-                                            spacing: 7
-                                            // amostra: fundo da paleta com o destaque por cima
-                                            Rectangle {
-                                                implicitWidth: 16; implicitHeight: 16; radius: 8
-                                                color: chip.info.base
-                                                border.width: 1; border.color: chip.info.surface
-                                                Rectangle {
-                                                    anchors.right: parent.right; anchors.bottom: parent.bottom
-                                                    width: 9; height: 9; radius: 4.5
-                                                    color: chip.info.accent
-                                                }
-                                            }
-                                            Text {
-                                                text: chip.info.label
-                                                color: chip.selected ? Theme.accent : Theme.fg
-                                                font.family: Theme.font
-                                                font.pixelSize: Theme.fontSize - 2
-                                                font.bold: chip.selected
-                                            }
-                                        }
-                                        MouseArea {
-                                            id: chipMouse
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: Theme.setFlavor(group.modelData.mode, chip.modelData)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // o editor (quickshell/palette): paletas novas, a partir de uma imagem, ajustes ao vivo
-                    Rectangle {
-                        implicitWidth: editRow.implicitWidth + 20
-                        implicitHeight: 30
-                        radius: 15
-                        color: editMouse.containsMouse ? Theme.hover : "transparent"
-                        border.width: 1
-                        border.color: Theme.border
-                        RowLayout {
-                            id: editRow
-                            anchors.centerIn: parent
-                            spacing: 7
-                            Text { text: root.glyph(0xF03EB); color: Theme.accent; font.family: Theme.iconFont; font.pixelSize: Theme.fontSize }   // md-pencil
-                            Text { text: "Edit palettes…"; color: Theme.fg; font.family: Theme.font; font.pixelSize: Theme.fontSize - 2 }
-                        }
-                        MouseArea {
-                            id: editMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: { Quickshell.execDetached(["barch", "theme", "edit"]); Popups.hide(popup) }
-                        }
-                    }
-                }
+                ThemePicker { center: root }
 
                 Text {
                     text: "Quick Settings"
@@ -756,141 +664,10 @@ Item {
                 }
 
                 // escolha da região da VPN (aparece ao clicar em VPN Region): filtro + lista por latência
-                ColumnLayout {
-                    visible: root.chooseRegion
-                    Layout.fillWidth: true
-                    spacing: 6
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: 32
-                        radius: Theme.buttonRadius
-                        color: Theme.surface
-                        border.width: 1
-                        border.color: regionField.activeFocus ? Theme.accent : "transparent"
-                        RowLayout {
-                            anchors { fill: parent; leftMargin: 10; rightMargin: 10 }
-                            spacing: 8
-                            Text { text: root.glyph(0xF0349); color: Theme.dim; font.family: Theme.iconFont; font.pixelSize: Theme.fontSize }   // magnify
-                            TextInput {
-                                id: regionField
-                                Layout.fillWidth: true
-                                color: Theme.fg; font.family: Theme.font; font.pixelSize: Theme.fontSize - 1
-                                clip: true
-                                onTextChanged: root.regionFilter = text
-                                Keys.onEscapePressed: { root.chooseRegion = false; text = "" }
-                                Keys.onReturnPressed: if (root.regionList.length > 0) root.pickRegion(root.regionList[0].id)
-                                Text {
-                                    anchors.fill: parent; verticalAlignment: Text.AlignVCenter
-                                    visible: regionField.text === ""
-                                    text: "Filter regions (" + Vpn.regions.length + ")"
-                                    color: Theme.overlay; font.family: Theme.font; font.pixelSize: Theme.fontSize - 1
-                                }
-                            }
-                            Text {
-                                visible: Vpn.measuring
-                                text: "measuring…"
-                                color: Theme.dim; font.family: Theme.font; font.pixelSize: Theme.fontSize - 3
-                            }
-                        }
-                    }
-
-                    ListView {
-                        id: regionView
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Math.min(contentHeight, 240)
-                        clip: true
-                        model: root.regionList
-                        boundsBehavior: Flickable.StopAtBounds
-                        delegate: Rectangle {
-                            id: regionRow
-                            required property var modelData
-                            readonly property bool selected: Vpn.preferred === modelData.id
-                            width: regionView.width
-                            implicitHeight: 32
-                            radius: Theme.buttonRadius
-                            color: regionMouse.containsMouse ? Theme.hover : "transparent"
-                            RowLayout {
-                                anchors { fill: parent; leftMargin: 10; rightMargin: 10 }
-                                spacing: 8
-                                Text {
-                                    text: regionRow.modelData.name
-                                    color: regionRow.selected ? Theme.accent : Theme.fg
-                                    font.family: Theme.font; font.pixelSize: Theme.fontSize - 1; font.bold: regionRow.selected
-                                    elide: Text.ElideRight; Layout.fillWidth: true
-                                }
-                                Text {
-                                    visible: text !== ""
-                                    text: regionRow.modelData.sub !== undefined ? regionRow.modelData.sub
-                                        : regionRow.modelData.country + (regionRow.modelData.pf ? "  ·  pf" : "") + (regionRow.modelData.geo ? "  ·  geo" : "")
-                                    color: Theme.dim; font.family: Theme.font; font.pixelSize: Theme.fontSize - 3
-                                }
-                                Text {
-                                    Layout.preferredWidth: 48
-                                    horizontalAlignment: Text.AlignRight
-                                    text: Vpn.ms(regionRow.modelData.latency)
-                                    color: regionRow.modelData.latency !== null && regionRow.modelData.latency < 0.05 ? Theme.good : Theme.dim
-                                    font.family: Theme.font; font.pixelSize: Theme.fontSize - 3
-                                }
-                            }
-                            MouseArea {
-                                id: regionMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.pickRegion(regionRow.modelData.id)
-                            }
-                        }
-                    }
-                }
+                RegionPicker { id: regionPicker; center: root }
 
                 // escolha do que gravar (aparece ao clicar em Record)
-                RowLayout {
-                    visible: root.chooseRecord && !Recorder.recording
-                    Layout.fillWidth: true
-                    spacing: 8
-                    Repeater {
-                        model: [
-                            { mode: "full",   icon: 0xF0379, label: "Full Screen" },   // monitor
-                            { mode: "region", icon: 0xF0A6D, label: "Region" }        // selection_drag
-                        ]
-                        Rectangle {
-                            id: opt
-                            required property var modelData
-                            Layout.fillWidth: true
-                            implicitHeight: 36
-                            radius: Theme.buttonRadius
-                            color: optMouse.containsMouse ? Theme.hover : "transparent"
-                            border.width: 1
-                            border.color: Theme.accent
-                            Row {
-                                anchors.centerIn: parent
-                                spacing: 8
-                                Text {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: root.glyph(opt.modelData.icon)
-                                    color: Theme.accent
-                                    font.family: Theme.iconFont
-                                    font.pixelSize: Theme.fontSize + 2
-                                }
-                                Text {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: opt.modelData.label
-                                    color: Theme.fg
-                                    font.family: Theme.font
-                                    font.pixelSize: Theme.fontSize - 1
-                                }
-                            }
-                            MouseArea {
-                                id: optMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.record(opt.modelData.mode)
-                            }
-                        }
-                    }
-                }
+                RecordPicker { center: root }
             }
         }
     }

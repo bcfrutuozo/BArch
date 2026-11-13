@@ -2,6 +2,7 @@
 // `barch books` makes): Hardcover search and Want to Read through Shelfmark, the requests the
 // automatic download could not settle, their releases, the download queue, Fix with Agent.
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

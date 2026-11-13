@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -199,14 +200,15 @@ Item {
                         Repeater {
                             model: det.j && det.j.episodes ? Object.keys(det.j.episodes).sort((a, b) => a - b) : []
                             RowLayout {
+                                id: entry
                                 required property var modelData
                                 readonly property var e: det.j.episodes[modelData]
                                 Layout.fillWidth: true
                                 spacing: 8
-                                Text { text: "E" + det.pad(modelData); color: Ui.subtext; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 2 }
-                                Badge { text: e.state; tint: Store.dubTint(e.state) }
-                                Text { visible: e.offset_ms !== undefined && e.offset_ms !== null; text: e.offset_ms + " ms"; color: Ui.overlay; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3 }
-                                Text { Layout.fillWidth: true; text: e.reason || ""; color: Ui.overlay; font.family: Ui.font; font.pixelSize: Ui.fontSize - 3; elide: Text.ElideRight }
+                                Text { text: "E" + det.pad(entry.modelData); color: Ui.subtext; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 2 }
+                                Badge { text: entry.e.state; tint: Store.dubTint(entry.e.state) }
+                                Text { visible: entry.e.offset_ms !== undefined && entry.e.offset_ms !== null; text: entry.e.offset_ms + " ms"; color: Ui.overlay; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3 }
+                                Text { Layout.fillWidth: true; text: entry.e.reason || ""; color: Ui.overlay; font.family: Ui.font; font.pixelSize: Ui.fontSize - 3; elide: Text.ElideRight }
                             }
                         }
                     }
@@ -253,11 +255,12 @@ Item {
                         Repeater {
                             model: det.j ? (det.j.history || []).slice(-15).reverse() : []
                             RowLayout {
+                                id: cell
                                 required property var modelData
                                 Layout.fillWidth: true
                                 spacing: 8
-                                Text { text: det.when(modelData.t); color: Ui.overlay; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3 }
-                                Text { Layout.fillWidth: true; text: modelData.msg; color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2; wrapMode: Text.WordWrap }
+                                Text { text: det.when(cell.modelData.t); color: Ui.overlay; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3 }
+                                Text { Layout.fillWidth: true; text: cell.modelData.msg; color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2; wrapMode: Text.WordWrap }
                             }
                         }
                     }

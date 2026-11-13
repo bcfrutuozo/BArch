@@ -15,6 +15,7 @@
 // A delegate gets its live screen object with Screens.byName(modelData); that binding
 // follows Quickshell.screens directly, so it is null for the moment a monitor is gone.
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 

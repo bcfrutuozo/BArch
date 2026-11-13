@@ -2,6 +2,7 @@
 // (RecordWidget) e pelo Control Center.
 pragma Singleton
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

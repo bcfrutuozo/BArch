@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -57,11 +58,12 @@ Rectangle {
                             ["subtitles", d.m.media.subs || "none"],
                             ["runtime", d.m.media.runtime]] : []
                         RowLayout {
+                            id: entry
                             required property var modelData
                             Layout.fillWidth: true
                             spacing: 10
-                            Text { Layout.preferredWidth: 64; text: modelData[0]; color: Ui.overlay; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2 }
-                            Text { Layout.fillWidth: true; text: modelData[1] || "?"; color: Ui.text; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2; wrapMode: Text.WordWrap }
+                            Text { Layout.preferredWidth: 64; text: entry.modelData[0]; color: Ui.overlay; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2 }
+                            Text { Layout.fillWidth: true; text: entry.modelData[1] || "?"; color: Ui.text; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2; wrapMode: Text.WordWrap }
                         }
                     }
                 }

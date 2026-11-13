@@ -1,5 +1,6 @@
 // StatRow.qml — linha do painel do SysMonitor: rótulo, valor e barra de progresso.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 

@@ -3,6 +3,7 @@
 // repo keeps (packages/*.txt). Removing goes through pkexec (polkit asks the password) and then
 // scripts/update-packages.sh, so the repo lists follow.
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

@@ -6,6 +6,7 @@
 // desta máquina gastaram hoje e na semana (claude-cost.log), por fonte. Atualiza a cada 5 min e ao abrir.
 // IPC "claude" (status em JSON, refresh), usado pelo "barch claude" e pelo barch-events (métricas claude.*).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

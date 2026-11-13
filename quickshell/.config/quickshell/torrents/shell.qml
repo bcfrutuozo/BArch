@@ -6,6 +6,7 @@
 //
 //   qs -p ~/.config/quickshell/torrents          barch torrents browse [overview|sources|torrents]
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

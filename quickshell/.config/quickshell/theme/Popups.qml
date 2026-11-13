@@ -4,6 +4,7 @@ pragma Singleton
 //  - só um painel aberto por vez (cada painel avisa quando abre/fecha: opened/closed);
 //  - abrir/fechar animado (show/hide/toggle usam o PanelAnim do painel, se houver).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 

@@ -7,6 +7,7 @@
 // trocado por `voice.py language <code>`.
 pragma Singleton
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

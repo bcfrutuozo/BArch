@@ -6,6 +6,7 @@
 // compromisso (hasEvents), para ele marcar com um ponto.
 // Sem khal ou sem eventos, a seção mostra só um aviso discreto.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

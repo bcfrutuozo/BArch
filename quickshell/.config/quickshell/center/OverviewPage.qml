@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -76,9 +77,10 @@ Item {
                 Repeater {
                     model: Store.failedNow
                     RowLayout {
+                        id: entry
                         required property var modelData
                         spacing: 8
-                        Text { Layout.fillWidth: true; text: modelData.unit + "  (" + modelData.scope + ")"; color: Ui.red; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 1 }
+                        Text { Layout.fillWidth: true; text: entry.modelData.unit + "  (" + entry.modelData.scope + ")"; color: Ui.red; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 1 }
                         UiButton { label: "journal"; small: true; onClicked: Store.showJournal(parent.modelData.scope, parent.modelData.unit) }
                         UiButton { label: "restart"; small: true; onClicked: Store.unitAction(parent.modelData.scope, "restart", parent.modelData.unit) }
                         UiButton { label: "reset"; small: true; tooltip: "systemctl reset-failed"; onClicked: Store.unitAction(parent.modelData.scope, "reset-failed", parent.modelData.unit) }
@@ -121,10 +123,11 @@ Item {
                 Repeater {
                     model: page.nextTimers
                     RowLayout {
+                        id: cell
                         required property var modelData
                         spacing: 8
-                        Text { Layout.preferredWidth: 300; text: modelData.unit; color: Ui.text; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 1; elide: Text.ElideRight }
-                        Text { Layout.fillWidth: true; text: Store.pretty(modelData.next); color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1 }
+                        Text { Layout.preferredWidth: 300; text: cell.modelData.unit; color: Ui.text; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 1; elide: Text.ElideRight }
+                        Text { Layout.fillWidth: true; text: Store.pretty(cell.modelData.next); color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 1 }
                     }
                 }
             }

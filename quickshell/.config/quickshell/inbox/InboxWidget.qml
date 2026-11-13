@@ -6,6 +6,7 @@
 // with its count and an Open button to the right app or Center page. Each source is read with a timeout,
 // so the NAS asleep only hides its lines. IPC "inbox" (status in JSON, refresh), used by `barch inbox`.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

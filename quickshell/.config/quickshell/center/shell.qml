@@ -9,6 +9,7 @@
 // Reads what systemctl, journalctl and `barch --json` give; actions are the same commands
 // (system units through polkit). The shared controls are links into ../ui.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

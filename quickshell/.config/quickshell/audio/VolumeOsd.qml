@@ -8,6 +8,7 @@
 // The microphone's *volume* is never watched: apps with automatic gain move it all the time.
 // Click-through (empty mask) and above fullscreen windows (overlay layer), so it shows in games.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

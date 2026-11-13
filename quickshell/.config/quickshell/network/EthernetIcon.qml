@@ -1,6 +1,7 @@
 // EthernetIcon.qml — porta de rede (RJ45) desenhada em traço fino, no mesmo estilo do WifiIcon.
 // Os ícones de cabo da Nerd Font são preenchidos ou parecem um computador; este é só contorno.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Shapes
 

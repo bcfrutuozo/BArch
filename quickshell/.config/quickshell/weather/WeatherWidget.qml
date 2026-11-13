@@ -3,6 +3,7 @@
 // Clique: painel com o tempo agora, as próximas horas, os próximos dias e o nascer/pôr do sol.
 // Atualiza a cada 15 min. A cidade fica em "city" (e o país em "country").
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
@@ -282,13 +283,14 @@ Item {
                             { g: 0xF059D, label: "Wind", value: Math.round(root.wx.current.wind) + " km/h" }
                         ] : []
                         ColumnLayout {
+                            id: entry
                             required property var modelData
                             Layout.fillWidth: true
                             spacing: 2
                             Text {
                                 Layout.fillWidth: true
                                 horizontalAlignment: Text.AlignHCenter
-                                text: root.glyph(modelData.g) + "  " + modelData.value
+                                text: root.glyph(entry.modelData.g) + "  " + entry.modelData.value
                                 color: Theme.fg
                                 font.family: Theme.iconFont
                                 font.pixelSize: Theme.fontSize - 1
@@ -296,7 +298,7 @@ Item {
                             Text {
                                 Layout.fillWidth: true
                                 horizontalAlignment: Text.AlignHCenter
-                                text: modelData.label
+                                text: entry.modelData.label
                                 color: Theme.dim
                                 font.family: Theme.font
                                 font.pixelSize: Theme.fontSize - 3
@@ -314,13 +316,14 @@ Item {
                     Repeater {
                         model: root.ready ? root.wx.hourly.filter((h, i) => i > 0 && i % 2 === 0).slice(0, 6) : []
                         ColumnLayout {
+                            id: cell
                             required property var modelData
                             Layout.fillWidth: true
                             spacing: 3
                             Text {
                                 Layout.fillWidth: true
                                 horizontalAlignment: Text.AlignHCenter
-                                text: root.hhmm(modelData.time)
+                                text: root.hhmm(cell.modelData.time)
                                 color: Theme.dim
                                 font.family: Theme.font
                                 font.pixelSize: Theme.fontSize - 3
@@ -328,7 +331,7 @@ Item {
                             Text {
                                 Layout.fillWidth: true
                                 horizontalAlignment: Text.AlignHCenter
-                                text: root.glyph(root.iconFor(modelData.code, modelData.day))
+                                text: root.glyph(root.iconFor(cell.modelData.code, cell.modelData.day))
                                 color: Theme.fg
                                 font.family: Theme.iconFont
                                 font.pixelSize: Theme.fontSize + 4
@@ -336,7 +339,7 @@ Item {
                             Text {
                                 Layout.fillWidth: true
                                 horizontalAlignment: Text.AlignHCenter
-                                text: root.deg(modelData.temp)
+                                text: root.deg(cell.modelData.temp)
                                 color: Theme.fg
                                 font.family: Theme.font
                                 font.pixelSize: Theme.fontSize - 1
@@ -344,7 +347,7 @@ Item {
                             Text {
                                 Layout.fillWidth: true
                                 horizontalAlignment: Text.AlignHCenter
-                                text: modelData.rain > 0 ? modelData.rain + "%" : " "
+                                text: cell.modelData.rain > 0 ? cell.modelData.rain + "%" : " "
                                 color: Theme.accent
                                 font.family: Theme.font
                                 font.pixelSize: Theme.fontSize - 4

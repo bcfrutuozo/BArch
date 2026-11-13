@@ -4,6 +4,7 @@
 // ligar, console, pausar/retomar, reiniciar, desligar e forçar desligamento.
 // Depende do vm-info.sh (nesta mesma pasta), virsh, jq e virt-manager (para o console).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

@@ -6,6 +6,7 @@
 //
 //   qs -p ~/.config/quickshell/video          barch video browse [search|movies|series|downloads|dub]
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

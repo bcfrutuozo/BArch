@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 
 // a poster from TMDB/TVDB (the URL video.py gives), or a placeholder with the first letter

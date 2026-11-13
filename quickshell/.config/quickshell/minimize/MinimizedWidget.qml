@@ -2,6 +2,7 @@
 // Um ícone por janela; clique devolve a janela ao workspace de onde ela saiu.
 // Passar o mouse mostra o título; clique direito abre o menu da janela. Some quando não há nada minimizado.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Widgets

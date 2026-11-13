@@ -4,6 +4,7 @@
 //
 //   qs -p ~/.config/quickshell/mixer             barch mixer [devices|apps|settings]
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

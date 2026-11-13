@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -114,11 +115,12 @@ Item {
                     Repeater {
                         model: page.shown
                         RowLayout {
+                            id: entry
                             required property var modelData
                             readonly property var e: modelData
                             Layout.fillWidth: true
                             spacing: 10
-                            Text { Layout.preferredWidth: 110; text: Qt.formatDateTime(new Date(e.ts * 1000), "dd/MM HH:mm:ss"); color: Ui.overlay; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3 }
+                            Text { Layout.preferredWidth: 110; text: Qt.formatDateTime(new Date(entry.e.ts * 1000), "dd/MM HH:mm:ss"); color: Ui.overlay; font.family: Ui.monoFont; font.pixelSize: Ui.fontSize - 3 }
                             Badge { text: parent.e.event; tint: page.eventTint(parent.e.event) }
                             Text { Layout.fillWidth: true; text: page.dataText(parent.e.data); color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 3; elide: Text.ElideRight }
                         }

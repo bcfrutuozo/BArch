@@ -2,6 +2,7 @@
 // the accent color around what is kept, with a grip at each end to drag, the rest dimmed, and a
 // playhead that scrubs (the frame above follows). Dragging a grip moves the playhead with it, so
 // the cut is seen while it is chosen.
+pragma ComponentBehavior: Bound
 import QtQuick
 
 Item {

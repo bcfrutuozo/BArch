@@ -4,6 +4,7 @@
 //   Clique: painel com capa, progresso e controles · Clique do meio: tocar/pausar
 // Funciona com Spotify, navegadores, mpv e qualquer app que fale MPRIS.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

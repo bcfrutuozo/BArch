@@ -1,5 +1,6 @@
 // Tile.qml — bloco de liga/desliga da central de controle (em contorno, coerente com o OLED).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import "../theme"

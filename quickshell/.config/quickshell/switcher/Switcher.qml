@@ -11,6 +11,7 @@
 // de todos os workspaces, inclusive o scratchpad.
 // A prévia usa o protocolo de captura de janelas do Hyprland (ScreencopyView).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

@@ -1,5 +1,6 @@
 // SectionTitle.qml — título de seção do painel do SysMonitor.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 

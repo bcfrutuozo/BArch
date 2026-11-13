@@ -4,6 +4,7 @@
 // do NetworkManager que pertence ao usuário; aqui só se chama o script e se lê o estado.
 pragma Singleton
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

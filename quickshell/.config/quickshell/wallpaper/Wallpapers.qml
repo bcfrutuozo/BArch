@@ -14,6 +14,7 @@ pragma Singleton
 // Seletor: launcher "b " (Launcher.qml) e o bloco Wallpaper da central de controle.
 //   qs ipc call wallpaper status | list | set <cena> <desktop|lock|both> | render [<paleta>|all]
 
+pragma ComponentBehavior: Bound
 import Quickshell
 import Quickshell.Io
 import "../theme"

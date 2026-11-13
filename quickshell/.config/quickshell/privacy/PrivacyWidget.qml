@@ -4,6 +4,7 @@
 // Clique: painel com os apps que estão usando cada um.
 // Depende do privacy-info.sh (nesta pasta): pipewire (pw-dump) e jq.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

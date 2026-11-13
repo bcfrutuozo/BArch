@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -173,8 +174,9 @@ Item {
                                 Repeater {
                                     model: ["mass", "stiffness", "damping"]
                                     RowLayout {
+                                        id: entry
                                         required property var modelData
-                                        Text { Layout.preferredWidth: 70; text: modelData; color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2 }
+                                        Text { Layout.preferredWidth: 70; text: entry.modelData; color: Ui.subtext; font.family: Ui.font; font.pixelSize: Ui.fontSize - 2 }
                                         UiField { Layout.fillWidth: true; mono: true; implicitHeight: 22; text: String(sp.c[parent.modelData])
                                             onCommitted: v => { const o = Object.assign({}, sp.c); o[parent.modelData] = Number(v) || 0; Store.setCurve(sp.modelData, o) } }
                                     }

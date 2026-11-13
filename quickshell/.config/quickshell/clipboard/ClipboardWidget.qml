@@ -3,6 +3,7 @@
 // Clique ou Enter copia o item de volta; × apaga um item; "Clear All" apaga o histórico.
 // Depende do cliphist (guardando o histórico) e do wl-clipboard.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls

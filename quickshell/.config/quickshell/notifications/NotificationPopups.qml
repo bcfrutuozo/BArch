@@ -1,6 +1,7 @@
 // NotificationPopups.qml — balões de notificação no canto superior direito, logo abaixo da barra.
 // Entram deslizando da direita, os mais novos em cima (no máximo 5 ao mesmo tempo).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Wayland

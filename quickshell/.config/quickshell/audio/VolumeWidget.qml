@@ -5,6 +5,7 @@
 // Clique esquerdo: painel com volume da saída, troca de dispositivo,
 // volume por aplicativo e microfone.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

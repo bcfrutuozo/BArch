@@ -9,6 +9,7 @@
 //
 //   qs -p ~/.config/quickshell/player          barch player [browse] [albums|artists|tracks|genres|queue|favorites|recent|lyrics|stats|viz|eq|settings]
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -139,7 +140,7 @@ ShellRoot {
             function selectArtist(name) { artistsLoader.visited = true; if (artistsLoader.item) artistsLoader.item.select(name); else root.pendingArtist = name }
             Connections { target: artistsLoader; function onLoaded() { if (root.pendingArtist) { artistsLoader.item.select(root.pendingArtist); root.pendingArtist = "" } } }
             function setQuery(q) { search.text = q }
-            function newPlaylist(keys) { dialog.create(keys) }
+            function newPlaylist(keys) { playlistDialog.create(keys) }
 
             // keyboard (a text field keeps the keys it uses)
             Shortcut { sequence: "Space"; onActivated: Player.toggle() }
@@ -163,7 +164,7 @@ ShellRoot {
             Shortcut { sequence: "Ctrl+Q"; onActivated: Qt.quit() }
 
             RowMenu { id: rowMenu }
-            PlaylistDialog { id: dialog }
+            PlaylistDialog { id: playlistDialog }
 
             ColumnLayout {
                 anchors.fill: parent
@@ -237,7 +238,7 @@ ShellRoot {
                             RowLayout {
                                 Layout.leftMargin: 10; Layout.topMargin: 10; Layout.rightMargin: 2
                                 Text { Layout.fillWidth: true; text: "PLAYLISTS"; color: Ui.overlay; font.family: Ui.font; font.pixelSize: Ui.fontSize - 4; font.bold: true }
-                                IconButton { size: 22; glyphSize: Ui.fontSize; icon: "󰐕"; tint: Ui.subtext; tooltip: "new playlist"; onClicked: { const p = mapToItem(null, 0, height); rowMenu.show(p.x, p.y, [{ label: "New playlist", icon: "󰲸", action: () => dialog.create([]) }, { label: "New smart playlist", icon: "󰛨", action: () => dialog.createSmart() }]) } }
+                                IconButton { size: 22; glyphSize: Ui.fontSize; icon: "󰐕"; tint: Ui.subtext; tooltip: "new playlist"; onClicked: { const p = mapToItem(null, 0, height); rowMenu.show(p.x, p.y, [{ label: "New playlist", icon: "󰲸", action: () => playlistDialog.create([]) }, { label: "New smart playlist", icon: "󰛨", action: () => playlistDialog.createSmart() }]) } }
                             }
                             ListView {
                                 Layout.fillWidth: true
@@ -260,7 +261,7 @@ ShellRoot {
                                         { label: "Play", icon: "󰐊", action: () => Player.playList(Store.playlistTracks(modelData), 0) },
                                         { label: "Shuffle", icon: "󰒝", action: () => Player.playShuffled(Store.playlistTracks(modelData)) },
                                         { label: "Add to queue", icon: "󰐕", action: () => Player.enqueue(Store.playlistTracks(modelData)) },
-                                        { label: modelData.smart ? "Rules…" : "Rename…", icon: "󰏫", action: () => dialog.edit(modelData.id) },
+                                        { label: modelData.smart ? "Rules…" : "Rename…", icon: "󰏫", action: () => playlistDialog.edit(modelData.id) },
                                         { label: "Move up", icon: "󰁝", action: () => { if (index > 0) Store.movePlaylist(index, index - 1) } },
                                         { label: "Move down", icon: "󰁅", action: () => { if (index < Store.playlists.length - 1) Store.movePlaylist(index, index + 1) } },
                                         { label: "Delete", icon: "󰆴", danger: true, action: () => { Store.deletePlaylist(modelData.id); if (root.playlistId === modelData.id) root.open("albums") } }
@@ -320,7 +321,7 @@ ShellRoot {
                                 Page { id: artistsLoader; sourceComponent: ArtistsPage { menu: rowMenu } }
                                 Page { sourceComponent: TracksPage { menu: rowMenu } }
                                 Page { sourceComponent: GenresPage { menu: rowMenu } }
-                                Page { sourceComponent: ListPage { menu: rowMenu; dialog: dialog; kind: root.page === "playlist" ? "playlist" : (root.pageDef.kind || "queue"); playlistId: root.playlistId } }
+                                Page { sourceComponent: ListPage { menu: rowMenu; dialog: playlistDialog; kind: root.page === "playlist" ? "playlist" : (root.pageDef.kind || "queue"); playlistId: root.playlistId } }
                                 Page { sourceComponent: LyricsPage {} }
                                 Page { sourceComponent: StatsPage { menu: rowMenu } }
                                 Page { sourceComponent: SettingsPage {} }

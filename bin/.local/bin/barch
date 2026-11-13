@@ -43,6 +43,10 @@ source "$LIB/core.sh"
 source "$LIB/desktop.sh"
 # shellcheck source=../lib/barch/music.sh
 source "$LIB/music.sh"
+# shellcheck source=../lib/barch/music-agents.sh
+source "$LIB/music-agents.sh"
+# shellcheck source=../lib/barch/music-library.sh
+source "$LIB/music-library.sh"
 # shellcheck source=../lib/barch/books.sh
 source "$LIB/books.sh"
 # shellcheck source=../lib/barch/video.sh

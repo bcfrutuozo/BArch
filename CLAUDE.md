@@ -139,7 +139,11 @@ reusing the widget's own functions.
   `hyprctl -j monitors`, `hyprctl binds -j`, `hyprctl eval '...'` (e.g. `BArch.monitors`).
 - Quickshell reloads QML on save; check its log for errors after every QML change.
   `./scripts/qml-check.sh` checks every qmldir and the reliable part of qmllint (`-v`: all of it).
-  Never name a property or function after one of the base type (`state`, `children`, `palette`).
+  Every QML file outside `lock/` starts with `pragma ComponentBehavior: Bound`: a delegate declares
+  `required property var modelData` / `int index` (without them it throws once created) and
+  children reach a property of an outer object through its id, never bare or through `parent` (in
+  an Animation, `parent` is the file root's parent). Never name a property or function after one
+  of the base type (`state`, `children`, `palette`).
 - Shell scripts: `bash -n` and, if installed, `shellcheck`. `./scripts/check.sh` runs every static
   check of the repo at once (scripts, barch's modules, QML, Lua, JSON, user units, agent timers,
   the unit tests, `hyprctl configerrors`); `sync.sh` runs it before committing.

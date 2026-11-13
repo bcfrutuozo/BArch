@@ -3,6 +3,7 @@
 // responde. Clique: a janela volta · clique do meio: pausa/continua · clique direito: encerra o player.
 // Some sozinho quando a janela abre ou o processo termina.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

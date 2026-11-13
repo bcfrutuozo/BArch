@@ -1,6 +1,7 @@
 // MicRecordWidget.qml — microphone recording indicator (Super+R).
 // Only visible while recording: pulsing red microphone + time. Click stops and saves.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import "../theme"

@@ -1,6 +1,7 @@
 // Ui.qml — colors and fonts of the BArch apps (quickshell/hypr, quickshell/center; linked into each), from the bar's theme state
 // (~/.local/state/quickshell/theme.json, the same file the lock screen follows), live.
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

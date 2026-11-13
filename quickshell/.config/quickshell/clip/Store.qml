@@ -3,6 +3,7 @@
 // chosen here), the trim, the frame being shown, and the export. Everything that touches the
 // video goes through clip.py next to this file, the same code `barch clip export` runs.
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io

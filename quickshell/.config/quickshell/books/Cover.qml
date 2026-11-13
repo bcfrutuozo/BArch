@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 
 // a book cover from the local cache (books.py fetched it), or a placeholder with the first letter

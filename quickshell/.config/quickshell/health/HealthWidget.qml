@@ -7,6 +7,7 @@
 // IPC "health" (status em JSON, refresh), usado pelo "barch health" em ~/.local/bin.
 // Depende de health-check.sh e clean.sh (nesta pasta), pacman-contrib (pacdiff, paccache), jq e foot.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell

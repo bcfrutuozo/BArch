@@ -13,6 +13,7 @@
 // volta tudo ao que era (`theme previewEnd`). Nunca escreve em palettes.json: a barra é a dona.
 // Depende de: a barra rodando (qs ipc), zenity (escolher a imagem), python3 + Pillow (gerador).
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls

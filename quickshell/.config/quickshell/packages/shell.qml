@@ -5,6 +5,7 @@
 //
 //   qs -p ~/.config/quickshell/packages          barch packages [installed|updates|history]
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

@@ -5,6 +5,7 @@
 //   qs -p ~/.config/quickshell/backup            barch backup browse [status|snapshots|browse]
 //   qs -p ~/.config/quickshell/backup ipc call app open <page> | close
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

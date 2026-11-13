@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -43,6 +44,7 @@ Item {
     readonly property int yearW: 52
 
     component Head: Item {
+        id: entry
         property string col: ""
         property string label: ""
         property int align: Text.AlignLeft
@@ -50,9 +52,9 @@ Item {
         Text {
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width
-            text: label + (list.sortCol === col && col ? (list.sortDesc ? " 󰅀" : " 󰅃") : "")
-            horizontalAlignment: align
-            color: list.sortCol === col && col ? Ui.accent : Ui.overlay
+            text: entry.label + (list.sortCol === entry.col && entry.col ? (list.sortDesc ? " 󰅀" : " 󰅃") : "")
+            horizontalAlignment: entry.align
+            color: list.sortCol === entry.col && entry.col ? Ui.accent : Ui.overlay
             font.family: Ui.font; font.pixelSize: Ui.fontSize - 3; font.bold: true
             elide: Text.ElideRight
         }
@@ -153,6 +155,7 @@ Item {
                                 Repeater {
                                     model: 3
                                     Rectangle {
+                                        id: bar
                                         required property int index
                                         width: 3; radius: 1; color: Ui.accent
                                         anchors.bottom: parent.bottom
@@ -160,8 +163,8 @@ Item {
                                         SequentialAnimation on height {
                                             running: row.current && Player.playing
                                             loops: Animation.Infinite
-                                            NumberAnimation { to: 14; duration: 300 + parent.index * 110; easing.type: Easing.InOutSine }
-                                            NumberAnimation { to: 5; duration: 300 + parent.index * 110; easing.type: Easing.InOutSine }
+                                            NumberAnimation { to: 14; duration: 300 + bar.index * 110; easing.type: Easing.InOutSine }
+                                            NumberAnimation { to: 5; duration: 300 + bar.index * 110; easing.type: Easing.InOutSine }
                                         }
                                     }
                                 }
