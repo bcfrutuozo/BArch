@@ -10,7 +10,8 @@ PT-BR audio, PT-BR subtitles**. Two pieces keep it:
 
 `./install.sh` (`barch video install`) copies both to the NAS. The API keys live in
 `~/.config/barch/video.json` and go only to the NAS (`secrets.yml`, `secrets.json`), never into
-the repo.
+the repo. The pipeline's API refuses to start without its `token` in `secrets.json`
+(`barch_video/auth.py`), so it is never open.
 
 ## The rule
 

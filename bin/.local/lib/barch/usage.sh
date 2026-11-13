@@ -208,6 +208,7 @@ Desktop (through the bar):
 Automation (agent/rules.json + agent/events.py, barch-events.service):
   rules list                  the rules, enabled or not, when each fired last
   rules test <event> [k=v..]  which rules an event would hit (nothing runs); rules test metric <name> <value>
+  rules lint|edit             check agent/rules.json (schema, regexes, {field} inside quotes); edit opens it first
   rules fire <id> [k=v..]     run a rule's actions now (what the "Run" button of an ask rule does)
   rules enable|disable <id>   flip a rule in rules.json (the daemon reloads it)
   events status|log [n] [--filter text] [--since 24h]

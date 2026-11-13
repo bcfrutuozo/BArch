@@ -29,6 +29,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from .auth import require_token, token_ok
 from .pipeline import STATES, Pipeline
 
 DEFAULTS = {"jobs": "/data/video-pipeline", "poll_s": 300, "port": 8339, "category": "barch-dub",
@@ -93,7 +94,7 @@ def make_handler(p: Pipeline, token: str):
 
         def _auth(self, q) -> bool:
             got = self.headers.get("X-Barch-Token") or (q.get("token") or [""])[0]
-            if token and got != token:
+            if not token_ok(token, got):
                 self._send(401, {"ok": False, "error": "token"})
                 return False
             return True
@@ -175,13 +176,14 @@ def digest_loop(p: Pipeline) -> None:
 
 def serve(cfg_path: str) -> None:
     cfg = load_config(cfg_path)
+    token = require_token(cfg, "video pipeline")      # before anything starts
     miss = missing_tools()
     if miss:
         print(f"video pipeline: missing {', '.join(miss)} (50-video-pipeline-packages installs them)", flush=True)
     p = Pipeline(cfg)
     threading.Thread(target=p.loop, daemon=True).start()
     threading.Thread(target=digest_loop, args=(p,), daemon=True).start()
-    srv = ThreadingHTTPServer(("0.0.0.0", int(cfg["port"])), make_handler(p, cfg.get("token", "")))
+    srv = ThreadingHTTPServer(("0.0.0.0", int(cfg["port"])), make_handler(p, token))
     print(f"video pipeline: listening on {cfg['port']}", flush=True)
     srv.serve_forever()
 

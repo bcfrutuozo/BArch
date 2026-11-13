@@ -38,7 +38,7 @@ barch voice wake "Bartch, liga o HDR"  # would it wake the daemon · misses: nea
 barch voice say "texto"            # speak · reload (commands.json) · log · setup [--install]
 barch voice lang [<code>|list]     # the language it listens and answers in (pt, en, es, auto…)
 barch backup init|run|check [--full]|status|list|restore [SNAPSHOT] <path>...   # restic to the NAS, verified weekly (see backup.md)
-barch rules list|test <event> [k=v..]|fire <id>|enable|disable <id>   # agent/rules.json (see agent.md)
+barch rules list|test <event> [k=v..]|fire <id>|enable|disable <id>|lint|edit   # agent/rules.json (see agent.md)
 barch events status|log [n] [--filter x] [--since 7d]   # the daemon and what happened (windows, VPN, boots, costs…)
 barch metrics list|series <metric> [--since 24h]|summary   # metrics.db: temperatures, load, boots, failures, Claude cost
 barch nas status [--no-certs]|setup   # the NAS now, through Unraid's API: array, disks, pools, containers, Unraid's warnings, certificates

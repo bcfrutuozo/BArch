@@ -100,6 +100,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .catalog import send_file
+from .auth import require_token, token_ok
 from .pipeline import STATES, Pipeline
 
 DEFAULTS = {
@@ -158,10 +159,8 @@ def make_handler(p: Pipeline, token: str):
             self.wfile.write(body)
 
         def _auth(self, q) -> bool:
-            if not token:
-                return True
             got = self.headers.get("X-Barch-Token") or (q.get("token") or [""])[0]
-            if got != token:
+            if not token_ok(token, got):
                 self._send(401, {"ok": False, "error": "token"})
                 return False
             return True
@@ -541,6 +540,7 @@ def make_handler(p: Pipeline, token: str):
 
 def serve(cfg_path: str) -> int:
     cfg = load_config(cfg_path)
+    token = require_token(cfg, "music pipeline")      # before anything starts
     p = Pipeline(cfg)
 
     def poll():
@@ -559,7 +559,7 @@ def serve(cfg_path: str) -> int:
                 print(f"[catalog] {e}", flush=True)
             time.sleep(float(cfg.get("catalog_every_s", 900)))
     threading.Thread(target=catalog, daemon=True).start()
-    srv = ThreadingHTTPServer(("0.0.0.0", int(cfg.get("port", 8338))), make_handler(p, cfg.get("token", "")))
+    srv = ThreadingHTTPServer(("0.0.0.0", int(cfg.get("port", 8338))), make_handler(p, token))
     print(f"music pipeline on :{cfg.get('port', 8338)}, jobs in {p.store.root}, music in {p.music}", flush=True)
     if missing_tools():
         print("music pipeline: MISSING " + ", ".join(missing_tools()) + " (custom-cont-init.d/50-music-pipeline-packages did not run?)", flush=True)

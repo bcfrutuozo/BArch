@@ -294,6 +294,94 @@ def save_rules_enabled(rule_id: str, enabled: bool) -> bool:
     return hit
 
 
+RULE_KEYS = {"id", "description", "title", "when", "do", "notify", "say", "ask", "cooldown", "timeout",
+             "critical", "enabled", "stop_on_error"}
+PLACEHOLDER = re.compile(r"\{(\w+)\}")
+
+
+def quoted_placeholders(cmd: str) -> list[str]:
+    """The {field} placeholders of a `do` command that sit inside '...' or "...". expand() already
+    shell-quotes every value, so inside quotes the value's own quotes are what the shell sees:
+    'echo {title}' with a window titled  x'; rm -rf ~; '  runs the rm."""
+    out, quote, i = [], None, 0
+    while i < len(cmd):
+        c = cmd[i]
+        if quote is None and c == "\\":
+            i += 2
+            continue
+        if quote == '"' and c == "\\":
+            i += 2
+            continue
+        if c in "'\"" and quote in (None, c):
+            quote = None if quote == c else c
+        elif quote and c == "{":
+            m = PLACEHOLDER.match(cmd, i)
+            if m:
+                out.append(m.group(1))
+                i = m.end()
+                continue
+        i += 1
+    return out
+
+
+def lint_rules(data) -> list[str]:
+    """Problems of a rules.json document (empty when fine); check.sh and `barch rules lint` run it."""
+    if not isinstance(data, dict) or not isinstance(data.get("rules"), list):
+        return ["rules.json: no \"rules\" list"]
+    problems, seen = [], set()
+    for n, r in enumerate(data["rules"]):
+        if not isinstance(r, dict) or not isinstance(r.get("id"), str) or not r["id"]:
+            problems.append(f"rule #{n}: no id")
+            continue
+        rid = r["id"]
+        p = lambda msg: problems.append(f"{rid}: {msg}")  # noqa: E731
+        if rid in seen:
+            p("duplicate id")
+        seen.add(rid)
+        for k in sorted(set(r) - RULE_KEYS):
+            p(f"unknown key {k!r}")
+        when = r.get("when")
+        if not isinstance(when, dict) or ("event" in when) == ("metric" in when):
+            p("when needs exactly one of event or metric")
+        elif "metric" in when:
+            above, below, clear = when.get("above"), when.get("below"), when.get("clear")
+            nums = {k: v for k, v in (("above", above), ("below", below), ("clear", clear)) if v is not None}
+            if (above is None) == (below is None):
+                p("a metric rule needs exactly one of above or below")
+            elif not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in nums.values()):
+                p("above, below and clear must be numbers")
+            elif clear is not None and ((above is not None and clear > above) or (below is not None and clear < below)):
+                p("clear is on the wrong side of the threshold: the rule would never re-arm")
+            for k in sorted(set(when) - {"metric", "above", "below", "clear"}):
+                p(f"unknown key {k!r} in a metric rule's when")
+        else:
+            for k, pat in when.items():
+                if k == "event":
+                    continue
+                try:
+                    re.compile(str(pat))
+                except re.error as e:
+                    p(f"when.{k}: not a regex ({e})")
+        do = r.get("do", [])
+        if not isinstance(do, list) or not all(isinstance(c, str) for c in do):
+            p("do must be a list of strings")
+        else:
+            for c in do:
+                for f in quoted_placeholders(c):
+                    p(f"{{{f}}} inside quotes in {c!r}: leave placeholders bare, they are shell-quoted already")
+        for k in ("notify", "say", "ask", "description", "title"):
+            if k in r and not isinstance(r[k], str):
+                p(f"{k} must be text")
+        for k in ("cooldown", "timeout"):
+            v = r.get(k)
+            if v is not None and not isinstance(v, (int, float)) and not re.fullmatch(r"\s*\d+\s*[smhd]?\s*", str(v)):
+                p(f"{k} {v!r} is not a duration (30s, 5m, 2h, 1d)")
+        for k in ("enabled", "critical", "stop_on_error"):
+            if k in r and not isinstance(r[k], bool):
+                p(f"{k} must be true or false")
+    return problems
+
+
 class Rules:
     """Matches events and metric crossings against rules.json and runs what they say."""
 
@@ -1112,6 +1200,13 @@ def cli(argv: list[str]) -> int:
         signal.signal(signal.SIGINT, lambda *_: d.stop.set())
         d.loop()
         return 0
+    if cmd == "lint":
+        try:
+            problems = lint_rules(json.loads((Path(args[0]) if args else RULES_FILE).read_text()))
+        except (OSError, json.JSONDecodeError) as e:
+            problems = [f"rules.json: {e}"]
+        print(json.dumps({"ok": not problems, "problems": problems}, ensure_ascii=False))
+        return 0 if not problems else 1
 
     store = Store(DB_FILE)
     out: object

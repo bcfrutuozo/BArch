@@ -101,7 +101,8 @@ without any AI:
   (`{"event": "window.open", "class": "^steam_app_"}`) or a metric with `above`/`below` and a
   `clear` value for hysteresis (`{"metric": "disk.root.pct", "above": 90, "clear": 85}` fires once
   when crossed and re-arms below 85); `do` is a list of shell commands with `{field}` placeholders
-  (shell-quoted; the fields also come as `EVENT_*` variables), `notify` a notification, `say` a
+  (shell-quoted, so they stay bare: `{title}` inside quotes would let a window title out of them, which
+  `barch rules lint` and `check.sh` refuse; the fields also come as `EVENT_*` variables), `notify` a notification, `say` a
   sentence through `barch voice say`, `ask` a notification with a **Run** button instead of acting,
   `cooldown` how long before it may fire again, `critical` and `enabled`. The daemon reloads the
   file when it changes. It ships with: disk above 90 %, CPU above 90 °C, GPU above 85 °C, VPN
@@ -123,6 +124,7 @@ without any AI:
 ```bash
 barch rules list                              # every rule, enabled or not, when it fired last
 barch rules test window.open class=steam_app_1 # which rules would fire (nothing runs)
+barch rules lint                              # schema, regexes, placeholders (check.sh runs it; agent/tests/test_rules.py covers the engine)
 barch rules test metric disk.root.pct 95
 barch rules fire game-opened                  # run a rule's actions now (the Run button)
 barch rules disable monitor-added             # flips "enabled" in rules.json

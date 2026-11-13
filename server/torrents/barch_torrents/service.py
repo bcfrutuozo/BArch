@@ -32,6 +32,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from .auth import require_token, token_ok
 from .integrations import Arr, Prowlarr, QBit, first_tracker, match_grabs
 from .store import Store, parse_range
 
@@ -159,7 +160,7 @@ def make_handler(s: Sampler, token: str):
 
         def _auth(self, q) -> bool:
             got = self.headers.get("X-Barch-Token") or (q.get("token") or [""])[0]
-            if token and got != token:
+            if not token_ok(token, got):
                 self._send(401, {"ok": False, "error": "token"})
                 return False
             return True
@@ -229,10 +230,11 @@ def make_handler(s: Sampler, token: str):
 
 def serve(cfg_path: str) -> None:
     cfg = load_config(cfg_path)
+    token = require_token(cfg, "torrents")      # before anything starts
     Path(cfg["db"]).parent.mkdir(parents=True, exist_ok=True)
     s = Sampler(cfg, Store(cfg["db"]))
     threading.Thread(target=s.loop, daemon=True).start()
-    srv = ThreadingHTTPServer(("0.0.0.0", int(cfg["port"])), make_handler(s, cfg.get("token", "")))
+    srv = ThreadingHTTPServer(("0.0.0.0", int(cfg["port"])), make_handler(s, token))
     print(f"torrents: sampling {cfg['qbittorrent']['url']} every {cfg['poll_s']} s, listening on {cfg['port']}"
           f" (indexers from {', '.join(s.sources) or 'nowhere: no API key'})", flush=True)
     srv.serve_forever()

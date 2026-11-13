@@ -43,7 +43,7 @@ Two labels are added once per torrent:
 
 ## API
 
-Port 8340, header `X-Barch-Token`; `range` is `24h`, `7d`, `30d`, `12w`, `1y` or `all`. The list is in
+Port 8340, header `X-Barch-Token` (compared in constant time; the service refuses to start without a token, so the API is never open); `range` is `24h`, `7d`, `30d`, `12w`, `1y` or `all`. The list is in
 the docstring of `barch_torrents/service.py`: `status`, `overview`, `samples`, `history` (per hour, day,
 week or month by the range; of everything, one category/indexer/tracker or one torrent, with the lifetime
 ratio at each bucket's end), `groups`, `torrents`, and `POST sample|restart`. The Torrents app

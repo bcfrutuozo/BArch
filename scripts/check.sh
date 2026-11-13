@@ -68,6 +68,7 @@ ok "timers listed"
 step "Automation (agent/events.py, agent/nas.py, agent/pfsense.py, agent/disk.py)"
 python3 -m py_compile agent/events.py agent/nas.py agent/pfsense.py agent/disk.py agent/drop.py 2>/dev/null || problem "automation: an agent module does not compile"
 python3 -m unittest discover -s agent/tests -q >/dev/null 2>&1 || problem "automation: unit tests fail (python3 -m unittest discover -s agent/tests)"
+python3 -I agent/events.py lint >/dev/null || problem "automation: agent/rules.json has problems (barch rules lint)"
 find agent -name __pycache__ -prune -exec rm -rf {} +
 ((fail)) || ok "compiles, tests pass"
 

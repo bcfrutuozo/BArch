@@ -29,8 +29,12 @@ cmd_rules() {
       [[ -n ${1:-} ]] || usage_error "rules $sub <id>"
       out=$(events_py "$sub" "$1") || rc=$?
       show "$out" 'if .ok then "\(.id): \(if .enabled then "enabled" else "disabled" end)" else "error: \(.error)" end' ;;
-    edit) ${EDITOR:-nvim} "$REPO/agent/rules.json" ;;
-    *) usage_error "rules list|test|fire|enable|disable|edit" ;;
+    lint | edit)
+      # edit: the editor, then the same check (the daemon reloads the file on its own)
+      [[ $sub == edit ]] && ${EDITOR:-nvim} "$REPO/agent/rules.json"
+      out=$(events_py lint "$@") || rc=$?
+      show "$out" 'if .ok then "rules.json: ok" else .problems[] end' ;;
+    *) usage_error "rules list|test|fire|enable|disable|lint|edit" ;;
   esac
   return "$rc"
 }

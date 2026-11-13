@@ -187,7 +187,9 @@ the s6 scripts (`barch-music-init` must be owned by root and `/config` belongs t
 so when they change they are staged in the `temporary` share and installed from there),
 `chown -R 99:100 /mnt/user/appdata/barch-music && chmod -R u=rwX,g=rwX,o=rwX` on `pipeline` (Unraid's own
 share permissions, so the SMB user can update it) and `chmod 600` on `secrets.json`. Secrets (Lidarr API
-key, Plex token, Telegram bot, optional AcoustID key) go in `appdata/barch-music/pipeline/secrets.json`.
+key, Plex token, Telegram bot, optional AcoustID key) go in `appdata/barch-music/pipeline/secrets.json`. Without
+the API `token` there the service refuses to start (`barch_music/auth.py`): a lost secrets file closes the API
+instead of opening it.
 Until 2026-11-04 it ran as an s6 service inside the linuxserver beets container (only for its Python and
 mutagen: the beets importer and library were never used); `install.sh` moves the config over and prints
 how to move the secrets and retire beets.
