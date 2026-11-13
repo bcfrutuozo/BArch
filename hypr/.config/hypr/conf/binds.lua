@@ -64,9 +64,10 @@ local function passthrough(mods, key, cmd)
 end
 hl.bind("ALT + Tab",         passthrough("ALT", "Tab", "qs ipc call switcher next"), { description = "Windows|Switch Windows" })
 hl.bind("ALT + SHIFT + Tab", passthrough("ALT SHIFT", "Tab", "qs ipc call switcher prev"), { description = "Windows|Switch Windows Backwards" })
--- soltar o Alt confirma a escolha (só age com o seletor aberto)
-hl.bind("ALT + Alt_L",         hl.dsp.exec_cmd("qs ipc call switcher commit"), { release = true, description = "Hidden|Switcher commit" })
-hl.bind("ALT + SHIFT + Alt_L", hl.dsp.exec_cmd("qs ipc call switcher commit"), { release = true, description = "Hidden|Switcher commit" })
+-- soltar o Alt confirma a escolha (só age com o seletor aberto). non_consuming: desde a 0.57.2
+-- (#16820) o bind casa já no aperto do Alt e o consumiria, e o Parsec imersivo nunca veria o Alt.
+hl.bind("ALT + Alt_L",         hl.dsp.exec_cmd("qs ipc call switcher commit"), { release = true, non_consuming = true, description = "Hidden|Switcher commit" })
+hl.bind("ALT + SHIFT + Alt_L", hl.dsp.exec_cmd("qs ipc call switcher commit"), { release = true, non_consuming = true, description = "Hidden|Switcher commit" })
 hl.bind(mainMod .. " + Tab", passthrough(mainMod, "Tab", "qs ipc call overview toggle"), { description = "Workspaces|Overview" })
 
 -- Foco com mainMod + setas

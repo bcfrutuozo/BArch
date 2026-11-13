@@ -176,6 +176,7 @@ wofi
 wtype
 xdg-desktop-portal-gtk
 xdg-desktop-portal-hyprland
+xdg-terminal-exec
 xorg-xrdb
 xorg-xwininfo
 yazi

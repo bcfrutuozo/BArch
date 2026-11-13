@@ -30,7 +30,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 |---|---|---|
 | `hypr/` | `~/.config/hypr` | Hyprland (Lua, split in `conf/`), hypridle, `scripts/lock.sh` (locks; starts and supervises the resident lock process); `settings.json` is what the Hyprland Settings app saved (below) |
 | `quickshell/` | `~/.config/quickshell` | The bar and everything around it (see below); `theme/palettes.json` + `theme/Theme.qml` are the central theme, `palette/` the palette editor, `hypr/` the Hyprland Settings app, `center/` the System Center, `backup/`, `packages/`, `mixer/`, `music/`, `player/` (the music player), `books/`, `video/`, `torrents/` and `clip/` (the video editor) the other apps, `voice/` the voice control daemon, `ui/` the controls they all share (linked into each) |
-| `foot/` | `~/.config/foot` | Terminal |
+| `foot/` | `~/.config/foot`, `~/.config/xdg-terminals.list` | Terminal; also the one `xdg-terminal-exec` picks for `Terminal=true` apps (Thunar opening a `.txt` in nvim), else it picked cmux, which ignores `-e` |
 | `ghostty/` | `~/.config/ghostty/config.ghostty` | Ghostty config as cmux reads it (it embeds libghostty): Ctrl+C copies a selection (^C without one), Ctrl+V pastes, Ctrl+Shift+C/V send the originals, like foot |
 | `nvim/` | `~/.config/nvim` | Neovim for C#/Avalonia and C++ (LSP, debug, build/run/test) |
 | `mpv/` | `~/.config/mpv` | Video player (HDR, NVDEC) |

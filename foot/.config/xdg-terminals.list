@@ -1,0 +1,3 @@
+# Terminal for apps with Terminal=true (xdg-terminal-exec: Thunar/GIO opening nvim, etc.).
+# Without it the first match was cmux, which ignores -e and opened nothing.
+foot.desktop

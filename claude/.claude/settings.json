@@ -66,5 +66,6 @@
       "**Trusted repo**: /home/bcfrutuozo/Source (no remotes configured) and /home/bcfrutuozo/BArch (the user's desktop configuration, private GitHub remote bcfrutuozo/BArch)",
       "**Org-specific CLIs**: None configured"
     ]
-  }
+  },
+  "model": "opus"
 }
