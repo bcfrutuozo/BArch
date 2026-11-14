@@ -115,6 +115,14 @@ if [ -d server/torrents ]; then
   ((fail)) || ok "compiles, tests pass"
 fi
 
+step "qBittorrent router (server/qbrouter)"
+if [ -d server/qbrouter ]; then
+  python3 -m compileall -q server/qbrouter/barch_qbrouter >/dev/null || problem "qbrouter: python does not compile"
+  python3 -m unittest discover -s server/qbrouter/tests -q >/dev/null 2>&1 || problem "qbrouter: unit tests fail (python3 -m unittest discover -s server/qbrouter/tests)"
+  find server/qbrouter -name __pycache__ -prune -exec rm -rf {} +
+  ((fail)) || ok "compiles, tests pass"
+fi
+
 if command -v hyprctl >/dev/null && hyprctl version >/dev/null 2>&1; then
   step "Hyprland"
   errs=$(hyprctl configerrors 2>/dev/null)

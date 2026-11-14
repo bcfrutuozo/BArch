@@ -1,0 +1,17 @@
+{
+  "listen": "0.0.0.0",
+  "port": 8080,
+  "default": "vpn",
+  "private_backend": "private",
+  "backends": {
+    "vpn": {"url": "http://qbittorrent:8080"},
+    "private": {"url": "http://qbittorrent-private:8080"}
+  },
+  "routes": [
+    {"backend": "private", "hosts": ["sapibr.com"], "why": "SAPIbr bans VPNs and proxies (its rules, 2026-11)"}
+  ],
+  "guard_s": 60,
+  "fetch": {"api_key_hosts": ["prowlarr"]},
+  "state": "/config/data/hashes.json",
+  "secrets": "/config/secrets.json"
+}

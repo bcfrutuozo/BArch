@@ -2,7 +2,8 @@
 
     python3 -m barch_torrents serve [--config /config/config.json]
 
-Every `poll_s` (5 min, on the clock) it reads qBittorrent's counters and writes them down (store.py):
+Every `poll_s` (5 min, on the clock) it reads qBittorrent's counters (both clients when
+`qbittorrent_private` is set: the VPN one and the one without VPN of server/qbrouter, summed) and writes them down (store.py):
 the client's all-time totals, and what every torrent uploaded and downloaded since the last sample.
 A new torrent gets its tracker (first announce host) and the indexer it was grabbed from: by its hash
 from Lidarr's, Radarr's and Sonarr's history, else by title and time from Prowlarr's, which every grab
@@ -33,7 +34,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .auth import require_token, token_ok
-from .integrations import Arr, Prowlarr, QBit, first_tracker, match_grabs
+from .integrations import Arr, Prowlarr, QBits, first_tracker, match_grabs
 from .store import Store, parse_range
 
 DEFAULTS = {"db": "/config/data/torrents.db", "port": 8340, "poll_s": 300, "goal_ratio": 3.0, "keep_hours_days": 60,
@@ -61,7 +62,7 @@ def load_config(path: str) -> dict:
 class Sampler:
     def __init__(self, cfg: dict, store: Store):
         self.cfg, self.store = cfg, store
-        self.qbit = QBit(cfg["qbittorrent"])
+        self.qbit = QBits.from_cfg(cfg)
         self.arrs = [a for a in (Arr(n, cfg.get(n) or {}) for n in ARRS) if a.ok]
         self.prowlarr = Prowlarr(cfg.get("prowlarr") or {})
         self.wake = threading.Event()
@@ -235,7 +236,7 @@ def serve(cfg_path: str) -> None:
     s = Sampler(cfg, Store(cfg["db"]))
     threading.Thread(target=s.loop, daemon=True).start()
     srv = ThreadingHTTPServer(("0.0.0.0", int(cfg["port"])), make_handler(s, token))
-    print(f"torrents: sampling {cfg['qbittorrent']['url']} every {cfg['poll_s']} s, listening on {cfg['port']}"
+    print(f"torrents: sampling {' + '.join(s.qbit.urls)} every {cfg['poll_s']} s, listening on {cfg['port']}"
           f" (indexers from {', '.join(s.sources) or 'nowhere: no API key'})", flush=True)
     srv.serve_forever()
 

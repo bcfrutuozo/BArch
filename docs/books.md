@@ -17,3 +17,11 @@ surname, EPUB first, scanned DjVu last; you pick the one to download), Reject or
 Claude finds out what the book really is, searches with better queries and downloads the right release
 once, or says what is missing; it never rejects. **Rejected**: everything you said no to (an audiobook you skipped, say), with the same
 release search: **Download** on one takes the request back and downloads it. **Downloads**: Shelfmark's queue with progress.
+
+**Public and private torrents**: every app that adds torrents (Shelfmark, Prowlarr's own search page, Radarr,
+Sonarr, Lidarr, the video pipeline) talks to `barch-qbrouter` (`server/qbrouter`), which sends public torrents
+to the PIA client and private ones (the `.torrent`'s private flag, so any private tracker added later) to
+`qbittorrent-private`, leaving from the home address: SAPIbr bans VPNs. Anything whose trackers it cannot read
+is refused, and a private torrent that turns up in the VPN client anyway is stopped within a minute. A private
+indexer in Prowlarr carries no proxy tag (its site sees the home address too). Browse such sites with
+Anonymous Mode off.

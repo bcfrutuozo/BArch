@@ -99,6 +99,59 @@ class QBit:
         return str(self._api("/app/version") or "")
 
 
+class QBits:
+    """Several qBittorrents read as one: the VPN client and qbittorrent-private (server/qbrouter), whose torrents
+    never share a hash. A sample is all of them or none: half a sample would drop the all-time totals and mark
+    the missing client's torrents removed."""
+
+    SUM = ("alltime_ul", "alltime_dl", "up_info_speed", "dl_info_speed", "total_peer_connections")
+
+    def __init__(self, clients: list[tuple[str, QBit]]):
+        self.clients = clients
+        self.where: dict[str, QBit] = {}      # hash -> the client holding it, from the last sample
+
+    @classmethod
+    def from_cfg(cls, cfg: dict) -> "QBits":
+        out = [("qbittorrent", QBit(cfg["qbittorrent"]))]
+        for name in ("qbittorrent_private",):
+            if (cfg.get(name) or {}).get("url"):
+                out.append((name, QBit(cfg[name])))
+        return cls(out)
+
+    @property
+    def urls(self) -> list[str]:
+        return [q.h.base for _, q in self.clients]
+
+    def maindata(self) -> tuple[dict, dict[str, dict]]:
+        server: dict = {}
+        torrents: dict[str, dict] = {}
+        where: dict[str, QBit] = {}
+        for name, q in self.clients:
+            try:
+                st, ts = q.maindata()
+            except Exception as e:  # noqa: BLE001 - named, so the log says which one
+                raise RuntimeError(f"{name}: {e}") from e
+            if not server:
+                server = dict(st)
+            else:
+                for k in self.SUM:
+                    server[k] = int(server.get(k) or 0) + int(st.get(k) or 0)
+                server["free_space_on_disk"] = max(int(server.get("free_space_on_disk") or 0),
+                                                   int(st.get("free_space_on_disk") or 0))   # the same disk
+            for h, t in ts.items():
+                torrents[h] = t
+                where[h] = q
+        self.where = where
+        return server, torrents
+
+    def trackers(self, h: str) -> list[dict]:
+        q = self.where.get(h) or self.where.get(h.lower()) or self.clients[0][1]
+        return q.trackers(h)
+
+    def version(self) -> str:
+        return " + ".join(f"{q.version()}" + ("" if n == "qbittorrent" else " (private)") for n, q in self.clients)
+
+
 class Arr:
     """Lidarr (API v1), Radarr or Sonarr (v3): which indexer every grabbed download came from."""
 

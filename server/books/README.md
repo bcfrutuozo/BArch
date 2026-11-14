@@ -26,10 +26,15 @@ Choices made there:
 - **Audiobooks go straight into the library** as `Author/Title/` (Audiobookshelf has no ingest folder).
 - **Logins come from Calibre-Web-Automated** (`AUTH_METHOD=cwa`, its `app.db` mounted read only):
   one user for both. A password changed there needs a Shelfmark restart.
+- **qBittorrent is reached through `barch-qbrouter`** (`server/qbrouter`): SAPIbr bans VPNs, so its
+  torrents go to `qbittorrent-private` (no VPN, home address) and every other one to `qbittorrent` (PIA),
+  chosen by the torrent's own trackers. Shelfmark sees one client. Add a VPN-banning tracker to Prowlarr
+  only once its domain is in the router's routes, and never with the `vpn` proxy tag.
 - **Torrents keep seeding** (`PROWLARR_TORRENT_ACTION=keep`): categories `books` and `audiobooks`
   (`/data/completed/books`, `/data/completed/audiobooks`) are in the music pipeline's seed check
   (`server/music`, `seed.categories`), which removes them at ratio 3 after 72 h or after 90 days and
-  records them in the seed history, like Radarr's.
+  records them in the seed history, like Radarr's. That check only sees `qbittorrent`: SAPIbr's torrents
+  in `qbittorrent-private` seed until removed by hand (its rule is 3 days at least).
 - **Languages**: `BOOK_LANGUAGE=pt,en` (each user can change their own).
 - **Usenet** through NZBGet (NZBFinder in Prowlarr, tags `lidarr` + `vpn`, 4500 queries a day): categories
   `books` and `audiobooks` with DestDir `/downloads/completed/usenet/{books,audiobooks}`, removed after import

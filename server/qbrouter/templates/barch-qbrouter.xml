@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<!-- BArch qbrouter (server/qbrouter): one qBittorrent address for Shelfmark, routed by tracker.
+     Copied to /boot/config/plugins/dockerMan/templates-user/my-barch-qbrouter.xml. The code and settings are
+     copied into the appdata folder by install.sh; the s6 scripts go into barch-qbrouter-init as root. -->
+<Container version="2">
+  <Name>barch-qbrouter</Name>
+  <Repository>ghcr.io/linuxserver/baseimage-alpine:3.23-0eccc513-ls2</Repository>
+  <Registry>https://github.com/linuxserver/docker-baseimage-alpine/pkgs/container/baseimage-alpine</Registry>
+  <Network>frutuozoproxy</Network>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Project>https://github.com/bcfrutuozo/BArch/tree/main/server/qbrouter</Project>
+  <Overview>qBittorrent Web API in front of qbittorrent (VPN) and qbittorrent-private (no VPN): each torrent goes to the client its trackers call for; stops VPN-banned tracker torrents found in the VPN client. No host port: Shelfmark uses http://barch-qbrouter:8080.</Overview>
+  <Category>Downloaders: Tools:</Category>
+  <WebUI/>
+  <Icon>https://cdn.jsdelivr.net/gh/selfhst/icons/png/qbittorrent.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <Config Name="Config" Target="/config" Default="/mnt/user/appdata/barch-qbrouter" Mode="rw" Description="app/, config.json, secrets.json, data/hashes.json" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/barch-qbrouter</Config>
+  <Config Name="Init scripts" Target="/custom-cont-init.d" Default="/mnt/user/appdata/barch-qbrouter-init/custom-cont-init.d" Mode="ro" Description="Installs python3 (root-owned, from install.sh)" Type="Path" Display="advanced" Required="true" Mask="false">/mnt/user/appdata/barch-qbrouter-init/custom-cont-init.d</Config>
+  <Config Name="Services" Target="/custom-services.d" Default="/mnt/user/appdata/barch-qbrouter-init/custom-services.d" Mode="ro" Description="Runs the router under s6 (root-owned, from install.sh)" Type="Path" Display="advanced" Required="true" Mask="false">/mnt/user/appdata/barch-qbrouter-init/custom-services.d</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="" Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="" Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
+  <Config Name="TZ" Target="TZ" Default="America/Sao_Paulo" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">America/Sao_Paulo</Config>
+</Container>

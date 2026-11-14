@@ -1,0 +1,10 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+# What the qBittorrent router needs inside the linuxserver Alpine base image, at every start:
+# python3, and a data folder the service user can write (the hash -> client map).
+if ! command -v python3 >/dev/null; then
+  echo "**** qbrouter: installing python3 ****"
+  apk add --no-cache python3 || echo "**** qbrouter: apk failed, the service cannot start ****"
+fi
+mkdir -p /config/data
+chown abc:abc /config/data 2>/dev/null || true

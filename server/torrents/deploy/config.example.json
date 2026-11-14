@@ -6,6 +6,7 @@
   "goal_ratio": 3.0,
   "keep_hours_days": 60,
   "qbittorrent": {"url": "http://qbittorrent:8080"},
+  "qbittorrent_private": {"url": "http://qbittorrent-private:8080"},
   "lidarr": {"url": "http://lidarr:8686"},
   "radarr": {"url": "http://radarr:7878"},
   "sonarr": {"url": "http://sonarr:8989"},

@@ -20,5 +20,5 @@
   "radarr": {"url": "http://radarr:7878"},
   "sonarr": {"url": "http://sonarr:8989"},
   "prowlarr": {"url": "http://prowlarr:9696"},
-  "qbittorrent": {"url": "http://qbittorrent:8080"}
+  "qbittorrent": {"url": "http://barch-qbrouter:8080"}
 }

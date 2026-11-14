@@ -259,7 +259,7 @@ ShellRoot {
                   model: ws.classes.slice(0, ws.maxIcons)
                   IconImage {
                     required property var modelData
-                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.verticalCenter: parent ? parent.verticalCenter : undefined   // null while the Repeater creates or drops it
                     implicitSize: 13
                     source: wsIsland.iconFor(modelData)
                     opacity: ws.modelData.focused ? 1 : 0.6

@@ -7,6 +7,11 @@ library Python and one SQLite file.
 
 `./install.sh` (`barch torrents install`) copies it to the NAS and prints the container's settings.
 
+With `qbittorrent_private` in `config.json` it reads both clients, the VPN one and the one without VPN
+(`server/qbrouter`), as one: the all-time totals, speeds and peers are summed, the torrents (never the same
+hash in both) listed together, a torrent's trackers asked of the client holding it. A sample is both or
+none, so a client that is down never looks like its torrents were removed.
+
 ## What it keeps
 
 Every five minutes, on the clock (`poll_s`), one call to `/sync/maindata`:
