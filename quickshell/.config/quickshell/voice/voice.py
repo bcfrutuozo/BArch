@@ -15,11 +15,18 @@ does not know, and Piper for the spoken answers.
     voice.py pause|resume|toggle|reload|stop
     voice.py language [code]  the language it listens and answers in (pt, en, auto…); languages lists them
     voice.py match "texto"   which intent a sentence hits and what it would run (offline, runs nothing)
+    voice.py dictate [start|stop|toggle|cancel]   dictation (Super+D): what is said is typed in the focused window
+    voice.py dictation-language [code|follow]     its language; follow = the one voice control listens in
 
 State for the bar: ~/.local/state/barch/voice/state.json (the bar watches it); control socket:
 $XDG_RUNTIME_DIR/barch-voice.sock (newline-delimited JSON). Settings: config.json next to this
 file; intents: commands.json; the prompt of the Claude fallback: fallback.md; the languages and
 their Piper voices: languages.json (the choice is kept in ~/.local/state/barch/voice/language).
+
+Dictation: Super+D starts recording the whole microphone (commands are off meanwhile); a pause
+of dictation_end_ms after speech, or Super+D again, ends it; whisper transcribes all of it at once
+in the dictation language (the voice language unless one is set) and the text is typed with wtype
+into the focused window and copied to the clipboard (dictation_output).
 
 Only Portuguese has the command table: in any other language the sentence goes, as whisper wrote
 it, to Claude, who answers in that language with that language's Piper voice (downloaded the
@@ -60,6 +67,7 @@ SOCKET = RUNTIME / "barch-voice.sock"
 STATE_FILE = STATE_DIR / "state.json"
 UNMATCHED = STATE_DIR / "unmatched.log"
 LANG_FILE = STATE_DIR / "language"
+DICT_LANG_FILE = STATE_DIR / "dictation-language"     # a code, or "follow" (the voice language)
 
 
 def load_languages() -> dict:
@@ -160,6 +168,13 @@ DEFAULTS = {
     ],
     "project_roots": ["~/Source", "~/Projects", "~/BArch"],
     "terminal": "foot",
+    # dictation (Super+D): ends after this much silence once speech was heard, gives up when nothing
+    # is said in dictation_wait_s, stops at dictation_max_s; output: "type", "clipboard" or "both"
+    "dictation_end_ms": 2500,
+    "dictation_wait_s": 10,
+    "dictation_max_s": 300,
+    "dictation_output": "both",
+    "dictation_prompt": "",      # words whisper should spell your way (names, jargon); never "Barch."
     "debug": False,
 }
 
@@ -404,7 +419,7 @@ class Whisper:
             except subprocess.TimeoutExpired:
                 self.server.kill()
 
-    def transcribe(self, pcm: bytes, lang: str = "pt") -> str:
+    def transcribe(self, pcm: bytes, lang: str = "pt", prompt: str | None = None, timeout: float = 60) -> str:
         """The words in `lang` (a whisper code, or "auto"); the language whisper heard goes to
         self.detected (a code; only the server reports it, the CLI leaves the asked one)."""
         if not self.available:
@@ -412,18 +427,18 @@ class Whisper:
         self.detected = lang
         with self.lock:
             try:
+                p = self.cfg["whisper_prompt"] if prompt is None else prompt
                 if self.server and self.server.poll() is None:
-                    return self._server(pcm, lang)
-                return self._cli(pcm, lang)
+                    return self._server(pcm, lang, p, timeout)
+                return self._cli(pcm, lang, p, timeout)
             except Exception as e:  # noqa: BLE001
                 log("whisper failed:", e)
                 return ""
 
-    def _server(self, pcm: bytes, lang: str) -> str:
+    def _server(self, pcm: bytes, lang: str, prompt: str, timeout: float) -> str:
         import urllib.request
         boundary = "----barchvoice"
-        fields = {"temperature": "0.0", "response_format": "verbose_json", "language": lang,
-                  "prompt": self.cfg["whisper_prompt"]}
+        fields = {"temperature": "0.0", "response_format": "verbose_json", "language": lang, "prompt": prompt}
         body = b""
         for k, v in fields.items():
             body += f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode()
@@ -431,17 +446,17 @@ class Whisper:
                  f"Content-Type: audio/wav\r\n\r\n").encode() + wav_bytes(pcm) + f"\r\n--{boundary}--\r\n".encode()
         req = urllib.request.Request(f"http://127.0.0.1:{self.port}/inference", data=body, method="POST",
                                      headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             data = json.loads(r.read().decode())
         name = str(data.get("detected_language") or "").lower()
         self.detected = LANG_BY_NAME.get(name, lang)
         return (data.get("text") or "").strip()
 
-    def _cli(self, pcm: bytes, lang: str) -> str:
+    def _cli(self, pcm: bytes, lang: str, prompt: str, timeout: float) -> str:
         path = RUNTIME / "barch-voice-in.wav"
         path.write_bytes(wav_bytes(pcm))
         r = run([self.cli, "-m", self.model, "-l", lang, "-t", str(self.cfg["whisper_threads"]), "-nt", "-np",
-                 "--prompt", self.cfg["whisper_prompt"], "-f", str(path)], timeout=120)
+                 *(["--prompt", prompt] if prompt else []), "-f", str(path)], timeout=max(120, timeout * 2))
         return " ".join(line.strip() for line in r.stdout.splitlines() if line.strip())
 
 
@@ -1195,6 +1210,12 @@ class Voice:
         self.intents = Intents(self.cfg, self.desktop, self.speaker, self.ask_claude)
         self.capture = None
         self.worklock = threading.Lock()
+        # dictation: the capture loop fills dict_buf while dictating; dict_stop asks it to end there
+        self.dict_language = self._load_dict_language()
+        self.dictating = False
+        self.dict_buf: list[bytes] = []
+        self.dict_stop = ""             # "", "stop" (transcribe what there is) or "cancel"
+        self.dict_lock = threading.Lock()
         self.write_state("starting")
 
     # -- language
@@ -1216,6 +1237,29 @@ class Voice:
         self.write_state()
         return {"ok": True, **self.language_info()}
 
+    def _load_dict_language(self) -> str:
+        try:
+            code = DICT_LANG_FILE.read_text().strip()
+        except OSError:
+            code = "follow"
+        return code if code == "follow" or code in LANGUAGES else "follow"
+
+    def set_dictation_language(self, code: str) -> dict:
+        code = (code or "").strip().lower()
+        if code in ("same", "voice", "default"):
+            code = "follow"
+        if code != "follow" and code not in LANGUAGES:
+            return {"ok": False, "error": f"unknown language {code!r} (voice.py languages lists them; follow = the voice language)"}
+        self.dict_language = code
+        atomic_write(DICT_LANG_FILE, code + "\n")
+        log("dictation language:", code)
+        self.write_state()
+        return {"ok": True, **self.language_info()}
+
+    def dictation_lang(self) -> str:
+        """What whisper transcribes the dictation in: a code, or "auto"."""
+        return self.language if self.dict_language == "follow" else self.dict_language
+
     def ensure_voice(self, code: str):
         """Download the Piper voice of a language in the background the first time it is picked."""
         # auto: the two he speaks; any other detected language speaks if its voice is there
@@ -1236,8 +1280,12 @@ class Voice:
     def language_info(self) -> dict:
         e = LANGUAGES.get(self.language, {})
         voice = self.speaker.voice_for(self.language) if self.language != "auto" else ""
+        d = self.dictation_lang()
+        de = LANGUAGES.get(d, {})
         return {"language": self.language, "language_name": e.get("name", self.language),
                 "language_native": e.get("native", ""), "voice": voice,
+                "dictation_language": self.dict_language, "dictation_effective": d,
+                "dictation_language_name": "Automatic" if d == "auto" else de.get("name", d),
                 "voice_ready": self.speaker.has(self.language) if self.language != "auto" else self.speaker.available,
                 "downloading": self.downloading}
 
@@ -1302,10 +1350,48 @@ class Voice:
             in_speech = False
             recent = []
             out = self.capture.stdout
+            dict_speech = dict_silence = dict_frames = 0
+            dict_end = int(self.cfg["dictation_end_ms"] / 20)
+            dict_wait = int(float(self.cfg["dictation_wait_s"]) * 50)
+            dict_max = int(float(self.cfg["dictation_max_s"]) * 50)
             while not self.stop_event.is_set():
                 buf = read_exact(out, BYTES_PER_FRAME)     # pipe reads come in odd sizes
                 if buf is None:
                     break
+                if self.dictating:
+                    # dictation: every frame goes to the buffer, the wake word is not looked for
+                    in_speech, utter, recent, speech_run, silence_run = False, [], [], 0, 0
+                    if time.time() < self.playing_until:
+                        continue                            # the start chime
+                    if not dict_frames:
+                        dict_speech = dict_silence = 0
+                    dict_frames += 1
+                    self.dict_buf.append(buf)
+                    x = np.frombuffer(buf, dtype=np.int16).astype(np.float32)
+                    rms = float(np.sqrt(np.mean(x * x))) if len(x) else 0.0
+                    if floor is None:
+                        floor = max(rms, 30.0)
+                    if rms > max(floor * mult, min_rms):
+                        dict_speech += 1
+                        dict_silence = 0
+                    else:
+                        dict_silence += 1
+                    why = self.dict_stop
+                    if not why and dict_speech >= start_frames and dict_silence >= dict_end:
+                        why = "stop"                        # he stopped talking
+                    elif not why and dict_speech < start_frames and dict_frames >= dict_wait:
+                        why = "cancel"                      # nothing was said
+                    elif not why and dict_frames >= dict_max:
+                        why = "stop"
+                    if why:
+                        pcm = b"".join(self.dict_buf)
+                        if why == "stop" and dict_silence > 15:
+                            pcm = pcm[: len(pcm) - (dict_silence - 15) * BYTES_PER_FRAME]   # keep 300 ms of the tail
+                        self.dictating, self.dict_buf, self.dict_stop, dict_frames = False, [], "", 0
+                        threading.Thread(target=self._dictation_done, args=(pcm if why == "stop" else b"", why),
+                                         daemon=True).start()
+                    continue
+                dict_frames = 0
                 if time.time() < self.playing_until or self.paused:
                     # our own voice, or paused: keep the floor, drop the audio
                     in_speech, utter, speech_run, silence_run = False, [], 0, 0
@@ -1351,10 +1437,93 @@ class Voice:
                 err = self.capture.stderr.read() if self.capture.stderr else b""
             except Exception:  # noqa: BLE001
                 pass
+            if self.dictating:                 # the microphone went away mid-dictation
+                self.dictating, self.dict_buf, self.dict_stop = False, [], ""
+                threading.Thread(target=self._dictation_done, args=(b"", "cancel"), daemon=True).start()
             if not self.stop_event.is_set():
                 log("capture ended:", err.decode(errors="replace").strip()[-200:])
                 self.write_state("error", error="microphone capture ended; retrying")
                 time.sleep(3)
+
+    # -- dictation
+    def dictate(self, action: str = "toggle") -> dict:
+        """Super+D: start recording everything the microphone hears, or end it (stop = transcribe and
+        type it, cancel = drop it). The capture loop ends it by itself after a pause."""
+        action = action or "toggle"
+        if action == "toggle":
+            action = "stop" if self.dictating else "start"
+        with self.dict_lock:
+            if action in ("stop", "cancel"):
+                if not self.dictating:
+                    return {"ok": False, "error": "not dictating", "dictating": False}
+                self.dict_stop = action
+                return {"ok": True, "dictating": False, "action": action}
+            if action != "start":
+                return {"ok": False, "error": f"unknown dictation action {action!r} (start, stop, toggle, cancel)"}
+            if self.dictating:
+                return {"ok": True, "dictating": True, "action": "start"}
+            if not self.whisper.available:
+                return {"ok": False, "error": "whisper.cpp or its model is missing"}
+            if not self.capture or self.capture.poll() is not None:
+                return {"ok": False, "error": "the microphone is not being captured (barch voice log)"}
+            if self.desktop.locked():
+                return {"ok": False, "error": "the session is locked", "locked": True}
+            self.awaiting_until = 0
+            self.followup = False
+            self.speaker.hush()
+            self.dict_buf, self.dict_stop = [], ""
+            self.write_state("dictating", heard="")
+            self.speaker.chime("wake")       # the loop drops frames while it plays
+            self.dictating = True
+            log("dictation: start, language", self.dictation_lang())
+            return {"ok": True, "dictating": True, "action": "start", "language": self.dictation_lang()}
+
+    def _dictation_done(self, pcm: bytes, why: str):
+        idle = "paused" if self.paused else "listening"
+        if why == "cancel" or len(pcm) // BYTES_PER_FRAME < int(self.cfg["utterance_min_ms"] / 20):
+            log("dictation: nothing to write" + (" (cancelled)" if why == "cancel" else ""))
+            self.write_state(idle, heard="")
+            self.speaker.chime("fail")
+            return
+        lang = self.dictation_lang()
+        self.write_state("transcribing", heard="…")
+        secs = len(pcm) / RATE / 2
+        t0 = time.time()
+        with self.worklock:
+            text = self.whisper.transcribe(pcm, lang, prompt=str(self.cfg["dictation_prompt"]),
+                                           timeout=max(60.0, secs * 2))
+        text = " ".join(text.split())
+        log(f"dictation: {secs:.1f}s of audio, {len(text)} chars in {time.time() - t0:.1f}s [{self.whisper.detected}]")
+        if not text or self.hallucinated(text) or normalize(text) in ("barch", ""):
+            self.write_state(idle, heard="")
+            self.speaker.chime("fail")
+            return
+        if self.desktop.locked():            # never type into the lock screen
+            log("dictation: session locked, text dropped")
+            self.write_state(idle, heard="")
+            return
+        out = str(self.cfg["dictation_output"])
+        typed = False
+        if out in ("type", "both"):
+            try:
+                r = run(["wtype", "--", text], timeout=max(20, len(text) // 20)) if shutil.which("wtype") else None
+            except (OSError, subprocess.TimeoutExpired) as e:
+                r = None
+                log("dictation: wtype failed:", e)
+            typed = bool(r and r.returncode == 0)
+            if not typed:
+                log("dictation: text not typed", (r.stderr.strip()[-200:] if r else "(wtype missing or failed)"))
+        if out in ("clipboard", "both") or not typed:
+            try:
+                subprocess.run(["wl-copy", "--", text], timeout=5, check=False,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except (OSError, subprocess.TimeoutExpired) as e:
+                log("dictation: wl-copy failed:", e)
+            if not typed:
+                subprocess.Popen([str(BARCH), "notify", "Dictation", "Copied to the clipboard: " + text[:200],
+                                  "--app", "barch-voice"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.write_state(idle, heard=text)
+        self.speaker.chime("ok")
 
     # -- one sentence
     def wake_in(self, text: str) -> tuple[bool, str]:
@@ -1677,6 +1846,12 @@ class Voice:
         if c == "toggle":
             self.set_paused(not self.paused)
             return {"ok": True, "paused": self.paused}
+        if c == "dictate":
+            return self.dictate(req.get("action") or "toggle")
+        if c == "dictation-language":
+            if req.get("code"):
+                return self.set_dictation_language(req["code"])
+            return {"ok": True, **self.language_info()}
         if c == "language":
             if req.get("code"):
                 return self.set_language(req["code"])
@@ -1784,8 +1959,10 @@ def languages() -> int:
 def client(argv: list[str]) -> int:
     cmd = argv[0]
     req = {"cmd": cmd}
-    if cmd == "language" and len(argv) > 1:
+    if cmd in ("language", "dictation-language") and len(argv) > 1:
         req["code"] = argv[1]
+    if cmd == "dictate" and len(argv) > 1:
+        req["action"] = argv[1]
     if cmd in ("say", "run"):
         if len(argv) < 2:
             print(f"usage: voice.py {cmd} <text>", file=sys.stderr)
@@ -1808,7 +1985,8 @@ def client(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] in ("status", "say", "run", "pause", "resume", "toggle", "reload", "stop", "language"):
+    if len(sys.argv) > 1 and sys.argv[1] in ("status", "say", "run", "pause", "resume", "toggle", "reload", "stop", "language",
+                                                 "dictate", "dictation-language"):
         sys.exit(client(sys.argv[1:]))
     if len(sys.argv) > 1 and sys.argv[1] == "languages":
         sys.exit(languages())

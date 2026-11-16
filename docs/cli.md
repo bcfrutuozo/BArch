@@ -37,6 +37,8 @@ barch voice match "abre o terminal"  # which command a sentence hits, running no
 barch voice wake "Bartch, liga o HDR"  # would it wake the daemon · misses: near misses of the wake word, to tune it
 barch voice say "texto"            # speak · reload (commands.json) · log · setup [--install]
 barch voice lang [<code>|list]     # the language it listens and answers in (pt, en, es, auto…)
+barch voice dictate [start|stop|toggle|cancel]   # dictation (Super+D): typed in the focused window
+barch voice dictate lang [<code>|follow|list]     # its language; follow = the one voice control listens in
 barch backup init|run|check [--full]|status|list|restore [SNAPSHOT] <path>...   # restic to the NAS, verified weekly (see backup.md)
 barch rules list|test <event> [k=v..]|fire <id>|enable|disable <id>|lint|edit   # agent/rules.json (see agent.md)
 barch events status|log [n] [--filter x] [--since 7d]   # the daemon and what happened (windows, VPN, boots, costs…)

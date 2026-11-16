@@ -4,7 +4,8 @@
 // serviço está ligado. Liga/desliga o serviço e pausa a escuta (socket do daemon, via voice.py).
 // Usado pelo VoiceWidget (ilha da barra), pelo tile Voice do Control Center e pelo barch (IPC "voice").
 // O idioma (languages.json: os do whisper, com a voz do Piper de cada um) vem no state.json e é
-// trocado por `voice.py language <code>`.
+// trocado por `voice.py language <code>`. O ditado (Super+D, `voice.py dictate`) tem os estados
+// dictating e transcribing e um idioma próprio: "follow" (o mesmo da voz) ou um código.
 pragma Singleton
 
 pragma ComponentBehavior: Bound
@@ -35,6 +36,8 @@ Singleton {
     property string languageNative: "Português"
     property bool voiceReady: true          // a voz do Piper desse idioma está baixada
     property string downloading: ""         // a voz sendo baixada agora
+    property string dictationLanguage: "follow"     // "follow" = o mesmo idioma em que escuta
+    property string dictationName: "Portuguese"     // o idioma que o ditado usa de fato
     property var languages: []              // languages.json: [{ code, name, native, voice, latin }]
     property bool busy: false
 
@@ -43,12 +46,15 @@ Singleton {
     readonly property bool active: running && state !== "off"
     readonly property bool awake: state === "wake" || state === "hearing" || state === "processing" || state === "thinking" || state === "followup"
     readonly property bool speaking: state === "speaking"
+    readonly property bool dictating: running && (state === "dictating" || state === "transcribing")
     readonly property bool degraded: running && (state === "error" || !whisper)
 
     readonly property string label: !running ? "Off"
                                   : state === "error" ? (error || "Error")
                                   : !whisper ? "whisper.cpp missing"
                                   : paused || state === "paused" ? "Paused"
+                                  : state === "dictating" ? "Dictating… (pause or Super+D to end)"
+                                  : state === "transcribing" ? "Writing the dictation…"
                                   : state === "wake" ? "Listening…"
                                   : state === "followup" ? "Still listening (no \"barch\" needed)"
                                   : state === "hearing" ? "Hearing…"
@@ -81,6 +87,8 @@ Singleton {
                     root.languageNative = s.language_native || ""
                     root.voiceReady = s.voice_ready !== false
                     root.downloading = s.downloading || ""
+                    root.dictationLanguage = s.dictation_language || "follow"
+                    root.dictationName = s.dictation_language_name || root.languageName
                 }
                 root.changed = Date.now()
             } catch (e) {}
@@ -140,11 +148,20 @@ Singleton {
         return true
     }
 
+    function dictate(action) { Quickshell.execDetached(["python3", "-I", script, "dictate", action || "toggle"]) }
+    function setDictationLanguage(code) {
+        if (code !== "follow" && !languages.some(l => l.code === code)) return false
+        root.dictationLanguage = code
+        control(["python3", "-I", script, "dictation-language", code])
+        return true
+    }
+
     // ---- IPC (barch voice ...) ----
     function status() {
         return { ok: true, running: running, enabled: enabled, state: current, paused: paused, heard: heard, said: said,
                  error: error, whisper: whisper, tts: tts, model: model, label: label,
-                 language: language, language_name: languageName, voice_ready: voiceReady, downloading: downloading }
+                 language: language, language_name: languageName, voice_ready: voiceReady, downloading: downloading,
+                 dictating: dictating, dictation_language: dictationLanguage, dictation_language_name: dictationName }
     }
     IpcHandler {
         target: "voice"
@@ -156,6 +173,11 @@ Singleton {
         function resume(): string { root.resume(); return JSON.stringify(root.status()) }
         function language(code: string): string {
             if (!root.setLanguage(code)) return JSON.stringify({ ok: false, error: "unknown language " + code })
+            return JSON.stringify(root.status())
+        }
+        function dictate(action: string): string { root.dictate(action); return JSON.stringify({ ok: true }) }
+        function dictationLanguage(code: string): string {
+            if (!root.setDictationLanguage(code)) return JSON.stringify({ ok: false, error: "unknown language " + code })
             return JSON.stringify(root.status())
         }
         function languages(): string {

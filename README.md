@@ -54,7 +54,7 @@ Each top-level folder is a [GNU Stow](https://www.gnu.org/software/stow/) packag
 | `docs/` | — | One page per area (below): what the README used to hold in full |
 | `system/` | `/etc`, `/boot`, `/usr/local/bin` | Snapshot of system files (copied, never linked); list in `SYSTEM_FILES` |
 | `packages/` | — | Explicitly installed packages (`pacman.txt`, `aur.txt`, `aur-ignore.txt`) |
-| `scripts/` | — | `sync.sh` (save), `check.sh` (static checks; `qml-check.sh` for the QML), `collect-system.sh` / `apply-system.sh` (`system/`), `update-packages.sh`, `lib.sh` (`PACKAGES`, `SYSTEM_FILES`, services); `bootstrap.sh` adopts configs that already exist on a configured machine into the repo (`--dry-run` first) |
+| `scripts/` | — | `sync.sh` (save), `check.sh` (static checks; `qml-check.sh` for the QML), `collect-system.sh` / `apply-system.sh` (`system/`), `update-packages.sh`, `lib.sh` (`PACKAGES`, `SYSTEM_FILES`, services); `bootstrap.sh` adopts configs that already exist on a configured machine into the repo (`--dry-run` first); `hw-report.sh` is a read-only hardware and kernel-log report that also runs from the Arch ISO ([docs/new-machine.md](docs/new-machine.md)) |
 
 Folders that don't exist on a machine are simply skipped.
 
@@ -78,13 +78,14 @@ Around it, apps with their own window and services, each with its page:
 | [docs/music.md](docs/music.md) | The music pipeline on the NAS and the Music app (review, covers, library, artists) |
 | [docs/player.md](docs/player.md) | The Player: the NAS library played here through mpv, with Plex/Tautulli scrobbling |
 | [docs/books.md](docs/books.md), [docs/video.md](docs/video.md), [docs/torrents.md](docs/torrents.md) | The book stack, Radarr/Sonarr with the PT-BR dub pipeline, qBittorrent statistics |
-| [docs/voice.md](docs/voice.md) | Always-on voice control ("barch ..."), whisper.cpp, Piper, the Claude fallback |
+| [docs/voice.md](docs/voice.md) | Always-on voice control ("barch ..."), dictation (Super+D), whisper.cpp, Piper, the Claude fallback |
 | [docs/agent.md](docs/agent.md) | Claude on its own: failures, safety snapshots, scheduled tasks; the event bus, metrics and rules |
 | [docs/nas.md](docs/nas.md) | NAS health through Unraid's API, the pfSense firewalls, the NAS's SMBus driver |
 | [docs/backup.md](docs/backup.md) | restic to the NAS and the Backup Browser |
 | [docs/finance.md](docs/finance.md) | C6 Bank statements into Firefly III |
 | [docs/cli.md](docs/cli.md) | Every `barch` subcommand |
 | [docs/machine.md](docs/machine.md) | True for this machine only: CPU core, kernel, boot, disk, monitors, games, NAS shares |
+| [docs/new-machine.md](docs/new-machine.md) | Validating the AM5 build inside its return window: known X870E Linux problems, the day-1 USB stick test, the week-1 stress list |
 
 ## barch CLI
 

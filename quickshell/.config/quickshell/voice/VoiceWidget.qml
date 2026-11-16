@@ -4,7 +4,8 @@
 // vermelho quando falta algo (whisper.cpp, microfone). Ao lado, por alguns segundos, o que
 // entendeu. Clique pausa e retoma a escuta; botão direito abre um painel com a última frase e a
 // resposta, o idioma (lista com filtro: todos os do whisper; fora do português tudo vai ao
-// Claude), pausa e desligar. Estado no singleton Voice (voice/Voice.qml).
+// Claude), o idioma do ditado (Super+D: o mesmo da voz ou outro, na mesma lista), pausa e
+// desligar. Durante o ditado o microfone fica vermelho e pulsando. Estado no singleton Voice (voice/Voice.qml).
 
 pragma ComponentBehavior: Bound
 import QtQuick
@@ -26,16 +27,31 @@ Item {
     visible: Voice.running
     onVisibleChanged: if (!visible) Popups.hide(popup)
 
-    // a lista de idiomas aberta no painel: o filtro precisa do teclado (shell.qml)
+    // a lista de idiomas aberta no painel: o filtro precisa do teclado (shell.qml); langFor diz
+    // de quem é a escolha: "voice" (o idioma em que escuta) ou "dictation" (o do Super+D)
     property bool chooseLang: false
+    property string langFor: "voice"
     property string langFilter: ""
     readonly property bool wantsKeyboard: chooseLang && popup.visible
     readonly property var langList: {
         const q = langFilter.trim().toLowerCase()
-        if (q === "") return Voice.languages
-        return Voice.languages.filter(l => (l.name + " " + l.native + " " + l.code).toLowerCase().includes(q))
+        const all = langFor === "dictation"
+            ? [{ code: "follow", name: "Same as voice control", native: Voice.languageLabel(Voice.language), voice: "-" }].concat(Voice.languages)
+            : Voice.languages
+        if (q === "") return all
+        return all.filter(l => (l.name + " " + l.native + " " + l.code).toLowerCase().includes(q))
     }
-    function pickLang(code) { Voice.setLanguage(code); chooseLang = false; langFilter = ""; langField.text = "" }
+    readonly property string currentLang: langFor === "dictation" ? Voice.dictationLanguage : Voice.language
+    function pickLang(code) {
+        if (langFor === "dictation") Voice.setDictationLanguage(code); else Voice.setLanguage(code)
+        chooseLang = false; langFilter = ""; langField.text = ""
+    }
+    function openLangs(target) {
+        chooseLang = !(chooseLang && langFor === target)
+        langFor = target
+        langFilter = ""; langField.text = ""
+        if (chooseLang) langField.forceActiveFocus()
+    }
     implicitWidth: row.implicitWidth
     implicitHeight: row.implicitHeight
 
@@ -53,6 +69,7 @@ Item {
     }
 
     readonly property color tone: Voice.degraded ? Theme.red
+                                : Voice.dictating ? Theme.red
                                 : Voice.paused ? Theme.overlay
                                 : Voice.speaking ? Theme.good
                                 : Voice.awake ? Theme.accent
@@ -65,13 +82,13 @@ Item {
         Text {
             id: mic
             anchors.verticalCenter: parent.verticalCenter
-            text: Voice.paused ? root.glyph(0xF036D) : Voice.degraded ? root.glyph(0xF036D) : root.glyph(0xF036C)   // microphone_off / microphone
+            text: Voice.dictating ? root.glyph(0xF036C) : Voice.paused || Voice.degraded ? root.glyph(0xF036D) : root.glyph(0xF036C)   // microphone_off / microphone
             color: root.tone
             font.family: Theme.iconFont
             font.pixelSize: Theme.fontSize + 2
             Behavior on color { ColorAnimation { duration: 150 } }
             SequentialAnimation on opacity {
-                running: Voice.state === "wake" || Voice.state === "hearing" || Voice.state === "followup"; loops: Animation.Infinite
+                running: Voice.state === "wake" || Voice.state === "hearing" || Voice.state === "followup" || Voice.dictating; loops: Animation.Infinite
                 NumberAnimation { to: Voice.state === "followup" ? 0.55 : 0.25; duration: Voice.state === "followup" ? 900 : 500 }
                 NumberAnimation { to: 1; duration: Voice.state === "followup" ? 900 : 500 }
                 onRunningChanged: if (!running) mic.opacity = 1
@@ -80,7 +97,9 @@ Item {
         Text {
             anchors.verticalCenter: parent.verticalCenter
             visible: text !== ""
-            text: Voice.state === "wake" ? "listening…"
+            text: Voice.state === "dictating" ? "dictating…"
+                : Voice.state === "transcribing" ? "writing…"
+                : Voice.state === "wake" ? "listening…"
                 : Voice.state === "thinking" ? "asking Claude…"
                 : root.showHeard ? Voice.heard : ""
             color: Theme.subtext
@@ -185,7 +204,7 @@ Item {
                         radius: Theme.buttonRadius
                         color: langMouse.containsMouse ? Theme.hover : Theme.surface
                         border.width: 1
-                        border.color: root.chooseLang ? Theme.accent : "transparent"
+                        border.color: root.chooseLang && root.langFor === "voice" ? Theme.accent : "transparent"
                         RowLayout {
                             anchors { fill: parent; leftMargin: 10; rightMargin: 10 }
                             spacing: 8
@@ -196,7 +215,7 @@ Item {
                                 elide: Text.ElideRight; Layout.fillWidth: true
                             }
                             Text {
-                                text: root.glyph(root.chooseLang ? 0xF0143 : 0xF0140)   // chevron_up / chevron_down
+                                text: root.glyph(root.chooseLang && root.langFor === "voice" ? 0xF0143 : 0xF0140)   // chevron_up / chevron_down
                                 color: Theme.dim; font.family: Theme.iconFont; font.pixelSize: Theme.fontSize
                             }
                         }
@@ -205,10 +224,7 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                root.chooseLang = !root.chooseLang
-                                if (root.chooseLang) langField.forceActiveFocus()
-                            }
+                            onClicked: root.openLangs("voice")
                         }
                     }
                     Text {
@@ -221,6 +237,40 @@ Item {
                         color: Voice.downloading !== "" || !Voice.voiceReady ? Theme.warn : Theme.dim
                         font.family: Theme.font; font.pixelSize: Theme.fontSize - 3
                         wrapMode: Text.Wrap; Layout.fillWidth: true
+                    }
+
+                    // idioma do ditado (Super+D): o mesmo da voz, ou um fixo; a mesma lista abaixo
+                    Text { text: "Dictation (Super+D)"; color: Theme.dim; font.family: Theme.font; font.pixelSize: Theme.fontSize - 3; Layout.topMargin: 4 }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 32
+                        radius: Theme.buttonRadius
+                        color: dictMouse.containsMouse ? Theme.hover : Theme.surface
+                        border.width: 1
+                        border.color: root.chooseLang && root.langFor === "dictation" ? Theme.accent : "transparent"
+                        RowLayout {
+                            anchors { fill: parent; leftMargin: 10; rightMargin: 10 }
+                            spacing: 8
+                            Text { text: root.glyph(0xF036C); color: Voice.dictating ? Theme.red : Theme.dim; font.family: Theme.iconFont; font.pixelSize: Theme.fontSize }   // microphone
+                            Text {
+                                text: Voice.dictationLanguage === "follow"
+                                    ? "Same as voice · " + Voice.languageLabel(Voice.language)
+                                    : Voice.languageLabel(Voice.dictationLanguage)
+                                color: Theme.fg; font.family: Theme.font; font.pixelSize: Theme.fontSize - 1
+                                elide: Text.ElideRight; Layout.fillWidth: true
+                            }
+                            Text {
+                                text: root.glyph(root.chooseLang && root.langFor === "dictation" ? 0xF0143 : 0xF0140)   // chevron_up / chevron_down
+                                color: Theme.dim; font.family: Theme.iconFont; font.pixelSize: Theme.fontSize
+                            }
+                        }
+                        MouseArea {
+                            id: dictMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.openLangs("dictation")
+                        }
                     }
 
                     ColumnLayout {
@@ -265,7 +315,7 @@ Item {
                             delegate: Rectangle {
                                 id: langRow
                                 required property var modelData
-                                readonly property bool selected: Voice.language === modelData.code
+                                readonly property bool selected: root.currentLang === modelData.code
                                 width: langView.width
                                 implicitHeight: 30
                                 radius: Theme.buttonRadius

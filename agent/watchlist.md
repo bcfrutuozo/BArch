@@ -19,6 +19,10 @@ is waiting on upstream; remove it when it's solved.
   recoverable from a tty; `lock.sh` logs it and stops). Report changes to `start-hyprland` or
   `--locked` / `--locked-cmd`. (The realtime kills that caused those crashes are gone: 0.57.2
   stopped asking rtkit for SCHED_RR, hyprwm/Hyprland#16843.)
+- **Kernel fixup: xhci 7.3 enumeration regression.** `bin/.local/share/kernel-update/0001-xhci-give-back-TDs-after-disconnect.patch`
+  is upstream `6895dbdc19d9` ("xhci: give back TDs and clean up ep0 after disconnect", Cc: stable),
+  backported to 7.3.4 on 2026-11-15 (CachyOS/linux-cachyos#1135). Report the 7.3.y stable release
+  whose changelog carries it, so the fixup can be deleted (kernel-update already skips it then).
 - **limine-snapper-sync: `flock: 200: Bad file descriptor` and "FAT32 boot partition not
   found".** 1.32.1 logs the flock error at every `--delete` run (`mutex_unlock` releases fd 200
   without having taken it on that path; harmless, the menu is updated anyway). On 2026-10-29 the

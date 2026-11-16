@@ -11,7 +11,33 @@ only listens, pulsing in the accent color after "barch" alone (it chimes and wai
 sentence), steady while it understands or asks Claude, green while it speaks, red when
 whisper.cpp or the microphone is missing; what it understood shows next to it for a few
 seconds. Click pauses and resumes the listening, right-click shows the last sentence and answer
-and the **language** it listens in (a list with a filter: every language whisper knows, see [The daemon](#the-daemon)).
+the **language** it listens in (a list with a filter: every language whisper knows, see [The daemon](#the-daemon))
+and the language of the [dictation](#dictation) (Super+D).
+
+## Dictation
+
+**Super+D** starts a dictation: a chime, the bar's microphone turns red and pulses, and everything the
+fifine hears is recorded (the wake word and the commands are off meanwhile, so dictating "barch
+fecha a janela" only writes it). A pause of 2.5 s after you spoke (`dictation_end_ms`), or Super+D
+again, ends it; whisper then transcribes the whole recording at once (punctuation included, up to
+`dictation_max_s`, 5 minutes) and the text is **typed into the focused window** with `wtype` and
+copied to the clipboard (`dictation_output`: `type`, `clipboard` or `both`, the default). A chime
+says it is done; a low one that nothing was heard (nothing said within `dictation_wait_s`, 10 s).
+**Super+Shift+D** cancels it without writing anything. It works while the voice control is paused,
+not while the session is locked, and nothing is typed if it locks before the text is ready. The text
+shows next to the microphone for a few seconds.
+
+**Language.** By default the dictation uses the language the voice control listens in (`follow`), so
+changing that one changes both; the microphone's panel (right-click) has a second field, **Dictation
+(Super+D)**, with the same list plus "Same as voice control", to fix another one (`barch voice dictate
+lang en`). **Automatic** lets whisper detect the language of each dictation. `dictation_prompt` in
+`config.json` can hold the names and jargon whisper should spell your way; it is never the "Barch."
+of the commands, which whisper would write back on silence.
+
+```bash
+barch voice dictate                   # toggle (what Super+D runs) · start · stop · cancel
+barch voice dictate lang [<code>|follow|list]
+```
 
 ## The daemon
 

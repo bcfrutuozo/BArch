@@ -21,6 +21,10 @@ hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("qs ipc call launcher openWith 'c '")
 hl.bind(mainMod .. " + N", hl.dsp.exec_cmd("qs ipc call notes toggle"), { description = "Apps|Quick Notes" })
 hl.bind(mainMod .. " + period", hl.dsp.exec_cmd("qs ipc call launcher openWith ': '"), { description = "Apps|Emoji" })
 hl.bind(mainMod .. " + A", hl.dsp.exec_cmd("qs ipc call launcher openWith 'a '"), { description = "Apps|Ask Claude" })
+-- Ditado (barch-voice): grava até uma pausa (ou Super+D de novo) e digita o texto na janela em
+-- foco. No soltar da tecla, para o Super não estar preso quando o wtype digitar
+hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("barch voice dictate toggle"), { release = true, description = "Apps|Dictation (start / stop)" })
+hl.bind(mainMod .. " + SHIFT + D", hl.dsp.exec_cmd("barch voice dictate cancel"), { description = "Apps|Dictation: cancel" })
 
 local closeWindowBind = hl.bind(mainMod .. " + C", hl.dsp.window.close(), { description = "Windows|Close" })
 -- closeWindowBind:set_enabled(false)

@@ -38,6 +38,28 @@ cmd_voice() {
         die 1 "$(jq -r '.error // "failed"' <<<"$out" 2>/dev/null)"
       }
       show "$out" '"voice: listening in \(.language_name)\(if .language_native != "" and .language_native != .language_name then " (\(.language_native))" else "" end)" + (if .downloading != "" then " — downloading the voice \(.downloading)" elif .voice_ready then "" else " — no voice: answers go to notifications" end)' ;;
+    dictate | dictation)
+      # dictate [start|stop|toggle|cancel] (Super+D) · dictate lang [code|follow|list]
+      local out rc=0
+      if [[ ${1:-} == lang || ${1:-} == language ]]; then
+        shift
+        [[ ${1:-} == list ]] && { cmd_voice lang list; return; }
+        out=$(python3 -I "$py" dictation-language ${1:+"$1"}) || rc=$?
+        ((rc == 3)) && die 3 "barch-voice is not running"
+        ((rc)) && die 1 "$(jq -r '.error // "failed"' <<<"$out" 2>/dev/null)"
+        show "$out" '"dictation: \(.dictation_language_name)" + (if .dictation_language == "follow" then " (same as voice control)" else "" end)'
+        return
+      fi
+      out=$(python3 -I "$py" dictate "${1:-toggle}") || rc=$?
+      if ((rc)); then
+        local why
+        if ((rc == 3)); then why="voice control is off (barch voice on)"
+        else why=$(jq -r '.error // "failed"' <<<"$out" 2>/dev/null); fi
+        # from the keybinding nobody reads stderr: say it where it shows
+        [[ $why == "not dictating" ]] || post "Dictation" "$why" normal barch-voice
+        die "$rc" "$why"
+      fi
+      show "$out" 'if .dictating then "dictating (\(.language // "")): speak, it ends after a pause or with Super+D" else "dictation: \(.action)" end' ;;
     pause | resume | reload)
       local out
       out=$(python3 -I "$py" "$sub") || die 1 "$(jq -r '.error // "failed"' <<<"$out" 2>/dev/null)"
@@ -72,6 +94,6 @@ cmd_voice() {
       tail -n "${1:-30}" "$f" ;;
     log) journalctl --user -u "$unit" -n "${1:-60}" --no-pager -o short ;;
     setup) bash "$REPO/quickshell/.config/quickshell/voice/setup.sh" "$@" ;;
-    *) usage_error "voice on|off|toggle|status|pause|resume|say|match|wake|misses|test|reload|log|setup" ;;
+    *) usage_error "voice on|off|toggle|status|pause|resume|dictate|say|match|wake|misses|test|reload|log|setup" ;;
   esac
 }

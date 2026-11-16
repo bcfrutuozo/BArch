@@ -77,6 +77,11 @@ Desktop (through the bar):
   voice lang [<code>|list]    the language it listens and answers in (pt, en, es, auto… every
                               language whisper knows; only Portuguese has the command table,
                               the rest goes to Claude; the Piper voice is downloaded when picked)
+  voice dictate [start|stop|toggle|cancel]
+                              dictation (Super+D): records until a pause (or Super+D again), whisper
+                              writes it all, typed in the focused window and copied to the clipboard
+  voice dictate lang [<code>|follow|list]
+                              the dictation's language; follow (default) = the one voice control uses
   voice say <text>            speak TEXT (piper)
   voice match <text>          which command TEXT would run, running nothing (to test commands.json)
   voice wake <text>           would TEXT (as whisper might write it) wake the daemon, and with what left
