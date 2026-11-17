@@ -1,0 +1,47 @@
+#!/bin/bash
+# Turns Bluetooth Low Energy off on the adapter the AirPods are paired with.
+#
+# The AirPods misbehave when their adapter also has LE on (they connect over classic BR/EDR),
+# which is why main.conf used to say ControllerMode = bredr. That setting is global and hid
+# every LE device, the Xbox Series controller included (it only pairs over LE). Now main.conf
+# says dual and this script takes LE away from the AirPods' adapter only; the other adapter
+# keeps LE for the controller. Run by barch-bt-le.service (after bluetoothd, and from the
+# udev rule when the adapter comes back after a replug or a resume).
+#
+# AIRPODS_ADAPTER: USB vendor:product of that adapter. Not plugged in (another machine, a VM):
+# nothing to do.
+set -u
+
+AIRPODS_ADAPTER=33fa:0010
+
+index=""
+for hci in /sys/class/bluetooth/hci*; do
+    [[ -e "$hci" ]] || continue
+    usb=$(readlink -f "$hci/device/..")
+    id="$(cat "$usb/idVendor" 2>/dev/null):$(cat "$usb/idProduct" 2>/dev/null)"
+    if [[ "$id" == "$AIRPODS_ADAPTER" ]]; then
+        index=${hci##*/hci}
+        break
+    fi
+done
+[[ -n "$index" ]] || { echo "adapter $AIRPODS_ADAPTER not present"; exit 0; }
+
+settings() { btmgmt --index "$index" info 2>/dev/null | sed -n 's/^\s*current settings: //p'; }
+
+# bluetoothd sets the mode from main.conf when it brings the adapter up (and powers it after
+# that): wait for it, or it turns LE back on behind us. Checked again afterwards for the same
+# reason.
+for _ in $(seq 20); do
+    [[ " $(settings) " == *" powered "* ]] && break
+    sleep 0.5
+done
+for _ in 1 2 3; do
+    if [[ " $(settings) " != *" le "* ]]; then
+        echo "hci$index ($AIRPODS_ADAPTER): LE off"
+        exit 0
+    fi
+    btmgmt --index "$index" le off >/dev/null
+    sleep 2
+done
+echo "hci$index ($AIRPODS_ADAPTER): could not turn LE off: $(settings)" >&2
+exit 1

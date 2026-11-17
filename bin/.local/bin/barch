@@ -107,6 +107,7 @@ case $cmd in
   dnd) cmd_dnd "$@" ;;
   anon) cmd_anon "$@" ;;
   vpn) cmd_vpn "$@" ;;
+  gamepad | pad) cmd_gamepad "$@" ;;
   music) cmd_music "$@" ;;
   player) cmd_player "$@" ;;
   books) cmd_books "$@" ;;

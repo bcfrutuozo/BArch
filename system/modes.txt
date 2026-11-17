@@ -36,6 +36,7 @@
 644 /etc/systemd/system/barch-agent-snapshot@.service
 644 /etc/systemd/system/barch-backup-root.service
 644 /etc/systemd/system/barch-backup-root.timer
+644 /etc/systemd/system/barch-bt-le.service
 644 /etc/systemd/system/barch-disk-health.service
 644 /etc/systemd/system/barch-disk-health.timer
 644 /etc/systemd/system/barch-failure@.service
@@ -51,11 +52,13 @@
 644 /etc/systemd/system/setvtrgb.service
 644 /etc/systemd/system/systemd-vconsole-setup.service.d/retry.conf
 644 /etc/systemd/zram-generator.conf
+644 /etc/udev/rules.d/90-barch-bt-le.rules
 644 /etc/vconsole.conf
 644 /etc/vtrgb-dracula
 755 /usr/local/bin/archnews
 755 /usr/local/bin/barch-agent-snapshot
 755 /usr/local/bin/barch-backup-root
+755 /usr/local/bin/barch-bt-le
 755 /usr/local/bin/barch-disk-health
 755 /usr/local/bin/barch-failure-relay
 755 /usr/local/bin/barch-killswitch

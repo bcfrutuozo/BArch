@@ -3,6 +3,7 @@ brave-origin-bin
 cmux-gtk
 disktree-bin
 dmg2img
+furmark
 gpu-t
 hexchat
 limine-mkinitcpio-hook

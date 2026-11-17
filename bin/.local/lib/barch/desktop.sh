@@ -146,6 +146,18 @@ cmd_nightlight() {
 
 cmd_dnd() { toggle notifs dndSet "${1:-}" '"do not disturb: \(.dnd | '"$onoff_text"')"'; }
 
+cmd_gamepad() {
+  local text='if (.gamepads | length) == 0 then "no gamepad connected"
+              else .gamepads[] | "\(.name)\t\(.address)\t\(if .battery < 0 then "?" else "\(.battery)%" end)" end'
+  case ${1:-status} in
+    status) ipc gamepad status ;;
+    rumble | vibrate) ipc gamepad rumble "${2:-}" ;;
+    disconnect) ipc gamepad disconnect "${2:-}"; text='"disconnected \(.disconnected)"' ;;
+    *) usage_error "gamepad [status]|rumble [address]|disconnect [address]" ;;
+  esac
+  show "$OUT" "$text"
+}
+
 cmd_vpn() {
   local text='"vpn: \(.state)" + (if .name != "" then " (\(.name)\(if .ip != "" then ", " + .ip else "" end))" else "" end)
               + " · region: \(.preferred)" + (if .error != "" then " · error: \(.error)" else "" end)'

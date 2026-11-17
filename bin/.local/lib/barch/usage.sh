@@ -65,6 +65,9 @@ Desktop (through the bar):
   vpn on [region]|off|toggle|status
                               the VPN alone: PIA over WireGuard (what Anonymous Mode uses)
   vpn regions                 regions, fastest first; vpn region <id>|auto picks the one to use
+  gamepad [status]|rumble [addr]|disconnect [addr]
+                              Bluetooth gamepads (the bar's controller icon): battery, vibrate one
+                              to tell which it is, disconnect it
   health [--refresh]          system health summary (.pacnew, failed services, TPM, cleanup)
   inbox [--refresh]           what waits for a decision: music and video review, library albums to tie,
                               book requests, failures of the day, health issues, agent reports (the bar's

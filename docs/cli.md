@@ -27,6 +27,7 @@ barch monitor side on|off|status   barch caffeine on|off|status
 barch nightlight on|off|status     barch dnd on|off|status
 barch anon on [region]|off|toggle|status   # Anonymous Mode: VPN + kill switch + Mullvad Browser as default + hostname out of DHCP
 barch vpn on [region]|off|toggle|status|regions|region <id>|auto
+barch gamepad [status]|rumble [address]|disconnect [address]   # Bluetooth gamepads: battery, vibrate (which one is it), disconnect
 barch health [--refresh]           # .pacnew, failed services, TPM, backup, cleanup
 barch inbox [--refresh]            # what waits for a decision: music/video review, library, books, failures, health, agents
 barch claude [--refresh]           # the Claude plan's usage: 5-hour session, week, Fable share, resets, plan, agents' spend
@@ -102,4 +103,4 @@ barch replay share [file] [--from 12 --to 40]
 ```
 
 Every command takes `--json`. Exit codes: `0` ok, `1` the bar refused, `2` usage, `3` bar not reachable.
-On the QML side these are the `IpcHandler`s `control`, `theme`, `wallpaper`, `notifs`, `health`, `inbox`, `claude`, `vpn`, `anon` and `voice` (`qs ipc show`).
+On the QML side these are the `IpcHandler`s `control`, `theme`, `wallpaper`, `notifs`, `health`, `inbox`, `claude`, `vpn`, `anon`, `gamepad` and `voice` (`qs ipc show`).

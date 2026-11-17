@@ -1,0 +1,3 @@
+# The AirPods' Bluetooth adapter came back (replug, resume): take LE off it again
+# (barch-bt-le, which explains why).
+ACTION=="add", SUBSYSTEM=="bluetooth", ENV{DEVTYPE}=="host", TAG+="systemd", ENV{SYSTEMD_WANTS}+="barch-bt-le.service"

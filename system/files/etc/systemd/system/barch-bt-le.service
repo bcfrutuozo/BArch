@@ -1,0 +1,10 @@
+[Unit]
+Description=Bluetooth LE off on the AirPods adapter (the other keeps it for the Xbox controller)
+After=bluetooth.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/barch-bt-le
+
+[Install]
+WantedBy=bluetooth.service

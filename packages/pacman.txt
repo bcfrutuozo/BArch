@@ -99,6 +99,7 @@ noto-fonts-emoji
 nvidia-container-toolkit
 nvidia-open-dkms
 nvidia-utils
+nvtop
 nwg-look
 obs-studio
 openssh

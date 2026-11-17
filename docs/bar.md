@@ -81,6 +81,12 @@ The main pieces:
   headset profile (HFP/HSP, 16 kHz mono) is out of the roles and the automatic switch to it is off,
   so an app opening the microphone (Discord, a call) never degrades the music: the fifine is the
   microphone. The connected device shows its codec in the Bluetooth tile and in the bar's device list.
+- **Bluetooth adapters:** two, with split roles. The AirPods misbehave when their adapter also has
+  LE on, but the Xbox Series controller only pairs over LE, so `/etc/bluetooth/main.conf` says
+  `ControllerMode = dual` and `barch-bt-le` (service + udev rule, re-run after a replug or resume)
+  turns LE off on the AirPods' adapter only (the USB dongle `33fa:0010`, hci0). The internal Intel
+  adapter (hci1) keeps LE and holds the controller: pair LE devices with
+  `bluetoothctl` → `select <hci1 address>` → `scan le`.
 - **Updates:** pending packages, unread Arch news (also enforced by a pacman hook) and the kernel.
 - **Volume on screen** (`audio/VolumeOsd.qml`): a pill near the bottom of every monitor (icon, level,
   percentage) for 1.4 s whenever the default output's volume or mute changes, and "Microphone muted / on"
@@ -95,4 +101,8 @@ The main pieces:
   disks (turns yellow/red as one fills; click a mount to open it); virtual machines (libvirt: start,
   console, pause, reboot, shut down); AirPods (`pods/`, from [omarchy-pods](https://github.com/thisisgm/omarchy-pods): battery,
   listening mode; its daemon `librepods`/`librepods-ctl` is built into `~/.local` by `install.sh`
-  at the commit pinned there, `PODS_COMMIT`).
+  at the commit pinned there, `PODS_COMMIT`); gamepads (`gamepad/`: shown while a Bluetooth
+  controller is connected, its icon and battery read from BlueZ, the emptiest one when there are
+  several; click for each one's battery, **Vibrate** (to tell which is which; `rumble.py` plays an
+  FF_RUMBLE effect on its `/dev/input` node, reachable through logind's ACL) and **Disconnect**;
+  right-click vibrates; a notification when a battery reaches 15%, once per discharge; `barch gamepad`).

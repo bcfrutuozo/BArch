@@ -21,6 +21,7 @@ import "screens"
 import "control"
 import "bluetooth"
 import "pods"
+import "gamepad"
 import "network"
 import "sysmon"
 import "clipboard"
@@ -451,6 +452,9 @@ ShellRoot {
 
         // AirPods (some sozinho quando não há fones)
         AirPodsWidget {}
+
+        // Bluetooth gamepads (Xbox controller): only while one is connected
+        GamepadWidget {}
 
         // Volume (while it is in use the on-screen pill stays out: the eyes are already here)
         VolumeWidget { onBusyChanged: volumeOsd.quiet = busy }
