@@ -96,7 +96,9 @@ without any AI:
   `disk.smart` (SMART failing, a critical warning, media errors that grew), `disk.selftest`, `btrfs.errors`
   (a counter grew) and `btrfs.scrub` (errors, aborted, or overdue, weekly), each with `text`; and the firewalls
   (`fw.*`, see NAS → Firewalls): `fw.down` / `fw.up`, `fw.auth`, `fw.boot`, `fw.gateway`, `fw.interface`,
-  `fw.ipsec`, `fw.dnsbl` and `fw.client` (a device never seen before took a lease).
+  `fw.ipsec`, `fw.dnsbl` and `fw.client` (a device never seen before took a lease). In Anonymous Mode
+  (and for `anon_grace_s`, 120 s, after it goes off) the NAS, the pfSense and the music/video pipelines are
+  not asked at all: the LAN is out of reach on purpose, so a miss there is not a `nas.down`/`fw.down`.
 - **Rules** in `agent/rules.json`: `when` is an event name plus regexes on its fields
   (`{"event": "window.open", "class": "^steam_app_"}`) or a metric with `above`/`below` and a
   `clear` value for hysteresis (`{"metric": "disk.root.pct", "above": 90, "clear": 85}` fires once

@@ -36,5 +36,30 @@ class FailureIncidents(unittest.TestCase):
         self.assertEqual([(i["unit"], i["count"]) for i in inc], [("a.service", 2), ("b.service", 1)])
 
 
+class LanPaused(unittest.TestCase):
+    """Anonymous Mode: the NAS and the pfSense are not asked (2026-11-18: fw.down right after anon.on)."""
+    def daemon(self, anon):
+        d = events.Daemon.__new__(events.Daemon)
+        d.flags = {"anon": anon}
+        d.anon_quiet_until = 0.0
+        d.nas_fails, d.next_nas = 2, 999.0
+        d.fw_fails, d.next_fw = {"omni": 2}, {"omni": 999.0}
+        return d
+
+    def test_anon_on_pauses_and_forgets_misses(self):
+        d = self.daemon(True)
+        self.assertTrue(d.lan_paused())
+        self.assertEqual((d.nas_fails, d.next_nas, d.fw_fails), (0, 0.0, {}))
+        self.assertEqual(d.next_fw, {"omni": 999.0})  # the fw.auth backoff is kept
+        self.assertEqual(d.sample_nas(), [])
+        self.assertEqual(d.sample_fw(), [])
+
+    def test_grace_after_anon_off(self):
+        d = self.daemon(False)
+        self.assertFalse(d.lan_paused())
+        d.anon_quiet_until = events.time.time() + 60
+        self.assertTrue(d.lan_paused())
+
+
 if __name__ == "__main__":
     unittest.main()

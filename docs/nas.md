@@ -5,7 +5,8 @@ The NAS and the firewalls as this desktop sees them, read only.
 **Health** (`agent/nas.py`, `barch nas status`): the desktop asks Unraid's own API (GraphQL, the one
 Homepage's Unraid widget uses) every five minutes, read only, and `barch-events` turns the answer
 into the `nas.*` metrics, events and rules of Automation (the System Center's **NAS** page, `barch center nas`, shows the same snapshot): the NAS not answering (three misses in a
-row, so a reboot of this machine or of the NAS's network says nothing), the array leaving STARTED, a
+row, so a reboot of this machine or of the NAS's network says nothing; never asked in Anonymous Mode, when
+the LAN is out of reach on purpose, nor by the System Center, whose NAS and Firewalls pages say "paused"), the array leaving STARTED, a
 disk that is no longer OK or counts errors, a container down for more than 15 minutes (one Unraid
 starts by itself that is not running, any that exited with an error, restarts in a loop or reports
 unhealthy; a clean stop of the ones Nextcloud AIO manages is its own doing), Unraid's unread warnings

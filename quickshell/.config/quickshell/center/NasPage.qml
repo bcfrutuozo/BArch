@@ -105,10 +105,12 @@ Item {
             // ---------- at a glance ----------
             Card {
                 Layout.margins: 12; Layout.bottomMargin: 0
-                title: !page.configured ? "NAS  ·  not set up"
+                title: Store.anon ? "NAS  ·  paused"
+                     : !page.configured ? "NAS  ·  not set up"
                      : !page.up ? "NAS  ·  " + (Store.nasAt ? "not answering" : "asking…")
                      : (page.s.host || "NAS") + "  ·  " + (page.problems.length === 0 ? "ok" : page.problems.length + " problem" + (page.problems.length === 1 ? "" : "s"))
-                subtitle: !page.configured ? "run `barch nas setup`: it writes ~/.config/barch/nas.json with the URL and API key of Homepage's Unraid widget"
+                subtitle: Store.anon ? "Anonymous Mode is on: the LAN is out of reach, so Unraid is not asked until it goes off"
+                        : !page.configured ? "run `barch nas setup`: it writes ~/.config/barch/nas.json with the URL and API key of Homepage's Unraid widget"
                         : !page.up ? String(page.s.error || "")
                         : "Unraid " + page.s.version + "  ·  up since " + String(page.s.up_since || "").slice(0, 10) + "  ·  asked " + Store.ago(Store.nasAt)
                           + (Store.nasBusy ? "  ·  asking…" : "")

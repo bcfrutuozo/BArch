@@ -1,6 +1,7 @@
 // WiredWidget.qml — conexão por cabo na barra do Quickshell
 // Na barra: porta RJ45 em contorno (apagada com o cabo desconectado; some se não houver placa de rede).
-// Clique: painel só com os dados da conexão (IP, máscara, gateway, DNS, MAC, velocidade, IP público).
+// Clique: painel com os dados da conexão (IP, máscara, gateway, DNS, MAC, velocidade, IP público)
+// e um botão para desligar/religar a placa (nmcli device disconnect/connect), para ficar só no Wi-Fi.
 // Clique em qualquer valor para copiá-lo.
 // Depende do NetworkManager (nmcli), do net-info.sh (nesta pasta) e do wl-clipboard.
 
@@ -28,6 +29,7 @@ Item {
     property string device: ""
     property string connection: ""
     property bool up: false
+    property bool off: false        // cabo ligado, mas a placa desligada (Turn off) ou sem perfil ativo
     property var details: []        // entradas "ethernet" do net-info.sh
     property string statusText: ""
 
@@ -54,25 +56,35 @@ Item {
     function refresh() { devProc.running = true }
     function refreshDetails() { infoProc.running = true }
 
+    function run(cmd, msg) {
+        statusText = msg
+        actionProc.command = cmd
+        actionProc.running = true
+    }
+
     // ---------- processos ----------
     Process {
         id: devProc
         command: ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device"]
         stdout: StdioCollector {
             onStreamFinished: {
-                let dev = "", conn = "", up = false
+                // com mais de uma placa: conectada > conectando > desligada com cabo > sem cabo
+                const rank = st => st === "connected" ? 3 : st.startsWith("connecting") ? 2
+                                 : st === "disconnected" ? 1 : 0
+                let dev = "", conn = "", state = "", best = -1
                 for (const line of text.trim().split("\n")) {
                     if (!line) continue
-                    const [d, type, state, c] = root.splitTerse(line)
-                    // prefere a placa conectada, se houver mais de uma
-                    if (type === "ethernet" && (!dev || state === "connected")) {
-                        dev = d; conn = c; up = (state === "connected")
+                    const [d, type, st, c] = root.splitTerse(line)
+                    if (type === "ethernet" && rank(st) > best) {
+                        dev = d; conn = c; state = st; best = rank(st)
                     }
                 }
+                const up = state === "connected"
                 const changed = up !== root.up
                 root.device = dev
                 root.connection = conn
                 root.up = up
+                root.off = state === "disconnected"
                 if (changed && popup.visible) root.refreshDetails()
             }
         }
@@ -87,6 +99,11 @@ Item {
                 catch (e) { root.details = [] }
             }
         }
+    }
+
+    Process {
+        id: actionProc
+        onExited: { root.statusText = ""; root.refresh(); root.refreshDetails() }
     }
 
     Timer { id: statusClear; interval: 2000; onTriggered: root.statusText = "" }
@@ -196,7 +213,7 @@ Item {
                         }
                     }
                     Text {
-                        text: root.up ? "Connected" : "Cable disconnected"
+                        text: root.up ? "Connected" : root.off ? "Off" : "Cable disconnected"
                         color: root.up ? Theme.good : Theme.dim
                         font.family: Theme.font
                         font.pixelSize: Theme.fontSize - 2
@@ -248,6 +265,37 @@ Item {
                         widget: root
                         label: "Public IP"
                         value: root.details.length > 0 ? root.details[0].external : ""
+                    }
+                }
+
+                // --- desligar / religar ---
+                Rectangle {
+                    visible: root.up || root.off
+                    Layout.alignment: Qt.AlignRight
+                    implicitWidth: toggleText.implicitWidth + 20
+                    implicitHeight: 26
+                    radius: Theme.buttonRadius
+                    color: toggleMouse.containsMouse ? Theme.hover : "transparent"
+                    border.width: 1
+                    border.color: Theme.border
+
+                    Text {
+                        id: toggleText
+                        anchors.centerIn: parent
+                        text: root.up ? "Turn off" : "Turn on"
+                        color: Theme.fg
+                        font.family: Theme.font
+                        font.pixelSize: Theme.fontSize - 2
+                    }
+                    MouseArea {
+                        id: toggleMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        enabled: !actionProc.running
+                        onClicked: root.up
+                            ? root.run(["nmcli", "device", "disconnect", root.device], "Turning off…")
+                            : root.run(["nmcli", "device", "connect", root.device], "Turning on…")
                     }
                 }
 

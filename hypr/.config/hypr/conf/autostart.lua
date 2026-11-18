@@ -20,4 +20,7 @@ hl.on("hyprland.start", function ()
     -- X11 apps that reads Xft DPI
     hl.exec_cmd('echo "Xft.dpi: 192" | xrdb -merge')
 
+    -- Alienware (HDMI-A-2) como monitor primário no XWayland/Wine (senão o de retrato vira o primário)
+    hl.exec_cmd("~/.config/hypr/scripts/xwayland-primary.sh")
+
 end)

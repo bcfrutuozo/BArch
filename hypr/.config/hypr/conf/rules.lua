@@ -70,6 +70,17 @@ hl.window_rule({
     center = true,
 })
 
+hl.window_rule({
+    -- Resident Evil 2 (RE:ENHANCE / Classic REbirth): o jogo deixa o alpha do frame
+    -- zerado; no monitor HDR (10 bits) o Hyprland respeita esse alpha e a janela some
+    -- (fica preta). Forçar opaca faz ignorar o alpha, como no monitor sRGB.
+    name  = "re2-opaque",
+    match = { class = "^(steam_app_4249110|bio2\\.exe)$" },
+
+    opaque  = true,
+    no_blur = true,
+})
+
 -- Picture-in-Picture (Brave/Chromium e Firefox): flutuando, por cima de tudo,
 -- em todos os workspaces, no canto inferior direito.
 hl.window_rule({

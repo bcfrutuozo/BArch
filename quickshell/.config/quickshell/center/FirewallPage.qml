@@ -221,10 +221,12 @@ Item {
             // ---------- not set up / header ----------
             Card {
                 Layout.margins: 12; Layout.bottomMargin: 0
-                title: !page.configured ? "Firewalls  ·  not set up"
+                title: Store.anon ? "Firewalls  ·  paused"
+                     : !page.configured ? "Firewalls  ·  not set up"
                      : page.siteNames.length === 0 ? "Firewalls  ·  " + (Store.fwAt ? "no answer" : "asking…")
                      : "Firewalls  ·  " + page.siteNames.join(", ") + "  ·  " + (page.problemCount === 0 ? "ok" : page.problemCount + " problem" + (page.problemCount === 1 ? "" : "s"))
-                subtitle: !page.configured ? "run `barch fw setup`: it says how to make a read-only API user and key on each pfSense and what ~/.config/barch/pfsense.json holds"
+                subtitle: Store.anon ? "Anonymous Mode is on: the LAN is out of reach, so the pfSense are not asked until it goes off"
+                        : !page.configured ? "run `barch fw setup`: it says how to make a read-only API user and key on each pfSense and what ~/.config/barch/pfsense.json holds"
                         : String(page.fw.error || "") || ("pfSense REST API, read only  ·  asked " + Store.ago(Store.fwAt) + (Store.fwBusy ? "  ·  asking…" : ""))
                 headerItems: [ UiButton { label: "Refresh"; icon: "󰑐"; small: true; tooltip: "ask both firewalls again"; onClicked: Store.refreshFw() } ]
             }

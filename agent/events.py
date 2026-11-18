@@ -572,6 +572,7 @@ class Daemon:
         self.disk_rows: list[tuple[str, float]] = []
         self.last_prune = 0.0
         self.flags: dict[str, object] = {}        # last known state of the things that transition
+        self.anon_quiet_until = 0.0               # the LAN is out of reach until then (Anonymous Mode)
         self.hwmon = self._hwmon()
         self.nvidia = bool(run(["sh", "-c", "command -v nvidia-smi"]).stdout.strip())
         self.pods_ctl = HOME / ".local/bin/librepods-ctl"
@@ -635,6 +636,18 @@ class Daemon:
             self.emit("vpn.off", data)
         else:
             self.emit("vpn.down", data)
+
+    def lan_paused(self) -> bool:
+        """Anonymous Mode routes everything through the VPN and its DNS, so the NAS, the pfSense and
+        the pipelines are out of reach on purpose: while it is on (and `anon_grace_s` after it goes
+        off, while the network comes back) they are not asked, and their misses are forgotten, so
+        no nas.down/fw.down is a false alarm."""
+        if self.flags.get("anon") is True or time.time() < self.anon_quiet_until:
+            self.nas_fails = 0
+            self.next_nas = 0.0
+            self.fw_fails.clear()
+            return True
+        return False
 
     # -- samplers
     def sample_system(self) -> list[tuple[str, float]]:
@@ -731,6 +744,8 @@ class Daemon:
                 d = json.loads(r.stdout)
                 on = bool(d.get("on") if "on" in d else d.get("active") if "active" in d else d.get("enabled"))
                 armed = bool((d.get("killswitch") or {}).get("armed"))
+                if self.flags.get("anon") is True and not on:
+                    self.anon_quiet_until = time.time() + float(self.cfg.get("anon_grace_s", 120))
                 self.transition("anon", on, "anon.on", "anon.off", {})
         except Exception:  # noqa: BLE001
             pass
@@ -790,7 +805,7 @@ class Daemon:
         Needs ~/.config/barch/music.json (barch music install); every `music_every_s`, 120 by default."""
         conf = HOME / ".config/barch/music.json"
         now = time.time()
-        if not conf.exists() or now - self.last_music < float(self.cfg.get("music_every_s", 120)):
+        if not conf.exists() or now - self.last_music < float(self.cfg.get("music_every_s", 120)) or self.lan_paused():
             return
         self.last_music = now
         try:
@@ -849,7 +864,7 @@ class Daemon:
         install); every `video_every_s`, 300 by default."""
         conf = HOME / ".config/barch/video.json"
         now = time.time()
-        if not conf.exists() or now - self.last_video < float(self.cfg.get("video_every_s", 300)):
+        if not conf.exists() or now - self.last_video < float(self.cfg.get("video_every_s", 300)) or self.lan_paused():
             return
         self.last_video = now
         try:
@@ -888,9 +903,10 @@ class Daemon:
         (nas.array, nas.disk, nas.containers, nas.alert, cert.expiring) plus nas.down after three
         misses in a row (retried every 30 s: one miss is a wake-up or a restart) and nas.up when it
         answers again. What was already reported lives in the rules' state, so a restart of the
-        daemon repeats nothing. Nothing is asked while this machine itself has no network."""
+        daemon repeats nothing. Nothing is asked while this machine itself has no network, nor in
+        Anonymous Mode (lan_paused)."""
         now = time.time()
-        if now < self.next_nas or self.flags.get("net") is False:
+        if self.lan_paused() or now < self.next_nas or self.flags.get("net") is False:
             return []
         self.next_nas = now + float(self.cfg.get("nas_every_s", 300))
         conf = nas.load_conf()
@@ -947,9 +963,10 @@ class Daemon:
         fw.down after three misses in a row (retried every 30 s) and fw.up when it answers again. A
         key the API refuses gives fw.auth once and is left alone for `fw_auth_backoff_s`: a burst of
         refused keys gets this desktop banned by the API's login protection. What was already
-        reported lives in the rules' state, so a restart of the daemon repeats nothing."""
+        reported lives in the rules' state, so a restart of the daemon repeats nothing. Nothing is
+        asked in Anonymous Mode (lan_paused)."""
         now = time.time()
-        if self.flags.get("net") is False:
+        if self.flags.get("net") is False or self.lan_paused():
             return []
         conf = pfsense.load_conf()
         if not conf:

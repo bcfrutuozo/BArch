@@ -83,8 +83,8 @@ ShellRoot {
                             required property var modelData
                             readonly property bool current: root.page === modelData.id
                             readonly property int marks: modelData.id === "services" ? Store.failedNow.length
-                                                       : modelData.id === "nas" ? (Store.nas.problems || []).length
-                                                       : modelData.id === "firewalls" ? Object.values(Store.fw.sites || {}).reduce((n, x) => n + (x.problems || []).length, 0)
+                                                       : modelData.id === "nas" ? (Store.anon ? 0 : (Store.nas.problems || []).length)
+                                                       : modelData.id === "firewalls" ? (Store.anon ? 0 : Object.values(Store.fw.sites || {}).reduce((n, x) => n + (x.problems || []).length, 0))
                                                        : modelData.id === "failures" ? Store.failuresNew.length
                                                        : modelData.id === "agent" ? Store.attention.length
                                                        : 0

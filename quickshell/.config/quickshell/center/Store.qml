@@ -129,9 +129,18 @@ Singleton {
         run([barch, "--json", "rules", "list"], out => rules = json(out, {}).rules || [])
         run([barch, "--json", "events", "log", "80"], out => events = json(out, {}).events || [])
     }
+    // Anonymous Mode sends everything through the VPN and its DNS: the NAS and the pfSense are out of
+    // reach on purpose, so they are not asked (and not shown as down) while it is on, as barch-events does
+    property bool anon: false
+    function refreshLan(full) {
+        run([barch, "--json", "anon", "status"], out => {
+            anon = json(out, {}).on === true
+            if (!anon) { refreshNas(full); refreshFw() }
+        })
+    }
     // full: the certificates too (a TLS handshake per endpoint); the minute timer keeps the last ones
     function refreshNas(full) {
-        if (nasBusy) return
+        if (nasBusy || anon) return
         nasBusy = true
         run([barch, "--json", "nas", "status"].concat(full ? [] : ["--no-certs"]), out => {
             nasBusy = false
@@ -147,7 +156,7 @@ Singleton {
     property real fwAt: 0
     property bool fwBusy: false
     function refreshFw() {
-        if (fwBusy) return
+        if (fwBusy || anon) return
         fwBusy = true
         run([barch, "--json", "fw", "status"], (out, err, code) => {
             fwBusy = false
@@ -167,12 +176,12 @@ Singleton {
     }
     function editPath(path) { Quickshell.execDetached(["sh", "-c", 'exec uwsm app -- foot -e "${EDITOR:-nvim}" "$1"', "sh", path]) }
     function refreshAll() {
-        refreshUnits(); refreshHealth(false); refreshAgent(); refreshSnapshots(); refreshFailures(); refreshAutomation(); refreshNas(true); refreshFw()
+        refreshUnits(); refreshHealth(false); refreshAgent(); refreshSnapshots(); refreshFailures(); refreshAutomation(); refreshLan(true)
         ready = true
     }
     Component.onCompleted: refreshAll()
     Timer { interval: 30000; running: true; repeat: true; onTriggered: { store.refreshUnits(); store.refreshFailures(); store.refreshAutomation() } }
-    Timer { interval: 60000; running: true; repeat: true; onTriggered: { store.refreshNas(false); store.refreshFw() } }
+    Timer { interval: 60000; running: true; repeat: true; onTriggered: store.refreshLan(false) }
 
     // ---------- failure-ignore (a file of the repo) ----------
     FileView {
