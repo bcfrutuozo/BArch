@@ -18,6 +18,11 @@ True for this machine only; review before using the repo elsewhere.
 - **Monitors:** AW3225QF on `HDMI-A-2` (4K 240 Hz, 10-bit, HDR, scale 2, the bar lives here);
   P2723QE on `HDMI-A-1`, portrait, to the left. Values in `hypr/.config/hypr/conf/monitors.lua`
   (`BArch.monitors`); the bar changes HDR/SDR brightness through `BArch.set_monitor(...)`.
+  XWayland has no negative coordinates, so the portrait monitor becomes its `+0+0` and, without a
+  primary output, Wine/Proton takes it as the main display (games list portrait resolutions or open
+  there). `hypr/scripts/xwayland-primary.sh` marks the AW as primary at login, and the rule
+  `xwayland-primary` (`agent/rules.json`) marks it again on every `monitor.added`: each reconnect of
+  the AW (wake, `hdr-kick`) recreates its XWayland output without the flag.
   After a resume the driver can refuse every mode above 60 Hz on the AW without logging anything;
   `hypr/scripts/hdr-kick.sh` (run by hypridle after sleep) checks the refresh rate it got and, when it
   is low, disables and re-enables the output, which renegotiates the link. It notifies if even that fails
@@ -34,6 +39,15 @@ True for this machine only; review before using the repo elsewhere.
 - **Games:** Battle.net in its own prefix at `~/Games/battle.net` (games on drive `G:`).
   WoW has no native HDR; gamescope's inverse tone mapping didn't work nested in Hyprland
   (gamescope 3.17, Hyprland 0.56) — use the SDR brightness slider instead.
+- **Red and blue swapped in HDR games:** on NVIDIA, Hyprland shows a swapchain in `A2R10G10B10`
+  (DRM ARGB2101010) as ABGR ([hyprwm/Hyprland#9557](https://github.com/hyprwm/Hyprland/issues/9557),
+  closed as not planned); DOOM Eternal picks it with its HDR on, and its red logo turns blue.
+  `tools/vk-format-fix` is a small implicit Vulkan layer (`VK_LAYER_BARCH_format_fix`, built by its
+  `build.sh` into `~/.local/lib/barch`, `install.sh` runs it) that hides that format, so games take
+  `A2B10G10R10`. It loads only with `BARCH_VK_FORMAT_FIX=1`, exported by `steam.desktop` and the
+  Battle.net `run.sh`; `BARCH_VK_FORMAT_FIX_DISABLE=1` in a game's launch options turns it off.
+- **Steam games in HDR:** Valve's Proton has no Wayland driver, so a game under XWayland never
+  sees HDR. Use GE-Proton with `PROTON_ENABLE_WAYLAND=1 PROTON_ENABLE_HDR=1` in the launch options.
 - **NAS shares** are `x-systemd.automount` entries in `fstab`; `nas-mount.service` mounts them in the
   background after login (waits up to 60 s for the NAS, then leaves them to mount on first access).
   The entries pin the NAS address (`ip=100.100.0.10`): its name also resolves to an IPv6 address

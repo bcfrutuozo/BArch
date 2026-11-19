@@ -1,6 +1,10 @@
 # BArch: copy of /usr/share/applications/steam.desktop with GDK_SCALE unset.
 # Steam multiplies GDK_SCALE by Xft.dpi/96; with xwayland:force_zero_scaling and Xft.dpi 192
 # (autostart.lua) that gave 4x. Xft.dpi alone scales it once (2x), sharp.
+# MANGOHUD=1: every game Steam starts loads MangoHud's Vulkan layer; the Control Center's
+# Game HUD switch shows or hides it live (no_display in the generated MangoHud.conf).
+# BARCH_VK_FORMAT_FIX=1: loads tools/vk-format-fix, which hides A2R10G10B10 (red and blue swapped
+# on NVIDIA under Hyprland, e.g. DOOM Eternal with HDR on).
 [Desktop Entry]
 Name=Steam
 Comment=Application for managing and playing games on Steam
@@ -30,7 +34,7 @@ Comment[th]=โปรแกรมสำหรับจัดการและ�
 Comment[tr]=Steam üzerinden oyun oynama ve düzenleme uygulaması
 Comment[uk]=Програма для керування іграми та запуску ігор у Steam
 Comment[vi]=Ứng dụng để quản lý và chơi trò chơi trên Steam
-Exec=env -u GDK_SCALE /usr/bin/steam %U
+Exec=env -u GDK_SCALE MANGOHUD=1 BARCH_VK_FORMAT_FIX=1 /usr/bin/steam %U
 Icon=steam
 Terminal=false
 Type=Application
@@ -68,7 +72,7 @@ Name[th]=ร้านค้า
 Name[tr]=Mağaza
 Name[uk]=Крамниця
 Name[vi]=Cửa hàng
-Exec=env -u GDK_SCALE /usr/bin/steam steam://store
+Exec=env -u GDK_SCALE MANGOHUD=1 BARCH_VK_FORMAT_FIX=1 /usr/bin/steam steam://store
 
 [Desktop Action Community]
 Name=Community
@@ -98,7 +102,7 @@ Name[th]=ชุมชน
 Name[tr]=Topluluk
 Name[uk]=Спільнота
 Name[vi]=Cộng đồng
-Exec=env -u GDK_SCALE /usr/bin/steam steam://url/CommunityHome/
+Exec=env -u GDK_SCALE MANGOHUD=1 BARCH_VK_FORMAT_FIX=1 /usr/bin/steam steam://url/CommunityHome/
 
 [Desktop Action Library]
 Name=Library
@@ -128,7 +132,7 @@ Name[th]=คลัง
 Name[tr]=Kütüphane
 Name[uk]=Бібліотека
 Name[vi]=Thư viện
-Exec=env -u GDK_SCALE /usr/bin/steam steam://open/games
+Exec=env -u GDK_SCALE MANGOHUD=1 BARCH_VK_FORMAT_FIX=1 /usr/bin/steam steam://open/games
 
 [Desktop Action Servers]
 Name=Servers
@@ -158,7 +162,7 @@ Name[th]=เซิร์ฟเวอร์
 Name[tr]=Sunucular
 Name[uk]=Сервери
 Name[vi]=Máy chủ
-Exec=env -u GDK_SCALE /usr/bin/steam steam://open/servers
+Exec=env -u GDK_SCALE MANGOHUD=1 BARCH_VK_FORMAT_FIX=1 /usr/bin/steam steam://open/servers
 
 [Desktop Action Screenshots]
 Name=Screenshots
@@ -188,7 +192,7 @@ Name[th]=ภาพหน้าจอ
 Name[tr]=Ekran Görüntüleri
 Name[uk]=Скріншоти
 Name[vi]=Ảnh chụp
-Exec=env -u GDK_SCALE /usr/bin/steam steam://open/screenshots
+Exec=env -u GDK_SCALE MANGOHUD=1 BARCH_VK_FORMAT_FIX=1 /usr/bin/steam steam://open/screenshots
 
 [Desktop Action News]
 Name=News
@@ -218,7 +222,7 @@ Name[th]=ข่าวสาร
 Name[tr]=Haberler
 Name[uk]=Новини
 Name[vi]=Tin tức
-Exec=env -u GDK_SCALE /usr/bin/steam steam://openurl/https://store.steampowered.com/news
+Exec=env -u GDK_SCALE MANGOHUD=1 BARCH_VK_FORMAT_FIX=1 /usr/bin/steam steam://openurl/https://store.steampowered.com/news
 
 [Desktop Action Settings]
 Name=Settings
@@ -248,11 +252,11 @@ Name[th]=การตั้งค่า
 Name[tr]=Ayarlar
 Name[uk]=Налаштування
 Name[vi]=Thiết lập
-Exec=env -u GDK_SCALE /usr/bin/steam steam://open/settings
+Exec=env -u GDK_SCALE MANGOHUD=1 BARCH_VK_FORMAT_FIX=1 /usr/bin/steam steam://open/settings
 
 [Desktop Action BigPicture]
 Name=Big Picture
-Exec=env -u GDK_SCALE /usr/bin/steam steam://open/bigpicture
+Exec=env -u GDK_SCALE MANGOHUD=1 BARCH_VK_FORMAT_FIX=1 /usr/bin/steam steam://open/bigpicture
 
 [Desktop Action Friends]
 Name=Friends
@@ -282,4 +286,4 @@ Name[th]=เพื่อน
 Name[tr]=Arkadaşlar
 Name[uk]=Друзі
 Name[vi]=Bạn bè
-Exec=env -u GDK_SCALE /usr/bin/steam steam://open/friends
+Exec=env -u GDK_SCALE MANGOHUD=1 BARCH_VK_FORMAT_FIX=1 /usr/bin/steam steam://open/friends

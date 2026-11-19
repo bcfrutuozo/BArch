@@ -548,20 +548,42 @@ Singleton {
             "# Mostrar/esconder: botão Game HUD no Control Center.",
             "legacy_layout=false",
             gameHud ? "" : "no_display",
-            "horizontal", "hud_compact",
+            // Steam e Battle.net exportam MANGOHUD=1 para tudo que abrem; estes não são jogos
+            "blacklist=gameoverlayui,steam,idTechLauncher.exe",
+            // painel vertical detalhado (cpu_power fica de fora: o RAPL só é legível pelo root)
             "position=top-left", "offset_x=16", "offset_y=16",
-            "font_size=22", "round_corners=" + cardRadius,
-            "background_alpha=0.7", "background_color=" + H(d.crust),
+            "font_size=20", "font_size_text=16", "font_scale=1.5", "round_corners=" + cardRadius,
+            "background_alpha=0.75", "background_color=" + H(d.crust),
             "text_color=" + H(d.text), "text_outline=0",
+            "horizontal_separator_color=" + H(d.overlay),
+            // quadros
             "fps", "fps_color_change", "fps_value=60,120",
             "fps_color=" + [H(d.red), H(d.yellow), H(d.green)].join(","),
-            "frametime", "frametime_color=" + H(d.subtext), "frame_timing=0",
-            "gpu_stats", "gpu_temp", "gpu_power", "gpu_color=" + H(d.accent),
-            "cpu_stats", "cpu_temp", "cpu_color=" + H(t.regular[6]),
+            "fps_metrics=avg,0.01,0.001", "show_fps_limit",
+            "frametime", "frame_timing=1", "frametime_color=" + H(d.subtext),
+            "throttling_status",
+            // GPU
+            "gpu_name", "gpu_stats", "gpu_load_change", "gpu_load_value=60,90",
+            "gpu_load_color=" + [H(d.green), H(d.yellow), H(d.red)].join(","),
+            "gpu_temp", "gpu_core_clock", "gpu_mem_clock",
+            "gpu_power", "gpu_power_limit", "gpu_fan",
+            "gpu_color=" + H(d.accent),
             "vram", "vram_color=" + H(t.regular[5]),
-            "ram", "ram_color=" + H(t.bright[5]),
-            "engine_color=" + H(d.accent), "wine_color=" + H(d.accent),
-            "toggle_hud=Shift_L+F12", ""
+            // CPU
+            "cpu_stats", "cpu_load_change", "cpu_load_value=60,90",
+            "cpu_load_color=" + [H(d.green), H(d.yellow), H(d.red)].join(","),
+            "cpu_temp", "cpu_mhz", "core_load", "core_bars",
+            "cpu_color=" + H(t.regular[6]),
+            // memória e disco
+            "ram", "swap", "procmem", "ram_color=" + H(t.bright[5]),
+            "io_read", "io_write", "io_color=" + H(d.subtext),
+            // jogo e tela
+            "engine_version", "engine_color=" + H(d.accent),
+            "wine", "wine_color=" + H(d.accent),
+            "vulkan_driver", "arch", "gamemode", "vkbasalt",
+            "resolution", "refresh_rate", "present_mode", "hdr", "display_server",
+            "time", "time_format=%H:%M",
+            "toggle_hud=Shift_L+F12", "toggle_hud_position=Shift_R+F11", ""
         ].filter((l, i, a) => l !== "" || i === a.length - 1).join("\n")
     }
     onMangohudConfChanged: hudWrite.restart()

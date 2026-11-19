@@ -154,6 +154,17 @@
       "cooldown": "30s"
     },
     {
+      "id": "xwayland-primary",
+      "description": "Mark the Alienware as XWayland's primary output again",
+      "when": {
+        "event": "monitor.added"
+      },
+      "do": [
+        "~/.config/hypr/scripts/xwayland-primary.sh"
+      ],
+      "cooldown": "5s"
+    },
+    {
       "id": "monitor-removed",
       "description": "A monitor was disconnected",
       "when": {

@@ -132,6 +132,11 @@ else
   fi
 fi
 
+step "Vulkan format fix (games)"
+# VK_LAYER_BARCH_format_fix: hides A2R10G10B10 from games, whose red and blue Hyprland swaps on
+# NVIDIA (HDR in DOOM Eternal); loads only with BARCH_VK_FORMAT_FIX=1, set by the launchers in games/
+if bash "$REPO/tools/vk-format-fix/build.sh" >/dev/null; then ok "layer built into ~/.local/lib/barch"; else warn "couldn't build the Vulkan format fix (tools/vk-format-fix/build.sh)"; fi
+
 step "Voice control (barch-voice)"
 # whisper.cpp + model, piper + the pt_BR voice (quickshell/voice/setup.sh); the daemon runs
 # without them and says so in the bar, so a missing piece is not fatal here

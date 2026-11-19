@@ -18,6 +18,9 @@ else
     export PROTON_ENABLE_HDR=1
 fi
 
+# vermelho/azul trocados no HDR (A2R10G10B10 no NVIDIA + Hyprland): tools/vk-format-fix
+export BARCH_VK_FORMAT_FIX=1
+
 # MangoHud sempre carregado; aparece ou some pelo botão Game HUD (sem reabrir o jogo)
 command -v mangohud >/dev/null && export MANGOHUD=1
 
