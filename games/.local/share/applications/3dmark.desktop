@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=3DMark
+GenericName=GPU benchmark (UL standalone, Proton)
+Comment=3DMark with the UL key, on Proton-GE via umu (~/Games/3dmark/run.sh)
+Exec=sh -c "\\$HOME/Games/3dmark/run.sh"
+Icon=applications-games
+Terminal=false
+Categories=System;Monitor;

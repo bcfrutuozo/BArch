@@ -4,6 +4,7 @@ adw-gtk-theme
 alsa-utils
 amd-ucode
 apcupsd
+archiso
 aspnet-runtime
 aspnet-targeting-pack
 audacity

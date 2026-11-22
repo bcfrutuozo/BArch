@@ -1,0 +1,13 @@
+# BArch: copy of /usr/share/applications/Superposition.desktop (AUR unigine-superposition)
+# with Qt's scaling off. The launcher bundles an old Qt5 (xcb): with Xft.dpi 192 and the
+# qt6ct theme it sized itself 8192x8192 off screen over both monitors, holding the input
+# for seconds, and fought every resize. Unscaled it opens at its normal size.
+[Desktop Entry]
+Type=Application
+Exec=env -u QT_QPA_PLATFORMTHEME QT_AUTO_SCREEN_SCALE_FACTOR=0 QT_ENABLE_HIGHDPI_SCALING=0 QT_SCALE_FACTOR=1 /usr/bin/unigine-superposition
+Path=/usr/bin
+Name=Superposition Benchmark
+GenericName=A GPU Stress test tool from the UNIGINE Corp.
+Icon=Superposition
+Terminal=false
+Categories=System;Monitor;

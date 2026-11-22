@@ -17,6 +17,11 @@ The commands assume an NVMe disk (`/dev/nvme0n1`), a user called `you`, and the 
 machine (Brazilian keyboard, São Paulo time, English system with Portuguese locale). Change
 them as you go. Every step that only applies to Bruno's hardware is marked **(this machine)**.
 
+**(this machine)** The AM5 build (late 2026) dual boots: Linux and Windows 11 IoT LTSC on the
+WD_BLACK SN8100 2 TB, the old SN770 1 TB as an NTFS games disk shared by both. Step 2 has its
+exact partitions, step 16 the games disk and Windows; the reasoning is in
+[docs/new-machine.md](docs/new-machine.md) ("Disks and dual boot").
+
 > **Read before you start.** Partitioning wipes the disk. Have the Arch ISO on a USB stick, a
 > wired connection or Wi-Fi credentials, and a second device with this page open.
 
@@ -52,6 +57,37 @@ partprobe /dev/nvme0n1
 Why 4 GiB: every kernel is a UKI of 60–120 MB, and `limine-snapper-sync` keeps copies of the
 UKIs of the snapshots it lists in the boot menu. 512 MB fills up after a few kernel updates.
 
+### (this machine) SN8100 with room for Windows
+
+**Install with only the SN8100 on the board.** The old SN770 still carries partitions labelled
+`ESP` and `cryptroot` (the previous install): with both disks in, `/dev/disk/by-partlabel/...`
+is ambiguous and the rest of this page could format or enroll the wrong one, and the firmware
+may boot the old Limine. The SN770 goes into M2_5 only after its data is migrated (step 16).
+
+Pick the disk by model, never by `nvme0`/`nvme1` (the order follows the slots, not the disks):
+
+```bash
+ls -l /dev/disk/by-id/ | grep -i sn8100
+SYS=$(ls /dev/disk/by-id/nvme-WD_BLACK_SN8100_* | grep -v -- -part | head -1)
+lsblk "$SYS"                                  # one disk, ~1.8T, the right one
+
+sgdisk --zap-all "$SYS"
+sgdisk -n1:0:+4G    -t1:ef00 -c1:ESP       "$SYS"   # ESP, shared with Windows later
+sgdisk -n2:0:+1580G -t2:8309 -c2:cryptroot "$SYS"   # LUKS, ~1.7 TB for Linux
+partprobe "$SYS"
+sgdisk -p "$SYS"                              # "Total free space" at the end: ~279 GiB
+```
+
+| # | Partition | Size | |
+|---|---|---|---|
+| 1 | ESP | 4 GiB | Limine, UKIs, snapshot entries; Windows adds `\EFI\Microsoft` (~100 MB) |
+| 2 | cryptroot | 1580 GiB | LUKS2 → btrfs, everything Linux |
+| — | free | ~279 GiB | **leave it unallocated**: Windows Setup creates MSR, NTFS (~300 GB) and WinRE there |
+
+The disk is 2 TB = ~1863 GiB. Windows sits after Linux, so this split is meant to stay: growing
+Linux later means moving the start of the Windows partition. From here on the commands use
+`by-partlabel`, which is safe only because the SN8100 is the one disk.
+
 ## 3. LUKS2
 
 ```bash
@@ -83,7 +119,7 @@ umount /mnt
 | `@pkg` | `/var/cache/pacman/pkg` | the package cache is not copied into every snapshot |
 | `@docker` | `/var/lib/docker` | images and containers: big, constantly changing, not system state |
 | `@vms` | `/var/lib/libvirt/images` | VM disks; also set `chattr +C` on it (below) so qcow2 files are not copy-on-write |
-| `@games` | `/home/you/Games` | (this machine) game libraries stay out of `@home`'s backup and snapshots |
+| `@games` | `/home/you/Games` | (this machine) game libraries stay out of `@home`'s backup and snapshots; on the AM5 build the games themselves go to the NTFS disk (step 16) and this keeps the Wine/Proton prefixes, which must not live on NTFS |
 
 Mount them all with the same options:
 
@@ -111,7 +147,7 @@ What this machine was installed with:
 pacstrap -K /mnt base base-devel linux linux-headers linux-firmware amd-ucode \
   btrfs-progs cryptsetup networkmanager sudo git neovim efibootmgr limine sbctl tpm2-tss \
   zram-generator snapper snap-pac \
-  nvidia-open-dkms nvidia-utils          # (this machine) RTX 4080
+  nvidia-open-dkms nvidia-utils          # (this machine) RTX 5090 (Blackwell: the open modules only)
 ```
 
 - Intel CPU: `intel-ucode` instead of `amd-ucode`.
@@ -231,6 +267,7 @@ timeout: 3
     path: boot():/EFI/Linux/arch-linux.efi
 EOF
 efibootmgr --create --disk /dev/nvme0n1 --part 1 --label Limine --loader '\EFI\limine\BOOTX64.EFI'
+# (this machine) --disk "$SYS" (the SN8100 by id; $SYS is not set inside the chroot, set it again)
 ```
 
 The UKI carries the command line, the microcode and the initramfs, so the entry needs no
@@ -243,6 +280,11 @@ reboot
 ```
 
 It should ask for the LUKS passphrase and boot to a console.
+
+**(this machine)** Stop here for the hardware tests of [docs/new-machine.md](docs/new-machine.md)
+(console only, stock kernel: MemTest86+ first, then mprime, y-cruncher, gpu-burn). Continue
+with step 10 only once the board, the CPU, the RAM and the 5090 passed; nothing above has to be
+redone.
 
 ## 10. Snapper, Limine automation and the repo
 
@@ -390,6 +432,38 @@ zramctl                                 # zram0 as swap
 
 Then the rest of the README: `kernel-update -f` (this machine), restoring secrets from the
 backup, and the post-install notes in **Fresh install**.
+
+## 16. The games disk and Windows (this machine)
+
+**Only after the old system's data is migrated**: the SN770 is the previous install (LUKS,
+`/home`, `~/Games`). Restore from the backup (README, step 5 of **Fresh install**), or put the
+SN770 in M2_5, open it with `sudo cryptsetup open <its part2 by id> oldroot` and copy what is
+missing. Until it is wiped, both disks have an `ESP` and a `cryptroot` label: address them by id.
+
+```bash
+GAMES=$(ls /dev/disk/by-id/nvme-WD_BLACK_SN770_1TB_* | grep -v -- -part | head -1)
+lsblk -o NAME,SIZE,PARTLABEL "$GAMES"          # 931.5G, the OLD system: last look before wiping
+sudo cryptsetup close oldroot 2>/dev/null
+sudo blkdiscard -f "$GAMES"                    # erases it and resets the SSD's cache state
+sudo sgdisk -n1:0:0 -t1:0700 -c1:games "$GAMES"
+sudo partprobe "$GAMES"
+sudo pacman -S --needed ntfs-3g                # mkfs.ntfs; mounting uses the kernel's ntfs3
+sudo mkfs.ntfs -Q -L games "$GAMES-part1"
+sudo mkdir -p /mnt/games
+echo "UUID=$(sudo blkid -s UUID -o value "$GAMES-part1")  /mnt/games  ntfs3  uid=1000,gid=1000,windows_names,noatime,nofail  0 0" | sudo tee -a /etc/fstab
+sudo mount /mnt/games && df -h /mnt/games
+```
+
+`windows_names` refuses names Windows could not open; `nofail` keeps a missing or dirty disk
+from stopping the boot. One Steam library (`/mnt/games/SteamLibrary`) for both systems; Proton
+prefixes stay on btrfs (`@games`).
+
+Then Windows 11 IoT LTSC into the free space of the SN8100 (Setup finds the ESP by itself),
+with Secure Boot keys already enrolled with `-m` (step 12). The order and the settings
+(Fast Startup and hibernation off, device encryption off, the `bcdedit` task that keeps Limine
+first, `sudo limine-scan` back in Linux) are in [docs/new-machine.md](docs/new-machine.md).
+After installing Windows, re-check the TPM unlock (step 13): if the passphrase is asked,
+re-enroll.
 
 ## Testing in a VM first
 

@@ -71,6 +71,17 @@ hl.window_rule({
 })
 
 hl.window_rule({
+    -- UNIGINE Superposition launcher (Qt5 under XWayland, frameless): floating and
+    -- centered. Its giant off-screen window came from Qt scaling, fixed in games/'s
+    -- Superposition.desktop; a size here only makes it fight back.
+    name  = "superposition-launcher",
+    match = { class = "^UNIGINE Superposition" },
+
+    float  = true,
+    center = true,
+})
+
+hl.window_rule({
     -- Resident Evil 2 (RE:ENHANCE / Classic REbirth): o jogo deixa o alpha do frame
     -- zerado; no monitor HDR (10 bits) o Hyprland respeita esse alpha e a janela some
     -- (fica preta). Forçar opaca faz ignorar o alpha, como no monitor sRGB.

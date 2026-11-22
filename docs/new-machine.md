@@ -1,10 +1,10 @@
 # New machine: validating the AM5 build
 
 The 2026-11 build (Ryzen 9 9950X3D, MSI MEG X870E GODLIKE, 2x32 GB DDR5-6000 CL30, WD_BLACK
-SN8100 2 TB, MSI MPG Ai1300TS) replaces the 5800X3D/B550 described in [machine.md](machine.md).
+SN8100 2 TB, MSI MPG Ai1300TS, ASUS TUF RTX 5090) replaces the 5800X3D/B550 described in [machine.md](machine.md).
 The Godlike came through Amazon Global and **MSI Brasil does not take its RMA**: anything wrong
-with it has to show up inside Amazon's 30-day return window. So the order is: prove the board
-under Linux from a USB stick first, migrate the system only after that.
+with it has to show up inside Amazon's 30-day return window. So the order is: prove the
+machine under Linux from a USB stick first, migrate the system only after that.
 
 Official manuals: `/mnt/nasfrutuozo/organization/desktops/bcfrutuozo/manuals/` (the Godlike, the
 Maestro 900R, MSI Center).
@@ -27,7 +27,7 @@ Back panel (manual p. 25, block diagram p. 90):
   The ToneX pedal (a USB 2.0 device) goes there with a cable from USB-C to its own connector;
   everything else on the Type-A ports.
 - **No HDMI**: the iGPU only comes out of the USB4 ports (DisplayPort alt mode, 4K 60 Hz), so the
-  tests without the RTX 4080 need a USB-C → DisplayPort cable.
+  live ISO (no NVIDIA driver) and any test without the 5090 need a USB-C → DisplayPort cable.
 - LAN: 10G Marvell AQC113CS (`atlantic`) and 5G Realtek RTL8126 (`r8169`).
 - PCI_E1 + PCI_E2 from the CPU, x16/x0 or x8/x8; PCI_E3 x4 from the chipset (x2 with M2_4 used).
 - Super I/O NCT6687: fans, pump and voltages need `nct6687d-dkms` (AUR); without it `sensors`
@@ -88,16 +88,33 @@ ASUS X870E (the Crosshair 2006 is the Dark Hero underneath, national warranty).
 The parts arrive on different days, and Amazon counts each item's window from its own delivery
 (check the date under the order): the **board's 30 days start when the board arrives**, whether
 or not the CPU is there yet. So the first full test starts the day the **minimum set** is in:
-board, CPU, RAM, PSU and cooler. Nothing else is needed: the 9950X3D has an iGPU (out of the
-USB4 ports only, with a USB-C → DisplayPort cable), so the RTX 4080 stays in the old machine; the ISO boots from a stick, so
-the SN8100 can come last. Run it on top of the motherboard box if the case is not there yet.
+board, CPU, RAM, PSU and cooler. The 9950X3D has an iGPU (out of the USB4 ports only, with a
+USB-C → DisplayPort cable) and the ISO boots from a stick, so the 5090 and the SN8100 can come
+later. Run it on top of the motherboard box if the case is not there yet.
+
+**Test the whole machine at once.** Whatever has arrived goes in, the RTX 5090 (and the TRYX riser,
+if it will be used) included: the windows run in parallel, and the PSU, the VRM and the case's
+airflow only show their limits with the CPU and the GPU loaded together. Isolating is for when
+something fails: then take parts out in this order and repeat the failing test each time: the
+5090 (back to the iGPU), the riser (card straight in PCI_E1), the second NVMe, then RAM one stick
+at a time in A2.
+
+**Display on the live ISO: the monitor on the board's USB4 port (iGPU), not on the 5090.** The ISO
+has no NVIDIA driver; if its `nouveau` cannot drive Blackwell there is no image, which looks like
+a dead board. Once `nvidia-open` is installed (below), the 5090's outputs can be used.
 
 **Tools on the live ISO.** Boot the Arch ISO with `cow_spacesize=8G` on its command line (`e` at
 the menu) so pacman has room in RAM, then:
 
 ```bash
 pacman -Sy stress-ng fio iperf3 smartmontools nvme-cli lm_sensors memtester alsa-utils ethtool iw s-tui
+# with the 5090 in: the driver, then modprobe nvidia (blacklist nouveau first if it grabbed the card)
+pacman -S nvidia-open nvidia-utils
 ```
+
+`nvidia-open` is built for the repo's current `linux`: it only loads if the ISO's kernel is the same
+version (`uname -r` against `pacman -Si linux`), so use the latest ISO. If `modprobe nvidia`
+refuses with a version mismatch, leave the GPU test for the installed system.
 
 y-cruncher and mprime (Prime95) are static binaries: download them beforehand from their sites
 onto the second stick (on the installed system they are in the AUR: `y-cruncher`, `mprime`).
@@ -154,12 +171,18 @@ VRM and SN8100 temperatures where the board shows them.
 
 ### Day 3: install, the GPU, the ToneX, sleep, everything at once
 
-- **GPU** (the 4080 moved over now): `nvidia-smi -q | grep -A3 "Link Width"` → x16 Gen 4 in PCI_E1,
-  then an hour of a heavy game or benchmark; `journalctl -k | grep -i aer` stays empty.
+- **GPU** (the 5090; from day 1 if it was already in, live ISO with `nvidia-open`):
+  - Link: `nvidia-smi -q | grep -A3 "Link Width"` and `lspci -vv -s <addr> | grep LnkSta` under
+    load (it drops to Gen 1 at idle): **`32GT/s, Width x16`** in PCI_E1. With the TRYX riser the
+    same, or the riser is the problem (Kabum, 7-day return); straight in the slot as reference.
+  - An hour of a heavy game or benchmark at full power; `journalctl -k | grep -iE "aer|pcie bus error|xid"`
+    stays empty (an `Xid` is the card or its power reporting a fault).
+  - The 12V-2x6 plug fully seated (no gap at the latch), checked again after the hour.
 - **ToneX passthrough** (BIOS: SVM and IOMMU on). Its own section below.
 - **Sleep:** 20 cycles of `sudo rtcwake -m mem -s 30` with the AW3225QF connected; every one must
   wake with image.
-- **Everything at once**, 1 h: y-cruncher on the CPU and the game or benchmark on the GPU together.
+- **Everything at once**, 1 h: y-cruncher on the CPU and the game or benchmark on the GPU together
+  (~1 kW with the 5090).
   This is the PSU (watch the Ai1300TS on JUSB1, `lsusb | grep 0db0:aa6f`), the VRM and the case's
   airflow at full power.
 - `hw-report.sh` at the end, kept with the day-1 report.
@@ -186,6 +209,55 @@ in its IOMMU group, given whole to the VM.
    the ToneX software, record a minute.
 4. **Ten start/stop cycles of the VM.** Some AMD USB controllers do not come back from the reset
    at VM shutdown: the host must get the pedal back every time, without `dmesg` errors.
+
+## Disks and dual boot (plan, decided 2026-11-22)
+
+Linux first, Windows 11 IoT Enterprise LTSC second, on the fast disk; the old disk only for games.
+
+**SN8100 2 TB (M2_1), in this order:**
+
+| # | Partition | Size | What |
+|---|---|---|---|
+| 1 | ESP, shared | 4 GiB | Limine, UKIs, snapshot entries, plus Windows' `\EFI\Microsoft` (~100 MB) |
+| 2 | LUKS2 → btrfs | ~1580 GiB | Linux, subvolumes as today (INSTALL.md) |
+| 3–5 | MSR, NTFS, WinRE | ~280 GiB left free | Windows Setup creates them in the free space: ~300 GB for Windows, Visual Studio, tools |
+
+Linux used ~240 GB without games on the old machine, so ~1.7 TB leaves room for AI models and
+video. Decide the split now: Windows sits after Linux, so growing Linux later means moving the
+start of the Windows partition.
+
+One ESP, not two: Windows Setup does not take a second ESP on the same disk without a manual
+`dism` + `bcdboot`, and the boot order lives in NVRAM either way. Never run Windows' boot repair
+(`bootrec /fixboot`, Startup Repair) without remembering the ESP is shared; `limine-update`
+rebuilds the Linux side.
+
+**SN770 1 TB (M2_5): games.** One NTFS partition, unencrypted, shared by both systems:
+`UUID=<uuid> /mnt/games ntfs3 uid=1000,gid=1000,windows_names,noatime,nofail 0 0`. One Steam
+library (`SteamLibrary`) used by both Steams; Proton prefixes (`compatdata`) stay on btrfs (a
+symlink), never on NTFS (symlinks, `:` in names). Battle.net games can live there too. Outside
+snapper.
+
+**Order of work:**
+1. Linux on partitions 1–2, ~280 GiB left unallocated at the end.
+2. Secure Boot keys enrolled **with Microsoft's** (`sbctl enroll-keys -m`), or the firmware
+   refuses `bootmgfw.efi` when Limine chains to it.
+3. Windows Setup into the free space (it finds the ESP itself).
+4. In Windows: Fast Startup and hibernation **off** (`powercfg /h off`), or the NTFS games disk
+   is left dirty and Linux mounts it read-only. Device encryption / BitLocker **off**: signing in
+   with a Microsoft account turns it on, and booting Windows through Limine one time and through
+   the firmware menu the next changes the measured boot path, so it would ask for the recovery
+   key; never on the games disk.
+5. A scheduled task at startup (SYSTEM) keeps Limine first in the UEFI order after updates:
+   `bcdedit /set {fwbootmgr} displayorder {<Limine GUID from bcdedit /enum firmware>} /addfirst`.
+   LTSC gets no feature updates, so a reset is rarer, but the task stays.
+6. Back in Linux: `sudo limine-scan`, pick "Windows Boot Manager" (it writes the `protocol: efi`
+   entry by partition GUID). `limine-snapper-sync` already excludes `Windows*` entries.
+
+**Windows 11 IoT LTSC notes:** no Store, Xbox app or Game Bar out of the box (`wsreset -i`
+brings the Store back; Gaming Services and the Xbox app from there for Game Pass titles). A
+Microsoft account works (Settings → Accounts → sign in with a Microsoft account) for OneDrive
+and settings sync; see step 4 about the encryption it switches on. Anti-cheat games and DLSS 5
+are what Windows is there for.
 
 ## Notes from the old machine
 
