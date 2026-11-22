@@ -16,11 +16,34 @@ VIRT=$(systemd-detect-virt 2>/dev/null || true)
 VM_SKIP='^/(etc/fstab|etc/crypttab|etc/kernel/cmdline|etc/default/limine|boot/|etc/mkinitcpio|etc/initcpio/|etc/modprobe\.d/nvidia|etc/docker/daemon\.json|etc/hostname|etc/vconsole\.conf|etc/systemd/system/getty@)'
 [[ -n "$VIRT" && "$VIRT" != none ]] && warn "running in a VM ($VIRT): disk, boot and NVIDIA files are skipped"
 
+# The ACPI override (etc/initcpio/acpi_override/apic.aml, loaded by the acpi_override hook) is
+# a MADT patched for one Ryzen 7 5800X3D whose core 7 crashes: on any other CPU it describes the
+# wrong processor (the AM5 build wants every core). Only that CPU gets the table and the hook;
+# elsewhere the table is skipped and mkinitcpio.conf is offered without the hook.
+ACPI_OVERRIDE_CPU='AMD Ryzen 7 5800X3D 8-Core Processor'
+CPU_MODEL=$(awk -F': ' '/^model name/ { print $2; exit }' /proc/cpuinfo)
+if [[ "$CPU_MODEL" != "$ACPI_OVERRIDE_CPU" ]]; then
+  ACPI_OVERRIDE=no
+  warn "CPU is '$CPU_MODEL': the ACPI override (core 7 off, for the 5800X3D) is left out"
+  tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+else
+  ACPI_OVERRIDE=yes
+fi
+
 changed=()
 while IFS= read -r -d '' file; do
   target="/${file#"$src"/}"
   if [[ -n "$VIRT" && "$VIRT" != none && "$target" =~ $VM_SKIP ]]; then
     ok "skipped in VM: $target"; continue
+  fi
+  if [[ "$ACPI_OVERRIDE" == no ]]; then
+    if [[ "$target" == /etc/initcpio/acpi_override/* ]]; then
+      ok "skipped (ACPI override, other CPU): $target"; continue
+    fi
+    if [[ "$target" == /etc/mkinitcpio.conf ]]; then
+      sed -E '/^HOOKS=/ { s/\bacpi_override\b ?//; s/\( /(/ }' "$file" > "$tmp/mkinitcpio.conf"
+      file="$tmp/mkinitcpio.conf"
+    fi
   fi
   if sudo test -f "$target" && sudo cmp -s "$file" "$target"; then
     ok "unchanged: $target"; continue

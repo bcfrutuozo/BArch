@@ -216,7 +216,9 @@ to another machine:
 
 - `acpi_override` **(this machine)**: loads `etc/initcpio/acpi_override/apic.aml`, a patched
   ACPI MADT table that disables CPU core 7, which crashes this particular CPU. On any other
-  machine it describes the wrong CPU.
+  machine it describes the wrong CPU. `apply-system.sh` (step 11) checks the CPU model: on
+  anything but that Ryzen 7 5800X3D it skips the table and offers `mkinitcpio.conf` without the
+  hook, so the AM5 build runs every core. The first `sync.sh` there drops both from `system/`.
 - `plymouth`: the boot splash. Optional; if you want it, install `plymouth`, put the hook after
   `systemd` and keep `splash` on the command line.
 
@@ -364,7 +366,7 @@ is not Bruno's, answer **no** to:
 | File | Why |
 |---|---|
 | `/etc/fstab`, `/etc/crypttab`, `/etc/kernel/cmdline`, `/etc/default/limine`, `/boot/limine.conf` | UUIDs of his disk, his NAS shares |
-| `/etc/mkinitcpio.conf`, `/etc/initcpio/**` | `acpi_override` disables a core of his CPU (step 8) |
+| `/etc/mkinitcpio.conf`, `/etc/initcpio/**` | `acpi_override` disables a core of his CPU (step 8); on another CPU the script already leaves it out, the rest of the file (NVIDIA modules, plymouth) is still his |
 | `/etc/modprobe.d/nvidia.conf` | only with an NVIDIA card |
 | `/etc/systemd/system/getty@tty1.service.d/autologin.conf` | logs **his** user in on tty1; edit the user name before taking it |
 | `/etc/hostname`, `/etc/vconsole.conf` | his host name, his keyboard |

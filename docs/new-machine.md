@@ -238,7 +238,9 @@ symlink), never on NTFS (symlinks, `:` in names). Battle.net games can live ther
 snapper.
 
 **Order of work:**
-1. Linux on partitions 1–2, ~280 GiB left unallocated at the end.
+1. Linux on partitions 1–2, ~280 GiB left unallocated at the end. No ACPI override here (the
+   old 5800X3D's core-7 MADT): `apply-system.sh` leaves it out on any other CPU; check
+   `nproc` = 32 and no `acpi_override` in `HOOKS=` of `/etc/mkinitcpio.conf`.
 2. Secure Boot keys enrolled **with Microsoft's** (`sbctl enroll-keys -m`), or the firmware
    refuses `bootmgfw.efi` when Limine chains to it.
 3. Windows Setup into the free space (it finds the ESP itself).
