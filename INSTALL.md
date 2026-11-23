@@ -74,8 +74,10 @@ lsblk "$SYS"                                  # one disk, ~1.8T, the right one
 
 # 4 KiB logical sectors, so disk, LUKS (step 3) and btrfs all write in 4K: no 4K LUKS sector
 # can be half-written on a power cut. Erases the whole drive; do it after the day-2 fio tests.
-nvme id-ns -H "$SYS" | grep "LBA Format"     # the line with "Data Size: 4096 bytes" gives the number
-nvme format "$SYS" --lbaf=<that number>      # skip if the drive only offers 512
+nvme id-ns -H "$SYS" | grep "LBA Format"     # the formats it offers; "(in use)" marks the current one
+LBAF=$(nvme id-ns -H "$SYS" | awk '/LBA Format.*Data Size: 4096 bytes/{print $3; exit}')
+echo "4K format: ${LBAF:-none}"              # empty = the drive only offers 512: skip the format
+nvme format "$SYS" --lbaf="$LBAF"            # erases the drive; asks for confirmation
 cat /sys/block/$(basename "$(readlink -f "$SYS")")/queue/logical_block_size   # 4096
 
 sgdisk --zap-all "$SYS"
@@ -539,8 +541,10 @@ GAMES="$OLD"
 lsblk -o NAME,SIZE,PARTLABEL "$GAMES"           # last look: this is the disk being erased
 sudo pacman -S --needed nvme-cli
 # 4 KiB logical sectors, like the SN8100 (step 2); the format erases it and resets the SSD's state
-sudo nvme id-ns -H "$GAMES" | grep "LBA Format"  # the line with "Data Size: 4096 bytes" gives the number
-sudo nvme format "$GAMES" --lbaf=<that number>   # if it only offers 512: sudo blkdiscard -f "$GAMES"
+sudo nvme id-ns -H "$GAMES" | grep "LBA Format"  # the formats it offers; "(in use)" marks the current one
+LBAF=$(sudo nvme id-ns -H "$GAMES" | awk '/LBA Format.*Data Size: 4096 bytes/{print $3; exit}')
+echo "4K format: ${LBAF:-none}"                  # empty = only 512: run sudo blkdiscard -f "$GAMES" instead
+sudo nvme format "$GAMES" --lbaf="$LBAF"         # erases the drive; asks for confirmation
 cat /sys/block/$(basename "$(readlink -f "$GAMES")")/queue/logical_block_size   # 4096
 sudo sgdisk -o -n1:0:0 -t1:0700 -c1:games "$GAMES"
 sudo partprobe "$GAMES" && sudo udevadm settle
