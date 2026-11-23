@@ -125,7 +125,7 @@ mkfs.fat -F32 -n ESP /dev/disk/by-partlabel/ESP
 mkfs.btrfs -L arch /dev/mapper/cryptroot
 
 mount /dev/mapper/cryptroot /mnt
-for sv in @ @home @snapshots @log @pkg @docker @vms; do btrfs subvolume create /mnt/$sv; done
+for sv in @ @home @snapshots @log @coredump @pkg @docker @vms; do btrfs subvolume create /mnt/$sv; done
 btrfs subvolume create /mnt/@games          # (this machine) Wine/Proton prefixes and runners
 umount /mnt
 ```
@@ -136,6 +136,7 @@ umount /mnt
 | `@home` | `/home` | your files never roll back with the system (the repo has git, the rest has the backup) |
 | `@snapshots` | `/.snapshots` | snapper's snapshots live outside `@`, so a rollback does not lose them |
 | `@log` | `/var/log` | logs survive a rollback (you want to read why you rolled back) |
+| `@coredump` | `/var/lib/systemd/coredump` | same reason as `@log`: a rollback keeps the dump of what crashed, and no snapshot carries them (the old machine had 1.7 GB of dumps inside `@`) |
 | `@pkg` | `/var/cache/pacman/pkg` | the package cache is not copied into every snapshot |
 | `@docker` | `/var/lib/docker` | images and containers: big, constantly changing, not system state |
 | `@vms` | `/var/lib/libvirt/images` | VM disks; also set `chattr +C` on it (below) so qcow2 files are not copy-on-write |
@@ -146,10 +147,11 @@ Mount them all with the same options:
 ```bash
 o=noatime,compress=zstd:1,ssd,discard=async,space_cache=v2
 mount -o $o,subvol=@ /dev/mapper/cryptroot /mnt
-mkdir -p /mnt/{home,.snapshots,var/log,var/cache/pacman/pkg,var/lib/docker,var/lib/libvirt/images,boot}
+mkdir -p /mnt/{home,.snapshots,var/log,var/lib/systemd/coredump,var/cache/pacman/pkg,var/lib/docker,var/lib/libvirt/images,boot}
 mount -o $o,subvol=@home      /dev/mapper/cryptroot /mnt/home
 mount -o $o,subvol=@snapshots /dev/mapper/cryptroot /mnt/.snapshots
 mount -o $o,subvol=@log       /dev/mapper/cryptroot /mnt/var/log
+mount -o $o,subvol=@coredump  /dev/mapper/cryptroot /mnt/var/lib/systemd/coredump
 mount -o $o,subvol=@pkg       /dev/mapper/cryptroot /mnt/var/cache/pacman/pkg
 mount -o $o,subvol=@docker    /dev/mapper/cryptroot /mnt/var/lib/docker
 mount -o $o,subvol=@vms       /dev/mapper/cryptroot /mnt/var/lib/libvirt/images
