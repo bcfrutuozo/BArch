@@ -210,10 +210,10 @@ NAS) second, on the fast disk; the old disk only for games.
 | # | Partition | Size | What |
 |---|---|---|---|
 | 1 | ESP, shared | 4 GiB | Limine, UKIs, snapshot entries, plus Windows' `\EFI\Microsoft` (~100 MB) |
-| 2 | LUKS2 → btrfs | ~1580 GiB | Linux, subvolumes as today (INSTALL.md) |
-| 3–5 | MSR, NTFS, WinRE | ~280 GiB left free | Windows Setup creates them in the free space: ~300 GB for Windows, Visual Studio, tools |
+| 2 | LUKS2 → btrfs | 1500 GiB | Linux, subvolumes as today (INSTALL.md) |
+| 3–5 | MSR, NTFS, WinRE | ~359 GiB left free | Windows Setup creates them in the free space: ~385 GB for Windows, Visual Studio, tools, with room to spare |
 
-Linux used ~240 GB without games on the old machine, so ~1.7 TB leaves room for AI models and
+Linux used ~240 GB without games on the old machine, so ~1.6 TB leaves room for AI models and
 video. Decide the split now: Windows sits after Linux, so growing Linux later means moving the
 start of the Windows partition.
 
@@ -229,7 +229,7 @@ symlink), never on NTFS (symlinks, `:` in names). Battle.net games can live ther
 snapper.
 
 **Order of work:**
-1. Linux on partitions 1–2, ~280 GiB left unallocated at the end. No ACPI override here (the
+1. Linux on partitions 1–2, ~359 GiB left unallocated at the end. No ACPI override here (the
    old 5800X3D's core-7 MADT): `apply-system.sh` leaves it out on any other CPU; check
    `nproc` = 32 and no `acpi_override` in `HOOKS=` of `/etc/mkinitcpio.conf`.
 2. Secure Boot keys enrolled **with Microsoft's** (`sbctl enroll-keys -m`), or the firmware

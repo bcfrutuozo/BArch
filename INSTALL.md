@@ -80,16 +80,16 @@ cat /sys/block/$(basename "$(readlink -f "$SYS")")/queue/logical_block_size   # 
 
 sgdisk --zap-all "$SYS"
 sgdisk -n1:0:+4G    -t1:ef00 -c1:ESP       "$SYS"   # ESP, shared with Windows later
-sgdisk -n2:0:+1580G -t2:8309 -c2:cryptroot "$SYS"   # LUKS, ~1.7 TB for Linux
+sgdisk -n2:0:+1500G -t2:8309 -c2:cryptroot "$SYS"   # LUKS, ~1.6 TB for Linux
 partprobe "$SYS"
-sgdisk -p "$SYS"                              # "Total free space" at the end: ~279 GiB
+sgdisk -p "$SYS"                              # "Total free space" at the end: ~359 GiB
 ```
 
 | # | Partition | Size | |
 |---|---|---|---|
 | 1 | ESP | 4 GiB | Limine, UKIs, snapshot entries; Windows adds `\EFI\Microsoft` (~100 MB) |
-| 2 | cryptroot | 1580 GiB | LUKS2 → btrfs, everything Linux |
-| — | free | ~279 GiB | **leave it unallocated**: Windows Setup creates MSR, NTFS (~300 GB) and WinRE there |
+| 2 | cryptroot | 1500 GiB | LUKS2 → btrfs, everything Linux |
+| — | free | ~359 GiB | **leave it unallocated**: Windows Setup creates MSR, NTFS (~385 GB) and WinRE there |
 
 The disk is 2 TB = ~1863 GiB. Windows sits after Linux, so this split is meant to stay: growing
 Linux later means moving the start of the Windows partition. From here on the commands use
@@ -482,7 +482,7 @@ backup, and the post-install notes in **Fresh install**.
 ## 16. Windows (this machine)
 
 Before the SN770 goes in, so Windows Setup sees one disk and one ESP: Windows 11 Enterprise (business
-editions ISO) into the ~279 GiB left free on the SN8100 (Setup creates MSR, NTFS and WinRE there and puts its boot
+editions ISO) into the ~359 GiB left free on the SN8100 (Setup creates MSR, NTFS and WinRE there and puts its boot
 manager in the existing ESP), with Secure Boot keys already enrolled with `-m` (step 12). In the
 partition screen pick the **unallocated space** only, never partition 1 or 2.
 
