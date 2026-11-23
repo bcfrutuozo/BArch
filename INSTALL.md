@@ -17,7 +17,7 @@ The commands assume an NVMe disk (`/dev/nvme0n1`), a user called `you`, and the 
 machine (Brazilian keyboard, São Paulo time, English system with Portuguese locale). Change
 them as you go. Every step that only applies to Bruno's hardware is marked **(this machine)**.
 
-**(this machine)** The AM5 build (late 2026) dual boots: Linux and Windows 11 IoT LTSC on the
+**(this machine)** The AM5 build (late 2026) dual boots: Linux and Windows 11 Enterprise on the
 WD_BLACK SN8100 2 TB, the old SN770 1 TB as an NTFS games disk shared by both. Step 2 has its
 exact partitions, step 16 Windows and step 17 the games disk; the reasoning is in
 [docs/new-machine.md](docs/new-machine.md) ("Disks and dual boot").
@@ -460,12 +460,13 @@ backup, and the post-install notes in **Fresh install**.
 
 ## 16. Windows (this machine)
 
-Before the SN770 goes in, so Windows Setup sees one disk and one ESP: Windows 11 IoT LTSC into
-the ~279 GiB left free on the SN8100 (Setup creates MSR, NTFS and WinRE there and puts its boot
+Before the SN770 goes in, so Windows Setup sees one disk and one ESP: Windows 11 Enterprise (business
+editions ISO) into the ~279 GiB left free on the SN8100 (Setup creates MSR, NTFS and WinRE there and puts its boot
 manager in the existing ESP), with Secure Boot keys already enrolled with `-m` (step 12). In the
 partition screen pick the **unallocated space** only, never partition 1 or 2.
 
-The settings (Fast Startup and hibernation off, device encryption off, the `bcdedit` task that
+The KMS activation right after the first login (`slmgr /ipk`, `/skms`, `/ato`, `/dlv`) and the
+settings (Fast Startup and hibernation off, device encryption off, the `bcdedit` task that
 keeps Limine first, telemetry) are in [docs/new-machine.md](docs/new-machine.md). Back in Linux:
 
 ```bash

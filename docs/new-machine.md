@@ -202,7 +202,8 @@ libvirt stays for Linux test VMs.
 
 ## Disks and dual boot (plan, decided 2026-11-22)
 
-Linux first, Windows 11 IoT Enterprise LTSC second, on the fast disk; the old disk only for games.
+Linux first, Windows 11 Enterprise (General Availability Channel, activated by the KMS host on the
+NAS) second, on the fast disk; the old disk only for games.
 
 **SN8100 2 TB (M2_1), in this order:**
 
@@ -233,35 +234,75 @@ snapper.
    `nproc` = 32 and no `acpi_override` in `HOOKS=` of `/etc/mkinitcpio.conf`.
 2. Secure Boot keys enrolled **with Microsoft's** (`sbctl enroll-keys -m`), or the firmware
    refuses `bootmgfw.efi` when Limine chains to it.
-3. Windows Setup into the free space (it finds the ESP itself).
-4. In Windows: Fast Startup and hibernation **off** (`powercfg /h off`), or the NTFS games disk
+3. Windows Setup into the free space (it finds the ESP itself), from the **business editions**
+   ISO (Microsoft 365 admin center / VLSC), edition **Windows 11 Enterprise**. No key during
+   Setup. At the sign-in screen: Sign-in options → **Domain join instead** creates a local
+   account (Enterprise still offers it; the consumer Pro ISO does not). A Microsoft account can be
+   added later.
+4. **Activation, on the first desktop**, before anything else (terminal as administrator). The
+   GVLK is Microsoft's public KMS client key for Windows 11 Enterprise; the host is the KMS on the
+   NAS (its address stays in `~/.config/barch`, not here):
+   ```
+   slmgr /ipk NPPR9-FWDCX-D2C8J-H872K-2YT43
+   slmgr /skms kms.example.com:1688
+   slmgr /ato
+   slmgr /dlv
+   ```
+   `/dlv` must show "Windows(R), Enterprise edition", "License Status: Licensed" and the KMS
+   machine name. If the board's LAN has no inbox driver, install the chipset/LAN driver first
+   (activation needs the network). `0xC004F038` means the host has not reached its client count
+   (25 Windows clients): see "Current count" in `slmgr /dlv` on the host. KMS activation lasts 180
+   days and renews itself every 7 days while the host is reachable.
+5. In Windows: Fast Startup and hibernation **off** (`powercfg /h off`), or the NTFS games disk
    is left dirty and Linux mounts it read-only. Device encryption / BitLocker **off**: signing in
    with a Microsoft account turns it on, and booting Windows through Limine one time and through
    the firmware menu the next changes the measured boot path, so it would ask for the recovery
    key; never on the games disk.
-5. A scheduled task at startup (SYSTEM) keeps Limine first in the UEFI order after updates:
+6. A scheduled task at startup (SYSTEM) keeps Limine first in the UEFI order after updates:
    `bcdedit /set {fwbootmgr} displayorder {<Limine GUID from bcdedit /enum firmware>} /addfirst`.
-   LTSC gets no feature updates, so a reset is rarer, but the task stays.
-6. Back in Linux: `sudo limine-scan`, pick "Windows Boot Manager" (it writes the `protocol: efi`
+   Required: every yearly feature update (25H2, 26H2...) tends to put Windows Boot Manager first
+   again.
+7. Back in Linux: `sudo limine-scan`, pick "Windows Boot Manager" (it writes the `protocol: efi`
    entry by partition GUID). `limine-snapper-sync` already excludes `Windows*` entries.
-7. Only then the SN770 into M2_5: copy the old `~/Games` off it, wipe it, NTFS at `/games`
+8. Only then the SN770 into M2_5: copy the old `~/Games` off it, wipe it, NTFS at `/games`
    (INSTALL.md step 17). Windows was installed with one disk in, so Setup could not pick the
    wrong one.
 
-**Windows 11 IoT LTSC notes:** no Store, Xbox app or Game Bar out of the box (`wsreset -i`
-brings the Store back; Gaming Services and the Xbox app from there for Game Pass titles). A
+**Why Enterprise and not LTSC or IoT:** same controls as LTSC (telemetry off, the whole group
+policy set, Windows Update for Business), plus the Store, Xbox app, Game Bar and Gaming Services
+for Game Pass and anti-cheat titles, and the yearly scheduler/driver work for new hardware. IoT
+Enterprise (non-LTSC) is the same binary but OEM-only and licensed for fixed-purpose devices, with
+no KMS key; Enterprise is the volume edition the NAS's KMS activates. To keep Windows from
+changing under a game, pin the version: `gpedit.msc` → Windows Update → Manage updates offered
+from Windows Update → **Select the target Feature Update version** (`Windows 11`, e.g. `25H2`),
+and raise it by hand once a release has settled. After each feature update, re-check the
+telemetry and app policies below. Windows Update can also update the Secure Boot db/dbx
+(Microsoft's KEK is enrolled): that changes PCR 7, so Linux asks the passphrase once; re-enroll
+the TPM (docs/machine.md). Never "Clear TPM" in Windows. A
 Microsoft account works (Settings → Accounts → sign in with a Microsoft account) for OneDrive
-and settings sync; see step 4 about the encryption it switches on. Anti-cheat games and DLSS 5
+and settings sync; see step 5 about the encryption it switches on. Anti-cheat games and DLSS 5
 are what Windows is there for.
 
 **Telemetry, three layers** (a local account sends the least; a Microsoft account syncs by
 design):
 1. `gpedit.msc` → Windows Components → Data Collection → **Allow Diagnostic Data: Disabled**.
-   Only Enterprise/Education honour "off"; that is why LTSC. Services `DiagTrack` and
+   Only Enterprise/Education honour "off"; that is why Enterprise and not Pro. Services `DiagTrack` and
    `dmwappushservice` disabled. O&O ShutUp10++ for the rest (reversible).
-2. Defender kept on with exclusions for `D:\` (the games disk) and the Visual Studio folders,
-   cloud protection and sample submission off. Fully disabling it leaves the shared games disk
-   and the shared ESP exposed to whatever runs in Windows.
+2. Defender **off** (decided 2026-11-23: no resident scanner taking memory and CPU). Order
+   matters, or Windows turns it back on:
+   1. Windows Security → Virus & threat protection → Manage settings → **Tamper Protection
+      off** (only from this screen; while it is on, the policies below are ignored).
+   2. `gpedit.msc` → Windows Components → Microsoft Defender Antivirus → **Turn off Microsoft
+      Defender Antivirus: Enabled**, and under Real-time Protection → **Turn off real-time
+      protection: Enabled**.
+   3. Reboot; `Get-MpComputerStatus` in PowerShell must show `AntivirusEnabled` and
+      `RealTimeProtectionEnabled` False. Check again after every feature update.
+   What it costs: nothing scans what Windows downloads or runs, and from Windows the shared
+   games disk and the ESP are writable. Linux keeps its own guard: root is on LUKS, and Secure
+   Boot with our keys refuses any unsigned EFI binary or UKI, so a replaced bootloader or kernel
+   stops at boot instead of running (`limine.conf` itself is not hash-enrolled). Keep SmartScreen on and download games only
+   through Steam/Battle.net/Xbox. Core isolation (Memory integrity) is a separate switch and the
+   one with a measurable cost in games; leave it as the anti-cheats require (some need it on).
 3. pfBlockerNG on pfSense with a telemetry-only list (not one that also blocks Windows Update,
    activation or Defender definitions), and DNS forced through pfSense: block outbound 53/853
    from the LAN except to pfSense, Windows' own DNS-over-HTTPS off, no VPN client in Windows.
@@ -279,7 +320,7 @@ Decided 2026-11-22, not written yet:
   plug), `barch psu`, a chart in the System Center. During the hardware tests a small reviewed
   script is enough to watch the pins through the GPU hour.
 - **`windows/` in the repo:** a reviewed PowerShell post-install (the `bcdedit` task, hibernation
-  and Fast Startup off, BitLocker check, telemetry policy, Defender exclusions), cloned on the
+  and Fast Startup off, BitLocker check, telemetry policy, Defender off), cloned on the
   Windows side (the repo is public; Windows cannot read the LUKS disk).
 - **Windows follows the theme like Linux** (`theme-auto`: light 08:00–18:00, dark otherwise):
   `windows/theme.ps1 [light|dark]` sets `AppsUseLightTheme`/`SystemUsesLightTheme`, broadcasts
