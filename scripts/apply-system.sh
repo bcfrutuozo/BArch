@@ -16,6 +16,18 @@ VIRT=$(systemd-detect-virt 2>/dev/null || true)
 VM_SKIP='^/(etc/fstab|etc/crypttab|etc/kernel/cmdline|etc/default/limine|boot/|etc/mkinitcpio|etc/initcpio/|etc/modprobe\.d/nvidia|etc/docker/daemon\.json|etc/hostname|etc/vconsole\.conf|etc/systemd/system/getty@)'
 [[ -n "$VIRT" && "$VIRT" != none ]] && warn "running in a VM ($VIRT): disk, boot and NVIDIA files are skipped"
 
+# The disk files carry the UUIDs of the disk they were collected from. On a new install (a new
+# disk, even for the same user) they would leave the machine unbootable, so they are skipped
+# when / is not the filesystem the repo's fstab names; the NAS lines are merged by hand.
+DISK_FILES='^/(etc/fstab|etc/crypttab|etc/kernel/cmdline|etc/default/limine|boot/limine\.conf)$'
+ROOT_UUID=$(findmnt -no UUID / 2>/dev/null || true)
+if [[ -n "$ROOT_UUID" ]] && ! grep -q "UUID=$ROOT_UUID" "$src/etc/fstab" 2>/dev/null; then
+  SAME_DISK=no
+  warn "/ is a different disk than the repo's fstab: fstab, crypttab, kernel cmdline and limine files are skipped"
+else
+  SAME_DISK=yes
+fi
+
 # The ACPI override (etc/initcpio/acpi_override/apic.aml, loaded by the acpi_override hook) is
 # a MADT patched for one Ryzen 7 5800X3D whose core 7 crashes: on any other CPU it describes the
 # wrong processor (the AM5 build wants every core). Only that CPU gets the table and the hook;
@@ -35,6 +47,9 @@ while IFS= read -r -d '' file; do
   target="/${file#"$src"/}"
   if [[ -n "$VIRT" && "$VIRT" != none && "$target" =~ $VM_SKIP ]]; then
     ok "skipped in VM: $target"; continue
+  fi
+  if [[ "$SAME_DISK" == no && "$target" =~ $DISK_FILES ]]; then
+    ok "skipped (other disk, its UUIDs): $target"; continue
   fi
   if [[ "$ACPI_OVERRIDE" == no ]]; then
     if [[ "$target" == /etc/initcpio/acpi_override/* ]]; then

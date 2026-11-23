@@ -19,7 +19,7 @@ them as you go. Every step that only applies to Bruno's hardware is marked **(th
 
 **(this machine)** The AM5 build (late 2026) dual boots: Linux and Windows 11 IoT LTSC on the
 WD_BLACK SN8100 2 TB, the old SN770 1 TB as an NTFS games disk shared by both. Step 2 has its
-exact partitions, step 16 the games disk and Windows; the reasoning is in
+exact partitions, step 16 Windows and step 17 the games disk; the reasoning is in
 [docs/new-machine.md](docs/new-machine.md) ("Disks and dual boot").
 
 > **Read before you start.** Partitioning wipes the disk. Have the Arch ISO on a USB stick, a
@@ -62,7 +62,8 @@ UKIs of the snapshots it lists in the boot menu. 512 MB fills up after a few ker
 **Install with only the SN8100 on the board.** The old SN770 still carries partitions labelled
 `ESP` and `cryptroot` (the previous install): with both disks in, `/dev/disk/by-partlabel/...`
 is ambiguous and the rest of this page could format or enroll the wrong one, and the firmware
-may boot the old Limine. The SN770 goes into M2_5 only after its data is migrated (step 16).
+may boot the old Limine. The SN770 goes into M2_5 only once the new system is installed and
+booting on its own, after Windows; step 17 copies its data and then wipes it.
 
 Pick the disk by model, never by `nvme0`/`nvme1` (the order follows the slots, not the disks):
 
@@ -106,7 +107,7 @@ mkfs.btrfs -L arch /dev/mapper/cryptroot
 
 mount /dev/mapper/cryptroot /mnt
 for sv in @ @home @snapshots @log @pkg @docker @vms; do btrfs subvolume create /mnt/$sv; done
-btrfs subvolume create /mnt/@games          # (this machine) the Battle.net/Steam library
+btrfs subvolume create /mnt/@games          # (this machine) Wine/Proton prefixes and runners
 umount /mnt
 ```
 
@@ -119,7 +120,7 @@ umount /mnt
 | `@pkg` | `/var/cache/pacman/pkg` | the package cache is not copied into every snapshot |
 | `@docker` | `/var/lib/docker` | images and containers: big, constantly changing, not system state |
 | `@vms` | `/var/lib/libvirt/images` | VM disks; also set `chattr +C` on it (below) so qcow2 files are not copy-on-write |
-| `@games` | `/home/you/Games` | (this machine) game libraries stay out of `@home`'s backup and snapshots; on the AM5 build the games themselves go to the NTFS disk (step 16) and this keeps the Wine/Proton prefixes, which must not live on NTFS |
+| `@games` | `/home/you/Games` | (this machine) game libraries stay out of `@home`'s backup and snapshots; on the AM5 build the games themselves go to the NTFS disk (step 17) and this keeps the Wine/Proton prefixes, which must not live on NTFS |
 
 Mount them all with the same options:
 
@@ -269,7 +270,14 @@ timeout: 3
     path: boot():/EFI/Linux/arch-linux.efi
 EOF
 efibootmgr --create --disk /dev/nvme0n1 --part 1 --label Limine --loader '\EFI\limine\BOOTX64.EFI'
-# (this machine) --disk "$SYS" (the SN8100 by id; $SYS is not set inside the chroot, set it again)
+```
+
+**(this machine)** the same, with the disk by id (variables from the live shell do not exist in
+the chroot):
+
+```bash
+SYS=$(ls /dev/disk/by-id/nvme-WD_BLACK_SN8100_* | grep -v -- -part | head -1)
+efibootmgr --create --disk "$SYS" --part 1 --label Limine --loader '\EFI\limine\BOOTX64.EFI'
 ```
 
 The UKI carries the command line, the microcode and the initramfs, so the entry needs no
@@ -286,7 +294,10 @@ It should ask for the LUKS passphrase and boot to a console.
 **(this machine)** Stop here for the hardware tests of [docs/new-machine.md](docs/new-machine.md)
 (console only, stock kernel: MemTest86+ first, then mprime, y-cruncher, gpu-burn). Continue
 with step 10 only once the board, the CPU, the RAM and the 5090 passed; nothing above has to be
-redone.
+redone. There is no AUR helper yet: `stress-ng`, `smartmontools`, `nvme-cli`, `lm_sensors`,
+`fio` come from pacman; mprime and y-cruncher are static tarballs from their sites (run them
+from a folder in your home); gpu-burn is built with `git clone https://aur.archlinux.org/gpu-burn-git.git && cd gpu-burn-git && makepkg -si`
+(it pulls `cuda`).
 
 ## 10. Snapper, Limine automation and the repo
 
@@ -374,6 +385,18 @@ is not Bruno's, answer **no** to:
 Inside a VM it skips the disk, boot and NVIDIA files by itself. After it: `sudo limine-update`
 if anything boot-related changed.
 
+**(this machine)** On a new disk, even for the same user, the script skips the disk files by
+itself (`/etc/fstab`, `/etc/crypttab`, `/etc/kernel/cmdline`, `/etc/default/limine`,
+`/boot/limine.conf`: the root filesystem's UUID is not the one in the repo's fstab) and leaves
+out the ACPI override (step 8). The ones written in steps 6–10 stay. Only the NAS shares come
+over by hand, with their credentials file restored from the backup or written again:
+
+```bash
+grep cifs ~/BArch/system/files/etc/fstab | sudo tee -a /etc/fstab
+sudo install -d -m 700 /etc/samba/credentials       # nasfrutuozo: username=, password=
+sudo systemctl daemon-reload
+```
+
 ## 12. Secure Boot
 
 Reboot into the firmware, put Secure Boot in **Setup Mode**, boot Arch again and:
@@ -435,37 +458,97 @@ zramctl                                 # zram0 as swap
 Then the rest of the README: `kernel-update -f` (this machine), restoring secrets from the
 backup, and the post-install notes in **Fresh install**.
 
-## 16. The games disk and Windows (this machine)
+## 16. Windows (this machine)
 
-**Only after the old system's data is migrated**: the SN770 is the previous install (LUKS,
-`/home`, `~/Games`). Restore from the backup (README, step 5 of **Fresh install**), or put the
-SN770 in M2_5, open it with `sudo cryptsetup open <its part2 by id> oldroot` and copy what is
-missing. Until it is wiped, both disks have an `ESP` and a `cryptroot` label: address them by id.
+Before the SN770 goes in, so Windows Setup sees one disk and one ESP: Windows 11 IoT LTSC into
+the ~279 GiB left free on the SN8100 (Setup creates MSR, NTFS and WinRE there and puts its boot
+manager in the existing ESP), with Secure Boot keys already enrolled with `-m` (step 12). In the
+partition screen pick the **unallocated space** only, never partition 1 or 2.
+
+The settings (Fast Startup and hibernation off, device encryption off, the `bcdedit` task that
+keeps Limine first, telemetry) are in [docs/new-machine.md](docs/new-machine.md). Back in Linux:
 
 ```bash
-GAMES=$(ls /dev/disk/by-id/nvme-WD_BLACK_SN770_1TB_* | grep -v -- -part | head -1)
-lsblk -o NAME,SIZE,PARTLABEL "$GAMES"          # 931.5G, the OLD system: last look before wiping
-sudo cryptsetup close oldroot 2>/dev/null
-sudo blkdiscard -f "$GAMES"                    # erases it and resets the SSD's cache state
-sudo sgdisk -n1:0:0 -t1:0700 -c1:games "$GAMES"
-sudo partprobe "$GAMES"
-sudo pacman -S --needed ntfs-3g                # mkfs.ntfs; mounting uses the kernel's ntfs3
+sudo limine-scan                        # pick "Windows Boot Manager": the entry goes into limine.conf
+sudo systemd-cryptenroll /dev/disk/by-partlabel/cryptroot --tpm2-device=auto --tpm2-pcrs=7 --wipe-slot=tpm2   # only if the passphrase was asked
+```
+
+## 17. The games disk (this machine)
+
+The SN770 is the previous install, and the games live **on it** (`@games`: ~175 GB of
+Battle.net, ~85 GB of Steam library, the prefixes; plus Steam's default library in the old
+`@home`). `~/Games` is not in the backup, so it is copied to the SN8100 first, the SN770 is
+wiped, and the games move onto it as NTFS. Secrets and app state come from the backup (README,
+step 5 of **Fresh install**).
+
+**a. Copy from the old disk.** Shut down, put the SN770 in M2_5, boot the new system (make
+sure the firmware boots the SN8100's Limine, not the old one). Both disks now have an `ESP`
+and a `cryptroot` label: from here address them by id only.
+
+```bash
+OLD=$(ls /dev/disk/by-id/nvme-WD_BLACK_SN770_1TB_* | grep -v -- -part | head -1)
+lsblk -o NAME,SIZE,PARTLABEL "$OLD"             # 931.5G: ESP + cryptroot, the old system
+sudo cryptsetup open "$OLD-part2" oldroot       # the old passphrase
+sudo mkdir -p /mnt/old
+sudo mount -o ro,subvol=@games /dev/mapper/oldroot /mnt/old
+rsync -aH --info=progress2 /mnt/old/ ~/Games/   # prefixes + games, ~300 GB, into @games for now
+sudo umount /mnt/old
+sudo mount -o ro,subvol=@home /dev/mapper/oldroot /mnt/old
+rsync -aH --info=progress2 /mnt/old/$USER/.local/share/Steam/steamapps/ ~/Games/steam-default/steamapps/   # a library root holds steamapps/
+# anything else still missing from the old home: copy it now, the disk is wiped next
+sudo umount /mnt/old
+sudo cryptsetup close oldroot
+```
+
+**b. Wipe it and make it the games disk.**
+
+```bash
+GAMES="$OLD"
+lsblk -o NAME,SIZE,PARTLABEL "$GAMES"           # last look: this is the disk being erased
+sudo blkdiscard -f "$GAMES"                     # erases it and resets the SSD's cache state
+sudo sgdisk -o -n1:0:0 -t1:0700 -c1:games "$GAMES"
+sudo partprobe "$GAMES" && sudo udevadm settle
+sudo pacman -S --needed ntfs-3g                 # mkfs.ntfs; mounting uses the kernel's ntfs3
 sudo mkfs.ntfs -Q -L games "$GAMES-part1"
-sudo mkdir -p /mnt/games
-echo "UUID=$(sudo blkid -s UUID -o value "$GAMES-part1")  /mnt/games  ntfs3  uid=1000,gid=1000,windows_names,noatime,nofail  0 0" | sudo tee -a /etc/fstab
-sudo mount /mnt/games && df -h /mnt/games
+sudo mkdir -p /games                            # at the root: /mnt stays for network shares (the NAS)
+echo "UUID=$(sudo blkid -s UUID -o value "$GAMES-part1")  /games  ntfs3  uid=1000,gid=1000,windows_names,noatime,nofail  0 0" | sudo tee -a /etc/fstab
+sudo systemctl daemon-reload
+sudo mount /games && df -h /games
 ```
 
 `windows_names` refuses names Windows could not open; `nofail` keeps a missing or dirty disk
-from stopping the boot. One Steam library (`/mnt/games/SteamLibrary`) for both systems; Proton
-prefixes stay on btrfs (`@games`).
+from stopping the boot.
 
-Then Windows 11 IoT LTSC into the free space of the SN8100 (Setup finds the ESP by itself),
-with Secure Boot keys already enrolled with `-m` (step 12). The order and the settings
-(Fast Startup and hibernation off, device encryption off, the `bcdedit` task that keeps Limine
-first, `sudo limine-scan` back in Linux) are in [docs/new-machine.md](docs/new-machine.md).
-After installing Windows, re-check the TPM unlock (step 13): if the passphrase is asked,
-re-enroll.
+**c. Move the games onto it.** Two places from here on: **`/games`** (NTFS, both systems)
+holds the games themselves, **`~/Games`** (`@games`, btrfs, outside snapper and the backup)
+holds what only Linux uses: Wine/Proton prefixes, Proton builds, the `run.sh` launchers.
+Prefixes never go on NTFS (they rely on symlinks, `:` in `dosdevices/c:`, case sensitivity and
+Unix permissions).
+
+```bash
+# Battle.net: the launcher stays in ~/Games/battle.net/prefix, the games go to the NTFS disk;
+# its G: drive follows them (the same folder is D:\Battle.net when booted into Windows)
+mkdir -p /games/Battle.net
+rsync -a --remove-source-files --info=progress2 ~/Games/battle.net/games/ /games/Battle.net/
+find ~/Games/battle.net/games -type d -empty -delete
+ln -sfn /games/Battle.net ~/Games/battle.net/prefix/dosdevices/g:
+```
+
+Steam (after `install.sh`, with Steam logged in):
+1. Settings → Storage → add a library at `/games/SteamLibrary` (it creates `steamapps/`).
+2. Quit Steam, keep its Proton prefixes on btrfs through a link, start Steam again:
+   ```bash
+   mkdir -p ~/Games/compatdata
+   rm -rf /games/SteamLibrary/steamapps/compatdata
+   ln -s ~/Games/compatdata /games/SteamLibrary/steamapps/compatdata
+   ```
+3. Add `~/Games/steam` and `~/Games/steam-default` as libraries too, then Storage → each game →
+   **Move** to `/games/SteamLibrary` (Steam carries the manifest and the files). Remove the two
+   old libraries when they are empty.
+
+Update the games path in `games/.config/gamemode.ini` (`~/Games/battle.net/games` →
+`/games/Battle.net`) and the line about drive `G:` in [docs/machine.md](docs/machine.md). In
+Windows, Battle.net and Steam "Locate"/add the same folders instead of downloading again.
 
 ## Testing in a VM first
 

@@ -232,7 +232,7 @@ One ESP, not two: Windows Setup does not take a second ESP on the same disk with
 rebuilds the Linux side.
 
 **SN770 1 TB (M2_5): games.** One NTFS partition, unencrypted, shared by both systems:
-`UUID=<uuid> /mnt/games ntfs3 uid=1000,gid=1000,windows_names,noatime,nofail 0 0`. One Steam
+`UUID=<uuid> /games ntfs3 uid=1000,gid=1000,windows_names,noatime,nofail 0 0`. One Steam
 library (`SteamLibrary`) used by both Steams; Proton prefixes (`compatdata`) stay on btrfs (a
 symlink), never on NTFS (symlinks, `:` in names). Battle.net games can live there too. Outside
 snapper.
@@ -254,12 +254,28 @@ snapper.
    LTSC gets no feature updates, so a reset is rarer, but the task stays.
 6. Back in Linux: `sudo limine-scan`, pick "Windows Boot Manager" (it writes the `protocol: efi`
    entry by partition GUID). `limine-snapper-sync` already excludes `Windows*` entries.
+7. Only then the SN770 into M2_5: copy the old `~/Games` off it, wipe it, NTFS at `/games`
+   (INSTALL.md step 17). Windows was installed with one disk in, so Setup could not pick the
+   wrong one.
 
 **Windows 11 IoT LTSC notes:** no Store, Xbox app or Game Bar out of the box (`wsreset -i`
 brings the Store back; Gaming Services and the Xbox app from there for Game Pass titles). A
 Microsoft account works (Settings → Accounts → sign in with a Microsoft account) for OneDrive
 and settings sync; see step 4 about the encryption it switches on. Anti-cheat games and DLSS 5
 are what Windows is there for.
+
+**Telemetry, three layers** (a local account sends the least; a Microsoft account syncs by
+design):
+1. `gpedit.msc` → Windows Components → Data Collection → **Allow Diagnostic Data: Disabled**.
+   Only Enterprise/Education honour "off"; that is why LTSC. Services `DiagTrack` and
+   `dmwappushservice` disabled. O&O ShutUp10++ for the rest (reversible).
+2. Defender kept on with exclusions for `D:\` (the games disk) and the Visual Studio folders,
+   cloud protection and sample submission off. Fully disabling it leaves the shared games disk
+   and the shared ESP exposed to whatever runs in Windows.
+3. pfBlockerNG on pfSense with a telemetry-only list (not one that also blocks Windows Update,
+   activation or Defender definitions), and DNS forced through pfSense: block outbound 53/853
+   from the LAN except to pfSense, Windows' own DNS-over-HTTPS off, no VPN client in Windows.
+   It applies to the whole network.
 
 ## Notes from the old machine
 
