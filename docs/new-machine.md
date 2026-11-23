@@ -270,9 +270,13 @@ snapper.
       Operating System Drives → **Configure TPM platform validation profile for native UEFI
       firmware configurations: Enabled, PCRs 7 and 11 only**. With our own Secure Boot keys
       BitLocker may otherwise fall back to the legacy profile (PCR 0/2/4), which measures the
-      Limine binary, and every Limine update would ask for the recovery key.
+      Limine binary, and every Limine update would ask for the recovery key. In the same
+      folder, **Choose drive encryption method and cipher strength (Windows 10 [Version 1511]
+      and later): Enabled, operating system drives XTS-AES 256-bit**, the same AES-256 as LUKS
+      (the default is 128; changing it later means decrypting and encrypting again).
    2. Boot Windows **through Limine** (the path BitLocker seals to), then turn BitLocker on for
-      C: (XTS-AES, used space only is fine on a new disk). `msinfo32` → "PCR7 Configuration" and
+      C: (used space only is fine on a new disk). The disk is in 4K logical sectors (INSTALL.md
+      step 2), so BitLocker and NTFS work in 4K with Setup's defaults; nothing to choose. `msinfo32` → "PCR7 Configuration" and
       `manage-bde -protectors -get C:` show what it sealed to.
    3. The 48-digit recovery key goes to Bitwarden, not a Microsoft account.
    From then on, **always boot Windows through Limine**, never the firmware's boot menu (F11):

@@ -72,6 +72,12 @@ ls -l /dev/disk/by-id/ | grep -i sn8100
 SYS=$(ls /dev/disk/by-id/nvme-WD_BLACK_SN8100_* | grep -v -- -part | head -1)
 lsblk "$SYS"                                  # one disk, ~1.8T, the right one
 
+# 4 KiB logical sectors, so disk, LUKS (step 3) and btrfs all write in 4K: no 4K LUKS sector
+# can be half-written on a power cut. Erases the whole drive; do it after the day-2 fio tests.
+nvme id-ns -H "$SYS" | grep "LBA Format"     # the line with "Data Size: 4096 bytes" gives the number
+nvme format "$SYS" --lbaf=<that number>      # skip if the drive only offers 512
+cat /sys/block/$(basename "$(readlink -f "$SYS")")/queue/logical_block_size   # 4096
+
 sgdisk --zap-all "$SYS"
 sgdisk -n1:0:+4G    -t1:ef00 -c1:ESP       "$SYS"   # ESP, shared with Windows later
 sgdisk -n2:0:+1580G -t2:8309 -c2:cryptroot "$SYS"   # LUKS, ~1.7 TB for Linux
@@ -92,9 +98,22 @@ Linux later means moving the start of the Windows partition. From here on the co
 ## 3. LUKS2
 
 ```bash
-cryptsetup luksFormat --type luks2 /dev/disk/by-partlabel/cryptroot
-cryptsetup open /dev/disk/by-partlabel/cryptroot cryptroot
+cryptsetup luksFormat --type luks2 --cipher aes-xts-plain64 --key-size 512 --sector-size 4096 \
+  /dev/disk/by-partlabel/cryptroot
+cryptsetup open --allow-discards --perf-no_read_workqueue --perf-no_write_workqueue \
+  --persistent /dev/disk/by-partlabel/cryptroot cryptroot
+cryptsetup luksDump /dev/disk/by-partlabel/cryptroot | grep -E '^(Flags|\s+(cipher|sector))'
+dmsetup table cryptroot                 # ends with: allow_discards no_read_workqueue no_write_workqueue sector_size:4096
 ```
+
+`--key-size 512`: XTS splits it in two, so this is AES-256 (cryptsetup's default, written out so
+it matches BitLocker's XTS-AES 256 on the Windows side). `--sector-size 4096`: one encryption per 4K block instead of eight 512-byte ones (btrfs writes 4K
+blocks anyway); it cannot be changed later without `cryptsetup reencrypt`. `--persistent` stores
+the flags in the LUKS2 header, so every later unlock (initramfs, TPM) uses them with nothing in
+the kernel command line: TRIM through LUKS, and en/decryption done inline instead of through
+dm-crypt's kernel workqueues. Both target 4K latency on NVMe: on the old 5800X3D + SN770, with
+512-byte sectors and neither flag, dm-crypt added ~11 µs to a 79 µs 4K read (fio, QD1). Undo the two `perf` flags any time with
+`cryptsetup refresh --allow-discards --persistent cryptroot`.
 
 Choose a real passphrase: the TPM unlock comes later and the passphrase is what you type
 whenever the TPM refuses (firmware or Secure Boot changes, see [docs/machine.md](docs/machine.md)).
@@ -516,11 +535,15 @@ du -sh ~/Games/*                                # battle.net ~4 GB, 3dmark ~17 G
 ```bash
 GAMES="$OLD"
 lsblk -o NAME,SIZE,PARTLABEL "$GAMES"           # last look: this is the disk being erased
-sudo blkdiscard -f "$GAMES"                     # erases it and resets the SSD's cache state
+sudo pacman -S --needed nvme-cli
+# 4 KiB logical sectors, like the SN8100 (step 2); the format erases it and resets the SSD's state
+sudo nvme id-ns -H "$GAMES" | grep "LBA Format"  # the line with "Data Size: 4096 bytes" gives the number
+sudo nvme format "$GAMES" --lbaf=<that number>   # if it only offers 512: sudo blkdiscard -f "$GAMES"
+cat /sys/block/$(basename "$(readlink -f "$GAMES")")/queue/logical_block_size   # 4096
 sudo sgdisk -o -n1:0:0 -t1:0700 -c1:games "$GAMES"
 sudo partprobe "$GAMES" && sudo udevadm settle
 sudo pacman -S --needed ntfs-3g                 # mkfs.ntfs; mounting uses the kernel's ntfs3
-sudo mkfs.ntfs -Q -L games "$GAMES-part1"
+sudo mkfs.ntfs -Q -c 4096 -L games "$GAMES-part1"   # 4K clusters: what ntfs3 handles best
 sudo mkdir -p /games                            # at the root: /mnt stays for network shares (the NAS)
 echo "UUID=$(sudo blkid -s UUID -o value "$GAMES-part1")  /games  ntfs3  uid=1000,gid=1000,windows_names,noatime,nofail  0 0" | sudo tee -a /etc/fstab
 sudo systemctl daemon-reload

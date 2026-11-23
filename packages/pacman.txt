@@ -64,6 +64,7 @@ inter-font
 jdk17-openjdk
 jq
 kcalc
+kdiskmark
 kernel-modules-hook
 khal
 lib32-gamemode
