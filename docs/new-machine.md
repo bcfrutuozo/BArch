@@ -24,8 +24,8 @@ Back panel (manual p. 25, block diagram p. 90):
 | 14: USB 10G Type-A | X870E chipset |
 
 - **No Type-A port comes from the CPU**: the CPU's USB is only the three Type-C ports of item 12.
-  The ToneX pedal (a USB 2.0 device) goes there with a cable from USB-C to its own connector;
-  everything else on the Type-A ports.
+  With Windows on its own partition (dual boot, below) the ToneX runs there natively, so its
+  pedal no longer needs a CPU controller for a VM: any port works.
 - **No HDMI**: the iGPU only comes out of the USB4 ports (DisplayPort alt mode, 4K 60 Hz), so the
   live ISO (no NVIDIA driver) and any test without the 5090 need a USB-C → DisplayPort cable.
 - LAN: 10G Marvell AQC113CS (`atlantic`) and 5G Realtek RTL8126 (`r8169`).
@@ -169,7 +169,7 @@ VRM and SN8100 temperatures where the board shows them.
   - Music playing during a y-cruncher run, `pw-top` open: the ERR column must not climb
     (crackles under load are the board's DPC/IRQ problem).
 
-### Day 3: install, the GPU, the ToneX, sleep, everything at once
+### Day 3: install, the GPU, sleep, everything at once
 
 - **GPU** (the 5090; from day 1 if it was already in, live ISO with `nvidia-open`):
   - Link: `nvidia-smi -q | grep -A3 "Link Width"` and `lspci -vv -s <addr> | grep LnkSta` under
@@ -178,7 +178,8 @@ VRM and SN8100 temperatures where the board shows them.
   - An hour of a heavy game or benchmark at full power; `journalctl -k | grep -iE "aer|pcie bus error|xid"`
     stays empty (an `Xid` is the card or its power reporting a fault).
   - The 12V-2x6 plug fully seated (no gap at the latch), checked again after the hour.
-- **ToneX passthrough** (BIOS: SVM and IOMMU on). Its own section below.
+- **Virtualization** (BIOS: SVM on, IOMMU on): `lsmod | grep kvm_amd`, one VM boots. Linux VMs and
+  Docker only; the ToneX moved to the native Windows, no USB passthrough any more.
 - **Sleep:** 20 cycles of `sudo rtcwake -m mem -s 30` with the AW3225QF connected; every one must
   wake with image.
 - **Everything at once**, 1 h: y-cruncher on the CPU and the game or benchmark on the GPU together
@@ -190,25 +191,14 @@ VRM and SN8100 temperatures where the board shows them.
 After day 3, use the machine normally for the rest of the window with the persistent journal:
 a freeze in week three still leaves its previous boot behind for `hw-report.sh`.
 
-### ToneX passthrough on the new board
+### ToneX: native Windows, not a VM
 
-What has to be true is the same as on the B550 (there the CPU controller `2d:00.3`, IOMMU group 20, went whole to the VM, since QEMU's emulated xHCI made USB audio unusable): a USB controller of the CPU alone
-in its IOMMU group, given whole to the VM.
-
-1. Groups: `for d in /sys/kernel/iommu_groups/*/devices/*; do g=${d#*/iommu_groups/}; echo "group ${g%%/*}: $(lspci -nns ${d##*/})"; done | grep -i usb`.
-   A USB controller whose group has nothing else is a candidate; the ones under the chipset
-   usually share a group.
-2. Which ports it owns: only the three CPU Type-C ports (item 12) can belong to it. The CPU has
-   two 10G controllers (`1022:15b6`, `1022:15b7`, each with a 480M and a 10G bus, each usually
-   alone in its group) plus a USB 2.0-only one (`1022:15b8`). The pedal is USB 2.0, so it rides
-   the port's USB 2.0 wires: it must show **under the controller that goes to the VM**, not under
-   15b8 or a hub. Plug the pedal into each one and look at
-   `readlink -f /sys/bus/usb/devices/*/ | grep -v usb` or `lsusb -t`: the bus of the candidate
-   controller. Label those ports: only the pedal goes there.
-3. Update the VM's hostdev address (`virsh edit "Windows 11 IoT LTSC"`), start it, play through
-   the ToneX software, record a minute.
-4. **Ten start/stop cycles of the VM.** Some AMD USB controllers do not come back from the reset
-   at VM shutdown: the host must get the pedal back every time, without `dmesg` errors.
+On the old machine the ToneX software ran in a Windows 11 VM with a whole CPU USB controller
+passed through (QEMU's emulated xHCI made USB audio unusable). With Windows installed natively
+(dual boot) it runs there: no passthrough, no reserved ports, every USB port is the host's. The
+trade-off: playing through the ToneX software means booting Windows. The libvirt VM
+"Windows 11 IoT LTSC" and its saved XML (backup) are no longer needed on the new machine;
+libvirt stays for Linux test VMs.
 
 ## Disks and dual boot (plan, decided 2026-11-22)
 
@@ -276,6 +266,27 @@ design):
    activation or Defender definitions), and DNS forced through pfSense: block outbound 53/853
    from the LAN except to pfSense, Windows' own DNS-over-HTTPS off, no VPN client in Windows.
    It applies to the whole network.
+
+## After the migration (to build with the hardware in)
+
+Decided 2026-11-22, not written yet:
+
+- **PSU telemetry (Ai1300TS, USB `0db0:aa6f` on JUSB1).** A sampler of our own in
+  `agent/events.py` reading its hidraw (command `0xE0`, 62-byte reply; boboom66/msi-psu-monitor
+  and onlyjco/msi-psu-tool as protocol references, not run as root): input/output power,
+  efficiency, temperature, fan, 12 V and the current of each 12V-2x6 pin. A udev rule for the
+  hidraw, a rule in `agent/rules.json` for pin imbalance (a contact going bad on the 5090's
+  plug), `barch psu`, a chart in the System Center. During the hardware tests a small reviewed
+  script is enough to watch the pins through the GPU hour.
+- **`windows/` in the repo:** a reviewed PowerShell post-install (the `bcdedit` task, hibernation
+  and Fast Startup off, BitLocker check, telemetry policy, Defender exclusions), cloned on the
+  Windows side (the repo is public; Windows cannot read the LUKS disk).
+- **Windows follows the theme like Linux** (`theme-auto`: light 08:00–18:00, dark otherwise):
+  `windows/theme.ps1 [light|dark]` sets `AppsUseLightTheme`/`SystemUsesLightTheme`, broadcasts
+  `WM_SETTINGCHANGE`, the accent color and the wallpaper from `palettes.json`, and the Corsair
+  K95/Scimitar color through OpenRGB's CLI (no iCUE). Run by a scheduled task (logon, 08:00,
+  18:00, resume, unlock), nothing resident. Without OpenRGB the devices fall back to the
+  profile saved in their memory from ckb-next.
 
 ## Notes from the old machine
 
