@@ -475,29 +475,39 @@ sudo systemd-cryptenroll /dev/disk/by-partlabel/cryptroot --tpm2-device=auto --t
 
 ## 17. The games disk (this machine)
 
-The SN770 is the previous install, and the games live **on it** (`@games`: ~175 GB of
-Battle.net, ~85 GB of Steam library, the prefixes; plus Steam's default library in the old
-`@home`). `~/Games` is not in the backup, so it is copied to the SN8100 first, the SN770 is
-wiped, and the games move onto it as NTFS. Secrets and app state come from the backup (README,
+The SN770 is the previous install. The games themselves are downloaded again (Steam,
+Battle.net); what is worth carrying over is what took work to get running and is not in the
+backup (`~/Games` never is): the Battle.net prefix (launcher installed, logged in) and its
+GE-Proton, the 3DMark prefix (.NET 4.8, the native `d3dcompiler_47`, the tests), and the
+Proton builds Steam uses. About 22 GB. Secrets and app state come from the backup (README,
 step 5 of **Fresh install**).
 
-**a. Copy from the old disk.** Shut down, put the SN770 in M2_5, boot the new system (make
-sure the firmware boots the SN8100's Limine, not the old one). Both disks now have an `ESP`
-and a `cryptroot` label: from here address them by id only.
+**a. Copy the runners and prefixes from the old disk.** Shut down, put the SN770 in M2_5, boot
+the new system (make sure the firmware boots the SN8100's Limine, not the old one). Both disks
+now have an `ESP` and a `cryptroot` label: from here address them by id only.
 
 ```bash
 OLD=$(ls /dev/disk/by-id/nvme-WD_BLACK_SN770_1TB_* | grep -v -- -part | head -1)
 lsblk -o NAME,SIZE,PARTLABEL "$OLD"             # 931.5G: ESP + cryptroot, the old system
 sudo cryptsetup open "$OLD-part2" oldroot       # the old passphrase
 sudo mkdir -p /mnt/old
+
+# @games without the game files: battle.net/{prefix,proton}, 3dmark/prefix, re-enhance
 sudo mount -o ro,subvol=@games /dev/mapper/oldroot /mnt/old
-rsync -aH --info=progress2 /mnt/old/ ~/Games/   # prefixes + games, ~300 GB, into @games for now
+rsync -aH --info=progress2 \
+  --exclude='/battle.net/games/' --exclude='/steam/' --exclude='/3dmark/setup/' \
+  /mnt/old/ ~/Games/
 sudo umount /mnt/old
+
+# Steam's extra Proton builds (GE-Proton) from the old home
 sudo mount -o ro,subvol=@home /dev/mapper/oldroot /mnt/old
-rsync -aH --info=progress2 /mnt/old/$USER/.local/share/Steam/steamapps/ ~/Games/steam-default/steamapps/   # a library root holds steamapps/
+mkdir -p ~/.local/share/Steam/compatibilitytools.d
+rsync -aH /mnt/old/$USER/.local/share/Steam/compatibilitytools.d/ ~/.local/share/Steam/compatibilitytools.d/
 # anything else still missing from the old home: copy it now, the disk is wiped next
 sudo umount /mnt/old
 sudo cryptsetup close oldroot
+
+du -sh ~/Games/*                                # battle.net ~4 GB, 3dmark ~17 GB
 ```
 
 **b. Wipe it and make it the games disk.**
@@ -519,36 +529,35 @@ sudo mount /games && df -h /games
 `windows_names` refuses names Windows could not open; `nofail` keeps a missing or dirty disk
 from stopping the boot.
 
-**c. Move the games onto it.** Two places from here on: **`/games`** (NTFS, both systems)
+**c. Point the launchers at it.** Two places from here on: **`/games`** (NTFS, both systems)
 holds the games themselves, **`~/Games`** (`@games`, btrfs, outside snapper and the backup)
 holds what only Linux uses: Wine/Proton prefixes, Proton builds, the `run.sh` launchers.
 Prefixes never go on NTFS (they rely on symlinks, `:` in `dosdevices/c:`, case sensitivity and
 Unix permissions).
 
 ```bash
-# Battle.net: the launcher stays in ~/Games/battle.net/prefix, the games go to the NTFS disk;
-# its G: drive follows them (the same folder is D:\Battle.net when booted into Windows)
+# Battle.net: the launcher stays in ~/Games/battle.net/prefix; its G: drive, where the games
+# install, now points at the NTFS disk (the same folder is D:\Battle.net in Windows)
 mkdir -p /games/Battle.net
-rsync -a --remove-source-files --info=progress2 ~/Games/battle.net/games/ /games/Battle.net/
-find ~/Games/battle.net/games -type d -empty -delete
 ln -sfn /games/Battle.net ~/Games/battle.net/prefix/dosdevices/g:
+~/Games/battle.net/run.sh                       # install the games again into G:\
 ```
 
 Steam (after `install.sh`, with Steam logged in):
-1. Settings → Storage → add a library at `/games/SteamLibrary` (it creates `steamapps/`).
+1. Settings → Storage → add a library at `/games/SteamLibrary` (it creates `steamapps/`) and make
+   it the default.
 2. Quit Steam, keep its Proton prefixes on btrfs through a link, start Steam again:
    ```bash
    mkdir -p ~/Games/compatdata
    rm -rf /games/SteamLibrary/steamapps/compatdata
    ln -s ~/Games/compatdata /games/SteamLibrary/steamapps/compatdata
    ```
-3. Add `~/Games/steam` and `~/Games/steam-default` as libraries too, then Storage → each game →
-   **Move** to `/games/SteamLibrary` (Steam carries the manifest and the files). Remove the two
-   old libraries when they are empty.
+3. Install the games there.
 
 Update the games path in `games/.config/gamemode.ini` (`~/Games/battle.net/games` →
 `/games/Battle.net`) and the line about drive `G:` in [docs/machine.md](docs/machine.md). In
-Windows, Battle.net and Steam "Locate"/add the same folders instead of downloading again.
+Windows, point Battle.net and Steam at the same folders (Battle.net → "Locate the game",
+Steam → add `D:\SteamLibrary`) instead of downloading again.
 
 ## Testing in a VM first
 
