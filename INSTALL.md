@@ -466,8 +466,8 @@ manager in the existing ESP), with Secure Boot keys already enrolled with `-m` (
 partition screen pick the **unallocated space** only, never partition 1 or 2.
 
 The KMS activation right after the first login (`slmgr /ipk`, `/skms`, `/ato`, `/dlv`) and the
-settings (Fast Startup and hibernation off, device encryption off, the `bcdedit` task that
-keeps Limine first, telemetry) are in [docs/new-machine.md](docs/new-machine.md). Back in Linux:
+settings (Fast Startup and hibernation off, the `bcdedit` task that keeps Limine first,
+telemetry, BitLocker with the TPM once Windows boots through Limine) are in [docs/new-machine.md](docs/new-machine.md). Back in Linux:
 
 ```bash
 sudo limine-scan                        # pick "Windows Boot Manager": the entry goes into limine.conf

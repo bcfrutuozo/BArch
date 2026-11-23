@@ -254,17 +254,37 @@ snapper.
    (25 Windows clients): see "Current count" in `slmgr /dlv` on the host. KMS activation lasts 180
    days and renews itself every 7 days while the host is reachable.
 5. In Windows: Fast Startup and hibernation **off** (`powercfg /h off`), or the NTFS games disk
-   is left dirty and Linux mounts it read-only. Device encryption / BitLocker **off**: signing in
-   with a Microsoft account turns it on, and booting Windows through Limine one time and through
-   the firmware menu the next changes the measured boot path, so it would ask for the recovery
-   key; never on the games disk.
+   is left dirty and Linux mounts it read-only. No automatic device encryption yet (signing in
+   with a Microsoft account turns it on with Microsoft's defaults): BitLocker goes on by hand in
+   step 8, once Windows boots through Limine. Never on the games disk.
 6. A scheduled task at startup (SYSTEM) keeps Limine first in the UEFI order after updates:
    `bcdedit /set {fwbootmgr} displayorder {<Limine GUID from bcdedit /enum firmware>} /addfirst`.
    Required: every yearly feature update (25H2, 26H2...) tends to put Windows Boot Manager first
    again.
 7. Back in Linux: `sudo limine-scan`, pick "Windows Boot Manager" (it writes the `protocol: efi`
    entry by partition GUID). `limine-snapper-sync` already excludes `Windows*` entries.
-8. Only then the SN770 into M2_5: copy the old `~/Games` off it, wipe it, NTFS at `/games`
+8. **BitLocker on C:, TPM only** (decided 2026-11-23: like LUKS, the disk opens by itself on this
+   machine only; a disk sent back under warranty stays unreadable). Windows has a password on the
+   local account and locks on idle and resume, like the Quickshell lock; no autologin.
+   1. Before turning it on, `gpedit.msc` → Windows Components → BitLocker Drive Encryption →
+      Operating System Drives → **Configure TPM platform validation profile for native UEFI
+      firmware configurations: Enabled, PCRs 7 and 11 only**. With our own Secure Boot keys
+      BitLocker may otherwise fall back to the legacy profile (PCR 0/2/4), which measures the
+      Limine binary, and every Limine update would ask for the recovery key.
+   2. Boot Windows **through Limine** (the path BitLocker seals to), then turn BitLocker on for
+      C: (XTS-AES, used space only is fine on a new disk). `msinfo32` → "PCR7 Configuration" and
+      `manage-bde -protectors -get C:` show what it sealed to.
+   3. The 48-digit recovery key goes to Bitwarden, not a Microsoft account.
+   From then on, **always boot Windows through Limine**, never the firmware's boot menu (F11):
+   the other path measures differently and asks for the recovery key.
+   **When the PCR 7 changes** (BIOS update, which can also reset the fTPM; Secure Boot keys; a
+   db/dbx update from Windows Update): Linux asks the LUKS passphrase once, re-enroll as in
+   docs/machine.md; Windows asks the recovery key once, through Limine, and reseals itself on that
+   boot (if it asks again: `manage-bde -protectors -disable C:` then `-enable C:`). Before a
+   planned BIOS update, `Suspend-BitLocker -MountPoint C: -RebootCount 1` in Windows skips its
+   recovery screen: the next Windows boot, whenever it comes, reseals to the new values (the key
+   is in the clear on disk until then, so only right before flashing). Never "Clear TPM".
+9. Only then the SN770 into M2_5: copy the old `~/Games` off it, wipe it, NTFS at `/games`
    (INSTALL.md step 17). Windows was installed with one disk in, so Setup could not pick the
    wrong one.
 
@@ -280,7 +300,8 @@ telemetry and app policies below. Windows Update can also update the Secure Boot
 (Microsoft's KEK is enrolled): that changes PCR 7, so Linux asks the passphrase once; re-enroll
 the TPM (docs/machine.md). Never "Clear TPM" in Windows. A
 Microsoft account works (Settings → Accounts → sign in with a Microsoft account) for OneDrive
-and settings sync; see step 5 about the encryption it switches on. Anti-cheat games and DLSS 5
+and settings sync; see step 5 about the encryption it switches on (with BitLocker already on, Windows offers to back up
+the recovery key to the account; decline). Anti-cheat games and DLSS 5
 are what Windows is there for.
 
 **Telemetry, three layers** (a local account sends the least; a Microsoft account syncs by
@@ -320,7 +341,7 @@ Decided 2026-11-22, not written yet:
   plug), `barch psu`, a chart in the System Center. During the hardware tests a small reviewed
   script is enough to watch the pins through the GPU hour.
 - **`windows/` in the repo:** a reviewed PowerShell post-install (the `bcdedit` task, hibernation
-  and Fast Startup off, BitLocker check, telemetry policy, Defender off), cloned on the
+  and Fast Startup off, BitLocker PCR policy and status, telemetry policy, Defender off), cloned on the
   Windows side (the repo is public; Windows cannot read the LUKS disk).
 - **Windows follows the theme like Linux** (`theme-auto`: light 08:00–18:00, dark otherwise):
   `windows/theme.ps1 [light|dark]` sets `AppsUseLightTheme`/`SystemUsesLightTheme`, broadcasts
