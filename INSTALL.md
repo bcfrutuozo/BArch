@@ -442,7 +442,12 @@ is not Bruno's, answer **no** to:
 | `/etc/systemd/system/getty@tty1.service.d/autologin.conf` | logs **his** user in on tty1; edit the user name before taking it |
 | `/etc/hostname`, `/etc/vconsole.conf` | his host name, his keyboard |
 
-Inside a VM it skips the disk, boot and NVIDIA files by itself. After it: `sudo limine-update`
+Inside a VM it skips the disk, boot and NVIDIA files by itself, and the VMs' bridge (`30-virbr0.*`:
+a test VM usually sits on the host's 192.168.122.0/24, which that bridge would take). On real
+hardware it also points libvirt's network "default" at that bridge (`system/libvirt/default.xml`):
+systemd-networkd serves DHCP and NAT to the VMs, systemd-resolved their DNS, and no dnsmasq is
+installed ([docs/network.md](docs/network.md)). libvirt keeps its own `default.xml` as a
+`.pacnew` on upgrades, so the pointer survives them. After it: `sudo limine-update`
 if anything boot-related changed.
 
 **(this machine)** On a new disk, even for the same user, the script skips the disk files by

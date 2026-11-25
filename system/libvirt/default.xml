@@ -1,0 +1,9 @@
+<!-- libvirt's network "default" as BArch uses it: only a pointer to the bridge virbr0, which
+     systemd-networkd creates, addresses and serves (DHCP, NAT) and systemd-resolved answers DNS on
+     (system/files/etc/systemd/network/30-virbr0.*). libvirt starts no dnsmasq for it; the VMs keep
+     their <source network='default'/>. apply-system.sh defines it (virsh net-define + autostart). -->
+<network>
+  <name>default</name>
+  <forward mode='bridge'/>
+  <bridge name='virbr0'/>
+</network>

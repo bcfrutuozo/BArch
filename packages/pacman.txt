@@ -24,7 +24,6 @@ cryptsetup
 ddcutil
 directx-shader-compiler
 discord
-dnsmasq
 docker
 docker-buildx
 docker-compose

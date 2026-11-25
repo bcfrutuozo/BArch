@@ -13,8 +13,10 @@ mode_of() { awk -v f="$1" '$2 == f { print $1; exit }' "$modes" 2>/dev/null || t
 # Numa VM (teste do repositório), arquivos ligados ao disco, ao boot e ao hardware desta
 # máquina ficam de fora: aplicá-los deixaria a VM sem boot.
 VIRT=$(systemd-detect-virt 2>/dev/null || true)
-VM_SKIP='^/(etc/fstab|etc/crypttab|etc/kernel/cmdline|etc/default/limine|boot/|etc/mkinitcpio|etc/initcpio/|etc/modprobe\.d/nvidia|etc/docker/daemon\.json|etc/hostname|etc/vconsole\.conf|etc/systemd/system/getty@)'
-[[ -n "$VIRT" && "$VIRT" != none ]] && warn "running in a VM ($VIRT): disk, boot and NVIDIA files are skipped"
+VM_SKIP='^/(etc/fstab|etc/crypttab|etc/kernel/cmdline|etc/default/limine|boot/|etc/mkinitcpio|etc/initcpio/|etc/modprobe\.d/nvidia|etc/docker/daemon\.json|etc/hostname|etc/vconsole\.conf|etc/systemd/system/getty@|etc/systemd/network/30-virbr0\.)'
+# 30-virbr0.* too: a test VM usually gets its own address from the host's 192.168.122.0/24, and a
+# bridge with 192.168.122.1/24 inside it would take that route and cut the guest off
+[[ -n "$VIRT" && "$VIRT" != none ]] && warn "running in a VM ($VIRT): disk, boot, NVIDIA and VM-bridge files are skipped"
 
 # The disk files carry the UUIDs of the disk they were collected from. On a new install (a new
 # disk, even for the same user) they would leave the machine unbootable, so they are skipped
@@ -127,6 +129,26 @@ for s in "${SYSTEM_SERVICES[@]}"; do
   if systemctl is-enabled --quiet "$s" 2>/dev/null; then ok "$s already enabled"; continue; fi
   ask "Enable $s?" && sudo systemctl enable --now "$s" && ok "$s"
 done
+
+# libvirt's network "default" is only a pointer to virbr0, the bridge systemd-networkd serves
+# (30-virbr0.*): no dnsmasq. A fresh libvirt (or the old NAT network) gets the repo's definition
+if command -v virsh >/dev/null && [[ -z "$VIRT" || "$VIRT" == none ]]; then
+  step "libvirt network"
+  v="virsh -c qemu:///system"
+  if sudo $v net-dumpxml default 2>/dev/null | grep -q "<forward mode='bridge'"; then
+    ok "network default already points at virbr0"
+  elif ask "Make libvirt's network \"default\" use the networkd bridge virbr0 (no dnsmasq)?"; then
+    sudo $v net-destroy default >/dev/null 2>&1 || true
+    sudo $v net-undefine default >/dev/null 2>&1 || true
+    sudo networkctl reload
+    if sudo $v net-define "$REPO/system/libvirt/default.xml" >/dev/null && sudo $v net-autostart default >/dev/null \
+      && sudo $v net-start default >/dev/null; then
+      ok "network default -> virbr0"
+    else
+      warn "could not define the network: sudo $v net-define $REPO/system/libvirt/default.xml"
+    fi
+  fi
+fi
 
 ((${#changed[@]})) || { ok "No files changed."; exit 0; }
 

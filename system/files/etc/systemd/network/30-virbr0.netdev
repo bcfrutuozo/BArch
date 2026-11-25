@@ -1,0 +1,7 @@
+# The VMs' bridge (libvirt's network "default" only points at it: system/libvirt/default.xml).
+# networkd owns it instead of libvirt, so there is no dnsmasq: DHCP from networkd, DNS from
+# systemd-resolved (DNSStubListenerExtra=192.168.122.1), NAT by IPMasquerade (docs/network.md).
+# The name stays virbr0, which nftables.conf and the kill switch already let through.
+[NetDev]
+Name=virbr0
+Kind=bridge

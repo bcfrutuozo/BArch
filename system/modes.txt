@@ -35,6 +35,8 @@
 644 /etc/sysctl.d/10-barch-net.conf
 644 /etc/systemd/network/20-wired.network
 644 /etc/systemd/network/25-wireless.network
+644 /etc/systemd/network/30-virbr0.netdev
+644 /etc/systemd/network/30-virbr0.network
 644 /etc/systemd/resolved.conf.d/barch.conf
 644 /etc/systemd/system/archlinux-keyring-wkd-sync.service.d/barch-timeout.conf
 644 /etc/systemd/system/barch-agent-snapshot@.service

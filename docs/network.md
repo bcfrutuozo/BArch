@@ -14,10 +14,19 @@ these instead.
 - `25-wireless.network`: Wi-Fi, the same with metric 600, so the cable wins while both are up,
   and the address kept through a 3 s carrier loss when roaming.
 
+- `30-virbr0.netdev`/`.network`: the VMs' bridge, 192.168.122.1/24 as libvirt had it. networkd
+  creates it and serves it: DHCP (`DHCPServer=`, guests get .100–.199), NAT (`IPMasquerade=ipv4`,
+  which also turns IPv4 forwarding on); systemd-resolved answers their DNS on 192.168.122.1
+  (`DNSStubListenerExtra=`), with the host's servers (the tunnel's while the VPN is up). libvirt's
+  network "default" only points at the bridge (`system/libvirt/default.xml`, `<forward
+  mode='bridge'/>`, loaded by `apply-system.sh`), so no dnsmasq is installed. Guests are reached by
+  address, not by name (dnsmasq registered their names; networkd's DHCP server does not).
+  `networkctl status virbr0` lists the leases.
+
 `systemd-networkd-wait-online` waits for **any** link to be routable (a drop-in; the links keep
 the default `RequiredForOnline=yes`, with `no` it would have nothing to wait for), so the board's second Ethernet port without a cable does not hold up
-`network-online.target` (the NAS mounts, Docker). Nothing else is matched: Docker's and
-libvirt's bridges and veths stay theirs.
+`network-online.target` (the NAS mounts, Docker). Nothing else is matched: Docker's bridges
+and veths, and the VMs' tap devices (vnet*) stay theirs.
 
 iwd only joins the network (`/etc/iwd/main.conf`: `EnableNetworkConfiguration=false`); the
 passwords of the networks it knows are in `/var/lib/iwd/<SSID>.psk` (root, mode 600), which

@@ -1,0 +1,23 @@
+# The VMs' network, 192.168.122.0/24 as libvirt had it: the host is .1 (gateway and DNS), guests get
+# .100-.199 from networkd's DHCP server; their traffic leaves masqueraded behind this machine
+# (through the tunnel while the VPN is up). IPMasquerade=ipv4 also turns IPv4 forwarding on.
+[Match]
+Name=virbr0
+
+[Link]
+RequiredForOnline=no
+
+[Network]
+Address=192.168.122.1/24
+ConfigureWithoutCarrier=yes
+IgnoreCarrierLoss=yes
+LinkLocalAddressing=no
+IPv6AcceptRA=no
+DHCPServer=yes
+IPMasquerade=ipv4
+
+[DHCPServer]
+PoolOffset=100
+PoolSize=100
+EmitDNS=yes
+DNS=192.168.122.1

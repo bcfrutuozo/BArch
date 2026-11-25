@@ -8,3 +8,6 @@ They are **copied**, never linked: the system owns them.
 - `modes.txt` keeps each file's original permissions.
 - Inline passwords (e.g. `password=` in cifs mounts) are replaced with `REDACTED`.
 - The list of files lives in `scripts/lib.sh` (`SYSTEM_FILES`).
+- `libvirt/default.xml` is not a copied file: libvirt keeps its network definitions itself, so
+  `apply-system.sh` loads it with `virsh net-define` (the network "default" pointing at the
+  `virbr0` bridge of systemd-networkd, no dnsmasq; see `docs/network.md`).
