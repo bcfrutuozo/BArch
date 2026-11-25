@@ -50,6 +50,31 @@ class Log(unittest.TestCase):
         self.assertEqual(qbit_failure_reason(self.ENTRIES, "nothing-like-this"), "")
         self.assertEqual(qbit_failure_reason([], "x"), "")
 
+class Existing(unittest.TestCase):
+    """A torrent qBittorrent already has (409) is adopted: tagged for the job, its hash returned."""
+
+    def test_409_adopts(self):
+        import io
+        import urllib.error
+        from barch_video.integrations import QBit
+        calls = []
+
+        class Fake(QBit):
+            def _api(self, method, path, **kw):
+                calls.append(path)
+                if path == "/torrents/add":
+                    raise urllib.error.HTTPError("u", 409, "Conflict", {}, io.BytesIO(b""))
+                if path == "/torrents/info":
+                    return [{"hash": kw["params"]["hashes"]}]
+                return None
+
+        q = Fake({})
+        h = q.add("magnet:?xt=urn:btih:BFCE8870A88C950CCFDE8347B685CDBC3D606632", "barch-dub", "barch-s1x1")
+        self.assertEqual(h, "bfce8870a88c950ccfde8347b685cdbc3d606632")
+        self.assertIn("/torrents/addTags", calls)
+        self.assertNotIn("/torrents/setCategory", calls)
+
+
 
 if __name__ == "__main__":
     unittest.main()

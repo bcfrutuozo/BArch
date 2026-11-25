@@ -118,8 +118,10 @@ cd ~/BArch
    `~/.config/barch/backup/password`, `barch backup restore latest ~/.ssh ~/.gnupg ~/.config/pia ...`
    (see [docs/backup.md](docs/backup.md)) and move the files into place.
 
-`install.sh` and `apply-system.sh` detect virtual machines: there they skip NVIDIA, the CachyOS
-kernel and every disk/boot file, so the repo can be tested in a KVM guest without breaking it.
+`install.sh` asks which GPU drivers to install (NVIDIA, Intel, AMD, several or none; the default is what
+it detects) and `apply-system.sh` reuses the answer, so a machine without NVIDIA gets none of its
+packages or files. Both detect virtual machines: there they skip the CachyOS kernel and every
+disk/boot file, so the repo can be tested in a KVM guest without breaking it.
 
 ## Not stored here
 

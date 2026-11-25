@@ -152,6 +152,7 @@ tesseract-data-por
 thunar
 thunar-archive-plugin
 thunar-volman
+tmux
 tpm2-tss
 tree-sitter-cli
 ttf-jetbrains-mono-nerd

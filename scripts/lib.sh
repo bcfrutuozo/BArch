@@ -110,3 +110,60 @@ ask() {   # ask "question" -> 0 if yes
   read -r -p "  $1 [y/N] " a </dev/tty
   [[ "$a" =~ ^[Yy]$ ]]
 }
+
+# GPU drivers. install.sh asks once (detected vendors as the default) and keeps the answer in
+# GPU_FILE; apply-system.sh reuses it. BARCH_GPU="intel nvidia" (or "none") skips the question.
+GPU_FILE="$HOME/.config/barch/gpu"
+GPU_VENDORS=(nvidia intel amd)
+# in packages/*.txt but useless without an NVIDIA card (the lists come from this machine)
+NVIDIA_ONLY='^(nvidia|lib32-nvidia|opencl-nvidia|cuda|ggml-cuda|libva-nvidia-driver|egl-gbm|egl-x11)'
+declare -A GPU_PACKAGES=(
+  [nvidia]="nvidia-open-dkms nvidia-utils lib32-nvidia-utils libva-nvidia-driver"
+  [intel]="mesa lib32-mesa vulkan-intel lib32-vulkan-intel intel-media-driver"
+  [amd]="mesa lib32-mesa vulkan-radeon lib32-vulkan-radeon"
+)
+
+gpu_detect() {   # vendors of the display controllers (PCI class 03), from sysfs: no pciutils needed
+  local d v found=()
+  for d in /sys/bus/pci/devices/*; do
+    [[ $(cat "$d/class" 2>/dev/null) == 0x03* ]] || continue
+    case $(cat "$d/vendor") in
+      0x10de) v=nvidia ;; 0x8086) v=intel ;; 0x1002) v=amd ;; *) continue ;;   # VMs' virtual GPUs: none
+    esac
+    [[ " ${found[*]} " == *" $v "* ]] || found+=("$v")
+  done
+  echo "${found[*]:-none}"
+}
+
+gpu_valid() {   # "intel nvidia" / "none" -> 0 when every word is a known vendor
+  local w
+  [[ "$1" == none ]] && return 0
+  [[ -n "$1" ]] || return 1
+  for w in $1; do [[ " ${GPU_VENDORS[*]} " == *" $w "* ]] || return 1; done
+}
+
+gpu_choose() {   # sets GPU ("nvidia intel" or "none"): BARCH_GPU, then the saved answer, then asks
+  local saved="" detected a
+  [[ -f "$GPU_FILE" ]] && saved=$(<"$GPU_FILE")
+  if [[ -n "${BARCH_GPU:-}" ]]; then
+    GPU=$(tr ',' ' ' <<<"$BARCH_GPU" | xargs)
+    gpu_valid "$GPU" || die "BARCH_GPU='$BARCH_GPU': use nvidia, intel, amd (several separated by spaces) or none"
+  elif [[ -n "$saved" ]] && gpu_valid "$saved"; then
+    GPU=$saved
+  else
+    detected=$(gpu_detect)
+    echo "  GPU drivers to install: nvidia, intel, amd (several separated by spaces) or none."
+    echo "  Detected on this machine: $detected"
+    while :; do
+      read -r -p "  GPU drivers [$detected] " a </dev/tty
+      GPU=$(tr ',' ' ' <<<"${a:-$detected}" | xargs)
+      gpu_valid "$GPU" && break
+      warn "unknown answer '$a'"
+    done
+  fi
+  mkdir -p "$(dirname "$GPU_FILE")"
+  echo "$GPU" > "$GPU_FILE"
+  ok "GPU drivers: $GPU (saved in ${GPU_FILE/#$HOME/\~}; delete it to be asked again)"
+}
+
+gpu_has() { [[ " $GPU " == *" $1 "* ]]; }

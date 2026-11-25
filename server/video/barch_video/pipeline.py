@@ -51,6 +51,7 @@ VIDEO_EXT = (".mkv", ".mp4", ".avi", ".m4v", ".ts", ".m2ts", ".wmv", ".mov")
 PT_RE = re.compile(r"\b(dual([ ._-]?[aá]udio)?|dublado|dublagem|nacional|pt[ ._-]?br|brazilian|portugu[eê]s)\b", re.I)
 DUAL_RE = re.compile(r"\b(dual([ ._-]?[aá]udio)?|multi)\b", re.I)
 BR_RE = re.compile(r"\b(dublado|dublagem|nacional|pt[ ._-]?br|brazilian|portugu[eê]s)\b", re.I)
+
 # "Dual Audio" alone is not a Brazilian dub: Indian and European releases say it too (Hindi Eng, German DL)
 OTHER_LANG_RE = re.compile(r"\b(hindi|hin|tamil|tam|telugu|tel|malayalam|kannada|bengali|punjabi|urdu|german|deutsch|ger|french|"
                            r"fran[cç]ais|vf|vff|vfq|truefrench|italian|italiano|ita|spanish|espa[nñ]ol|castellano|latino|esp|russian|"
@@ -59,6 +60,12 @@ BAD_RE = re.compile(r"\b(cam|hdcam|camrip|ts|hdts|telesync|tc|telecine|screener|
 PACK_RE = re.compile(r"\b(cole[cç][aã]o|collection|trilogia|trilogy|saga|quadrilogia|complete|pack|box)\b", re.I)
 SERIES_PACK_RE = re.compile(r"\b(cole[cç][aã]o|collection|complete[ ._-]series|s[eé]rie[ ._-]completa|todas[ ._-]as[ ._-]temporadas)\b", re.I)
 EP_FILE_RE = re.compile(r"(?i)(?:\bs(\d{1,2})[ ._-]?e(\d{1,3})|\b(\d{1,2})x(\d{2,3})\b)")
+
+
+def dubbed_only(title: str) -> bool:
+    """A release named as dubbed into PT-BR and not as dual/multi audio: its one audio track is the dub, whatever
+    its tag says (FARMSKINS' "[Dublado PT-BR]" tags it eng)."""
+    return bool(BR_RE.search(title or "")) and not DUAL_RE.search(title or "")
 
 
 def clean_title(title: str) -> str:
@@ -597,7 +604,7 @@ class Pipeline:
 
     # ------------------------------------------------------------------------------------ align+mux
 
-    def dub_file(self, j: dict, ref: str, donor: str, label: str) -> dict:
+    def dub_file(self, j: dict, ref: str, donor: str, label: str, donor_title: str = "") -> dict:
         """Align `donor` with `ref`, mux its PT-BR audio (and the subtitles `ref` lacks) into a copy, check the
         copy and put it in place of `ref`. Answers {"ok", "why", "review" (only another release of `ref`
         fixes it), "alignment", "mux_log", "verify"}; nothing is replaced unless ok."""
@@ -625,8 +632,10 @@ class Pipeline:
                 por_pos = und           # a single untagged track in a dubbed release: the dub
             elif len(und) == 1 and don_orig:
                 por_pos = und           # original tagged, the other one untagged: the dub
+            elif len(da) == 1 and dubbed_only(donor_title):
+                por_pos, don_orig = [0], []     # a "Dublado" release with one track tagged wrong: the dub
             else:
-                return out | {"why": "its audio tracks are not tagged with a language: " + ", ".join(lang(s) for s in da)}
+                return out | {"why": "no PT-BR audio track in it (its audio: " + ", ".join(lang(s) for s in da) + ")"}
         # compare original with original when the donor has it, otherwise the dub with the original
         dref = don_orig[0] if don_orig else por_pos[0]
         self.doing = f"align {label}: decoding"
@@ -675,7 +684,7 @@ class Pipeline:
             self.store.save(j)
             return
         ref = j["file"]
-        r = self.dub_file(j, ref, c["path"], j["title"])
+        r = self.dub_file(j, ref, c["path"], j["title"], c.get("title", ""))
         for k in ("alignment", "mux_log", "verify"):
             if k in r:
                 j[k] = r[k]
@@ -721,7 +730,7 @@ class Pipeline:
                 continue
             e = j["episodes"][k]
             label = f"{j['title']}E{int(k):02d}"
-            r = self.dub_file(j, e["file"], donor, label)
+            r = self.dub_file(j, e["file"], donor, label, c.get("title", ""))
             e["alignment"] = r.get("alignment")
             if r["ok"]:
                 e.update({"state": "done", "reason": "", "offset_ms": r["offset_ms"], "donor": c["title"]})

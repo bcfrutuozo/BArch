@@ -74,11 +74,14 @@ lsblk "$SYS"                                  # one disk, ~1.8T, the right one
 
 # 4 KiB logical sectors, so disk, LUKS (step 3) and btrfs all write in 4K: no 4K LUKS sector
 # can be half-written on a power cut. Erases the whole drive; do it after the day-2 fio tests.
-nvme id-ns -H "$SYS" | grep "LBA Format"     # the formats it offers; "(in use)" marks the current one
-LBAF=$(nvme id-ns -H "$SYS" | awk '/LBA Format.*Data Size: 4096 bytes/{print $3; exit}')
+# nvme-cli 3 dropped id-ns -H and refuses /dev/disk/by-id links: read the formats with smartctl
+# and hand nvme the real /dev/nvmeXnY
+DEV=$(readlink -f "$SYS")
+smartctl -c "$DEV" | sed -n '/Supported LBA Sizes/,$p'   # Id, Fmt (+ = in use), Data (512/4096)
+LBAF=$(smartctl -c "$DEV" | awk '/Supported LBA Sizes/{t=1; next} t && $1 ~ /^[0-9]+$/ && $3 == 4096 && $4 == 0 {print $1; exit}')
 echo "4K format: ${LBAF:-none}"              # empty = the drive only offers 512: skip the format
-nvme format "$SYS" --lbaf="$LBAF"            # erases the drive; asks for confirmation
-cat /sys/block/$(basename "$(readlink -f "$SYS")")/queue/logical_block_size   # 4096
+[ -n "$LBAF" ] && nvme format "$DEV" --lbaf="$LBAF"   # erases the drive; asks for confirmation
+cat /sys/block/$(basename "$DEV")/queue/logical_block_size   # 4096
 
 sgdisk --zap-all "$SYS"
 sgdisk -n1:0:+4G    -t1:ef00 -c1:ESP       "$SYS"   # ESP, shared with Windows later
@@ -357,6 +360,14 @@ cd ~/BArch
 ./install.sh
 ```
 
+`install.sh` first asks which GPU drivers to install (`nvidia`, `intel`, `amd`, several separated
+by spaces, or `none`; Enter takes what it detected on the PCI bus) and keeps the answer in
+`~/.config/barch/gpu`, which `apply-system.sh` reuses: without NVIDIA the NVIDIA packages of the
+lists, `/etc/modprobe.d/nvidia.conf`, Docker's NVIDIA runtime and the nvidia modules of
+`mkinitcpio.conf` are left out, and the session's NVIDIA variables (`uwsm/env`) only apply when
+`nvidia_drm` is loaded. It also installs the microcode of the CPU it runs on (`intel-ucode` or
+`amd-ucode`). `BARCH_GPU="intel"` skips the question; delete the file to be asked again.
+
 From here **`limine-mkinitcpio-hook` owns the boot files**: it builds one UKI per kernel
 (`/boot/EFI/Linux/<machine-id>_<kernel>.efi`) and writes the entries of `/boot/limine.conf`
 itself. Undo the manual preset of step 9 (restore the original `linux.preset`, or delete it:
@@ -541,11 +552,12 @@ GAMES="$OLD"
 lsblk -o NAME,SIZE,PARTLABEL "$GAMES"           # last look: this is the disk being erased
 sudo pacman -S --needed nvme-cli
 # 4 KiB logical sectors, like the SN8100 (step 2); the format erases it and resets the SSD's state
-sudo nvme id-ns -H "$GAMES" | grep "LBA Format"  # the formats it offers; "(in use)" marks the current one
-LBAF=$(sudo nvme id-ns -H "$GAMES" | awk '/LBA Format.*Data Size: 4096 bytes/{print $3; exit}')
+GDEV=$(readlink -f "$GAMES")                     # nvme-cli 3 refuses /dev/disk/by-id links
+sudo smartctl -c "$GDEV" | sed -n '/Supported LBA Sizes/,$p'   # Id, Fmt (+ = in use), Data (512/4096)
+LBAF=$(sudo smartctl -c "$GDEV" | awk '/Supported LBA Sizes/{t=1; next} t && $1 ~ /^[0-9]+$/ && $3 == 4096 && $4 == 0 {print $1; exit}')
 echo "4K format: ${LBAF:-none}"                  # empty = only 512: run sudo blkdiscard -f "$GAMES" instead
-sudo nvme format "$GAMES" --lbaf="$LBAF"         # erases the drive; asks for confirmation
-cat /sys/block/$(basename "$(readlink -f "$GAMES")")/queue/logical_block_size   # 4096
+[ -n "$LBAF" ] && sudo nvme format "$GDEV" --lbaf="$LBAF"   # erases the drive; asks for confirmation
+cat /sys/block/$(basename "$GDEV")/queue/logical_block_size   # 4096
 sudo sgdisk -o -n1:0:0 -t1:0700 -c1:games "$GAMES"
 sudo partprobe "$GAMES" && sudo udevadm settle
 sudo pacman -S --needed ntfs-3g                 # mkfs.ntfs; mounting uses the kernel's ntfs3
@@ -594,5 +606,5 @@ Steam → add `D:\SteamLibrary`) instead of downloading again.
 - virt-manager / QEMU with UEFI (OVMF). For Secure Boot and TPM: the `*.secboot` OVMF variant
   and an emulated TPM 2.0 (`swtpm`); without them skip steps 12 and 13 and type the passphrase.
 - Use `/dev/vda` instead of `/dev/nvme0n1` (and `vda1`, `vda2`), leave out the NVIDIA packages.
-- `install.sh` and `apply-system.sh` detect the VM (`systemd-detect-virt`) and skip NVIDIA, the
-  CachyOS kernel and every disk/boot file.
+- `install.sh` and `apply-system.sh` detect the VM (`systemd-detect-virt`) and skip the CachyOS
+  kernel and every disk/boot file; the GPU question defaults to `none` there (a virtual GPU).

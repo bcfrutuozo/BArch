@@ -6,11 +6,29 @@ source "$(dirname "$0")/scripts/lib.sh"
 
 # Virtual machine (testing the repo): skip hardware-specific packages
 VIRT=$(systemd-detect-virt 2>/dev/null || true)
-HW_ONLY='^(nvidia|lib32-nvidia|opencl-nvidia|cuda|linux-cachyos|libva-nvidia|egl-gbm|egl-x11|nvtop|gpu-screen-recorder)'
+HW_ONLY='^(linux-cachyos|nvtop|gpu-screen-recorder)'
 if [[ -n "$VIRT" && "$VIRT" != none ]]; then
-  warn "running in a VM ($VIRT): NVIDIA, the CachyOS kernel and the GPU recorder are skipped"
+  warn "running in a VM ($VIRT): the CachyOS kernel and the GPU recorder are skipped"
 fi
-filter_hw() { if [[ -n "$VIRT" && "$VIRT" != none ]]; then grep -vE "$HW_ONLY" || true; else cat; fi; }
+
+step "GPU drivers"
+gpu_choose
+# the microcode of this CPU (the lists carry amd-ucode, from the machine they were made on)
+case $(awk -F': ' '/^vendor_id/ { print $2; exit }' /proc/cpuinfo) in
+  GenuineIntel) UCODE=intel-ucode ;; AuthenticAMD) UCODE=amd-ucode ;; *) UCODE="" ;;
+esac
+filter_hw() {
+  local re='^(amd-ucode|intel-ucode)$'
+  [[ -n "$VIRT" && "$VIRT" != none ]] && re+="|$HW_ONLY"
+  gpu_has nvidia || re+="|$NVIDIA_ONLY"
+  grep -vE "$re" || true
+}
+extra_packages() {   # what this machine needs that the lists may not carry: its GPU drivers, its microcode
+  local v
+  for v in $GPU; do [[ -n "${GPU_PACKAGES[$v]:-}" ]] && tr ' ' '\n' <<<"${GPU_PACKAGES[$v]}"; done
+  [[ -n "$UCODE" && ( -z "$VIRT" || "$VIRT" == none ) ]] && echo "$UCODE"
+  return 0
+}
 
 step "Repositories"
 # multilib: bibliotecas de 32 bits (Steam, Proton, lib32-*); vem desligado numa instalação nova
@@ -24,7 +42,7 @@ step "Base tools"
 sudo pacman -S --needed --noconfirm git stow base-devel openssh
 
 step "Official packages"
-missing=$(comm -23 <(sort -u "$REPO/packages/pacman.txt") <(pacman -Qq | sort -u) | filter_hw)
+missing=$(comm -23 <( { filter_hw < "$REPO/packages/pacman.txt"; extra_packages; } | sort -u) <(pacman -Qq | sort -u))
 if [[ -n "$missing" ]]; then
   # only what still exists in the repositories (renamed/removed packages would abort the whole install)
   available=$(comm -12 <(sort -u <<<"$missing") <(pacman -Slq | sort -u))
@@ -149,7 +167,7 @@ services=("${USER_SERVICES[@]}")
 [[ -f "$REPO/packages/user-services.txt" ]] && mapfile -t -O "${#services[@]}" services < "$REPO/packages/user-services.txt"
 for s in $(printf '%s\n' "${services[@]}" | sort -u); do
   [[ -z "$s" ]] && continue
-  if [[ -n "$VIRT" && "$VIRT" != none ]] && grep -qE "$HW_ONLY|gsr-" <<<"$s"; then continue; fi
+  if [[ -n "$VIRT" && "$VIRT" != none ]] && grep -qE "gpu-screen-recorder|gsr-" <<<"$s"; then continue; fi
   systemctl --user enable "$s" >/dev/null 2>&1 && ok "$s" || warn "could not enable $s"
 done
 

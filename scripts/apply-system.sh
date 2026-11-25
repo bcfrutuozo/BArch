@@ -37,10 +37,23 @@ CPU_MODEL=$(awk -F': ' '/^model name/ { print $2; exit }' /proc/cpuinfo)
 if [[ "$CPU_MODEL" != "$ACPI_OVERRIDE_CPU" ]]; then
   ACPI_OVERRIDE=no
   warn "CPU is '$CPU_MODEL': the ACPI override (core 7 off, for the 5800X3D) is left out"
-  tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 else
   ACPI_OVERRIDE=yes
 fi
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+
+# The GPU drivers chosen in install.sh: without NVIDIA its module options, Docker's NVIDIA runtime
+# and the nvidia modules in the initramfs are left out (mkinitcpio would fail on the missing modules).
+gpu_choose
+NVIDIA_FILES='^/etc/(modprobe\.d/nvidia\.conf|docker/daemon\.json)$'
+gpu_has nvidia || warn "no NVIDIA driver chosen: its module options, Docker runtime and initramfs modules are left out"
+
+mkinitcpio_conf() {   # the repo's mkinitcpio.conf with the hooks and modules this machine has no use for
+  local sed_args=()
+  [[ "$ACPI_OVERRIDE" == no ]] && sed_args+=(-e '/^HOOKS=/ { s/\bacpi_override\b ?//; s/\( /(/ }')
+  gpu_has nvidia || sed_args+=(-e '/^MODULES=/ { s/\bnvidia(_modeset|_uvm|_drm)?\b ?//g; s/\( /(/; s/ \)/)/ }')
+  if ((${#sed_args[@]})); then sed -E "${sed_args[@]}" "$1"; else cat "$1"; fi
+}
 
 changed=()
 while IFS= read -r -d '' file; do
@@ -51,14 +64,15 @@ while IFS= read -r -d '' file; do
   if [[ "$SAME_DISK" == no && "$target" =~ $DISK_FILES ]]; then
     ok "skipped (other disk, its UUIDs): $target"; continue
   fi
-  if [[ "$ACPI_OVERRIDE" == no ]]; then
-    if [[ "$target" == /etc/initcpio/acpi_override/* ]]; then
-      ok "skipped (ACPI override, other CPU): $target"; continue
-    fi
-    if [[ "$target" == /etc/mkinitcpio.conf ]]; then
-      sed -E '/^HOOKS=/ { s/\bacpi_override\b ?//; s/\( /(/ }' "$file" > "$tmp/mkinitcpio.conf"
-      file="$tmp/mkinitcpio.conf"
-    fi
+  if [[ "$ACPI_OVERRIDE" == no && "$target" == /etc/initcpio/acpi_override/* ]]; then
+    ok "skipped (ACPI override, other CPU): $target"; continue
+  fi
+  if ! gpu_has nvidia && [[ "$target" =~ $NVIDIA_FILES ]]; then
+    ok "skipped (no NVIDIA): $target"; continue
+  fi
+  if [[ "$target" == /etc/mkinitcpio.conf ]]; then
+    mkinitcpio_conf "$file" > "$tmp/mkinitcpio.conf"
+    file="$tmp/mkinitcpio.conf"
   fi
   if sudo test -f "$target" && sudo cmp -s "$file" "$target"; then
     ok "unchanged: $target"; continue

@@ -1,6 +1,10 @@
-export LIBVA_DRIVER_NAME=nvidia
-export __GLX_VENDOR_LIBRARY_NAME=nvidia
-export NVD_BACKEND=direct
+# NVIDIA only when its driver is loaded: on Intel/AMD these would point VA-API and GLX at a
+# driver that is not there (install.sh lets a machine skip NVIDIA)
+if [ -d /sys/module/nvidia_drm ]; then
+  export LIBVA_DRIVER_NAME=nvidia
+  export __GLX_VENDOR_LIBRARY_NAME=nvidia
+  export NVD_BACKEND=direct
+fi
 export ELECTRON_OZONE_PLATFORM_HINT=auto
 export GDK_SCALE=2
 export QT_QPA_PLATFORMTHEME=qt6ct

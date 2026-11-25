@@ -10,6 +10,7 @@ import json
 import os
 import re
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -273,12 +274,19 @@ class QBit:
         and returns its info hash when known, so the download can be found even if the tag is lost."""
         kind, src = fetch_torrent(url) if not url.startswith("magnet:") else ("magnet", url)
         fields = {"category": category, "tags": tag}
-        if kind == "magnet":
-            r = self._api("POST", "/torrents/add", form={"urls": src, **fields})
-            h = magnet_hash(src)
-        else:
-            r = self._api("POST", "/torrents/add", form=fields, files={"torrents": ("release.torrent", src)})
-            h = torrent_hash(src)
+        h = magnet_hash(src) if kind == "magnet" else torrent_hash(src)
+        try:
+            if kind == "magnet":
+                r = self._api("POST", "/torrents/add", form={"urls": src, **fields})
+            else:
+                r = self._api("POST", "/torrents/add", form=fields, files={"torrents": ("release.torrent", src)})
+        except urllib.error.HTTPError as e:
+            # 409: qBittorrent has it already (a donor kept after a failed try): adopt it with this job's tag,
+            # its category left alone so its files are not moved
+            if e.code != 409 or not h or not self.by_hash(h):
+                raise
+            self._api("POST", "/torrents/addTags", form={"hashes": h, "tags": tag})
+            return h
         if isinstance(r, str) and "fail" in r.lower():
             raise RuntimeError(f"qBittorrent refused the torrent: {r}")
         return h

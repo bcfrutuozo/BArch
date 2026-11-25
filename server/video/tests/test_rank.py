@@ -52,5 +52,18 @@ class Rank(unittest.TestCase):
         self.assertLess(s, 0)
 
 
+class DubbedOnly(unittest.TestCase):
+    """A one-track release named "Dublado" is the dub even when the track is tagged with the original language."""
+
+    def test_dubbed_only(self):
+        from barch_video.pipeline import dubbed_only
+        self.assertTrue(dubbed_only("F1 The Movie (2025) 1080p WEB-DL [Dublado PT-BR] FARMSKINS"))
+        self.assertTrue(dubbed_only("The Walking Dead S11.E01-E20 (2021) 1080p WEB-DL [Dublado Portugues] MOSTBET"))
+        self.assertFalse(dubbed_only("F1.The.Movie.2025.1080p.WEB-DL.H264.Dual.YG"))
+        self.assertFalse(dubbed_only("Game of Thrones 5ª Temporada (2015) WEB-DL 1080p Dual audio Dublado"))
+        self.assertFalse(dubbed_only("Superman 2025 1080p MULTi PT-BR"))
+        self.assertFalse(dubbed_only(""))
+
+
 if __name__ == "__main__":
     unittest.main()
