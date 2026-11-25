@@ -25,7 +25,6 @@ declare -A PACKAGES=(
   [obs]=".local/share/applications/obs-stream.desktop .local/share/applications/obs-guitarra.desktop"
   [clip]=".local/share/applications/barch-clip.desktop"
   [spotify]=".local/share/applications/spotify-launcher.desktop"
-  [moonlight]=".local/share/applications/com.moonlight_stream.Moonlight.desktop"
   [applio]=".local/share/applications/applio.desktop"
 )
 
