@@ -73,7 +73,13 @@ daemon_running() { flock -n -E 75 "$runtime/daemon.lock" true 2>/dev/null; [[ $?
 
 ensure_daemon() {   # start the supervisor (which starts the lock) if none is running
   daemon_running && return 0
-  setsid -f "$self" --daemon >/dev/null 2>&1 </dev/null
+  # called from an app (a terminal running --relaunch, anything under app.slice): the supervisor and
+  # the lock would live in that app's scope, where systemd-oomd may kill it; session.slice instead
+  if grep -q '/app\.slice/' /proc/self/cgroup 2>/dev/null && command -v uwsm >/dev/null; then
+    setsid -f uwsm app -s s -a barch-lock -- "$self" --daemon >/dev/null 2>&1 </dev/null
+  else
+    setsid -f "$self" --daemon >/dev/null 2>&1 </dev/null
+  fi
 }
 
 not_locked() {

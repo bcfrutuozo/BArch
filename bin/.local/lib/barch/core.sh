@@ -108,7 +108,7 @@ app_open() {
     qs -p "$cfg" ipc call app open "$page" >/dev/null
     return
   fi
-  env "$var=$page" setsid -f qs -p "$cfg" >/dev/null 2>&1
+  env "$var=$page" setsid -f uwsm app -- qs -p "$cfg" >/dev/null 2>&1
 }
 
 # cost_log <source> <usd> [note]: one line per Claude call, read by barch-events (metrics summary)

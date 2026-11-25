@@ -17,7 +17,7 @@ hypr_edit() {
     qs -p "$cfg" ipc call app open "${1:-}" >/dev/null
     return
   fi
-  BARCH_HYPR_PAGE=${1:-} setsid -f qs -p "$cfg" >/dev/null 2>&1
+  BARCH_HYPR_PAGE=${1:-} setsid -f uwsm app -- qs -p "$cfg" >/dev/null 2>&1
 }
 
 cmd_hypr() {

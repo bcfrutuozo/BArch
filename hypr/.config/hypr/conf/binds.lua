@@ -5,9 +5,11 @@
 -- "Grupo|Descrição". Atalho sem description aparece em "Other". Números no fim
 -- ("Go to Workspace 1", "… 2"…) viram uma linha só na folha.
 
--- Programas
-local terminal    = "foot"
-local fileManager = "thunar"
+-- Programas. "uwsm app --" puts each one in its own systemd scope (app-graphical.slice) instead of
+-- Hyprland's own unit: systemd-oomd picks a single app to kill under memory pressure, never the
+-- session (docs/machine.md "Memory")
+local terminal    = "uwsm app -- foot"
+local fileManager = "uwsm app -- thunar"
 --local menu        = "hyprlauncher"
 
 local mainMod = "SUPER"

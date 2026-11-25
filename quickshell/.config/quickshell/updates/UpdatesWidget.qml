@@ -284,7 +284,7 @@ Item {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: { Popups.hide(popup); Quickshell.execDetached(["xdg-open", parent.modelData.link]) }
+                                        onClicked: { Popups.hide(popup); Quickshell.execDetached(["uwsm", "app", "--", "xdg-open", parent.modelData.link]) }
                                     }
                                 }
                             }

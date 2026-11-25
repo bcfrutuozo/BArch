@@ -264,7 +264,7 @@ Item {
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
                                 Popups.hide(popup)
-                                Quickshell.execDetached(["xdg-open", card.d.targets[0]])
+                                Quickshell.execDetached(["uwsm", "app", "--", "xdg-open", card.d.targets[0]])
                             }
                         }
 

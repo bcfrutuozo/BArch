@@ -86,7 +86,8 @@ without any AI:
   `window.close` with class and title, `window.fullscreen`, `window.urgent`, `monitor.added`,
   `monitor.removed`), `vpn.up`, `vpn.down` (the tunnel dropped) and `vpn.off` (turned off: Disconnect, Anonymous Mode off, a voice command; `pia.sh disconnect` leaves the time in `stopped`), both with the tunnel that went away and whether the kill switch is holding the traffic, `anon.on`/`anon.off`, `net.up`/`net.down` (default
   route), `pods.connected`/`pods.disconnected`, `session.locked`/`unlocked`, `failure` (a new
-  log from `barch failure`), `boot`, `claude.cost` (every agent task run and voice fallback writes
+  log from `barch failure`), `oom.kill` (systemd-oomd killed an app, or the kernel's OOM killer a
+  process, read from the journal; rule `oom-kill` notifies, as earlyoom did), `boot`, `claude.cost` (every agent task run and voice fallback writes
   a line to `~/.local/state/barch/claude-cost.log`), `music.review` (an album of the NAS music
   pipeline landed in the review queue, polled every 2 min: id, name, problem, `cover_only`),
   `video.foreign` (a movie or episode file of the video pipeline has audio beyond the original language

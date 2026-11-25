@@ -154,22 +154,30 @@ Scope {
     }
 
     // ---------- ações ----------
+    // everything opened from here gets its own systemd scope (uwsm app): a child of the bar would live
+    // in the bar's scope, so systemd-oomd killing it would take the bar along (and the other way round)
+    function launch(argv) { Quickshell.execDetached(["uwsm", "app", "--"].concat(argv)) }
+    function launchEntry(e) {
+        if (e.runInTerminal) { launch([terminal, "-e"].concat(e.command)); return }
+        // execDetached takes no object with a workingDirectory here (Quickshell 0.3.2): env -C does it
+        const cd = e.workingDirectory ? ["env", "-C", e.workingDirectory] : []
+        Quickshell.execDetached(cd.concat(["uwsm", "app", "-a", e.id, "--"], e.command))
+    }
     function activate(index, shift) {
         const r = src.results[index]
         if (!r || r.kind === "info") return
         switch (r.kind) {
         case "app":
             src.bump(r.entry.id)
-            if (r.entry.runInTerminal) Quickshell.execDetached([terminal, "-e"].concat(r.entry.command))
-            else r.entry.execute()
+            root.launchEntry(r.entry)
             break
         case "calc":
             Quickshell.execDetached(["wl-copy", r.title])
             break
         case "run":
         case "term":
-            if (shift || r.kind === "term") Quickshell.execDetached([terminal, "--hold", "sh", "-c", r.title])
-            else Quickshell.execDetached(["sh", "-c", r.title])
+            if (shift || r.kind === "term") root.launch([terminal, "--hold", "sh", "-c", r.title])
+            else root.launch(["sh", "-c", r.title])
             break
         case "action":
             Quickshell.execDetached(r.cmd)
@@ -187,15 +195,15 @@ Scope {
                 Quickshell.execDetached(["sh", "-c", 'sleep 0.25; wtype -- "$1"', "sh", r.emoji])
             break
         case "web":
-            Quickshell.execDetached(["xdg-open", r.url])
+            root.launch(["xdg-open", r.url])
             break
         case "project":
             src.bump("proj:" + r.path)
-            if (shift) Quickshell.execDetached(["thunar", r.path])
-            else Quickshell.execDetached([terminal, "-D", r.path, "nvim", "."])
+            if (shift) root.launch(["thunar", r.path])
+            else root.launch([terminal, "-D", r.path, "nvim", "."])
             break
         case "file":
-            Quickshell.execDetached(["xdg-open", shift && !r.dir ? r.path.slice(0, r.path.lastIndexOf("/")) : r.path])
+            root.launch(["xdg-open", shift && !r.dir ? r.path.slice(0, r.path.lastIndexOf("/")) : r.path])
             break
         case "agent":
             Quickshell.execDetached(["barch", "agent", "ask"].concat(shift || r.resume ? ["--continue"] : [], arg ? [arg] : []))

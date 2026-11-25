@@ -62,7 +62,20 @@ mapfile -t files < <(find . -name '*.qml' -not -xtype l | sort)
 if ((verbose)); then
   jq -r '.files[] | .filename as $f | .warnings[] | "\(.type) \(.id // "-") \($f):\(.line // 0): \(.message)"' "$out"
 fi
-while IFS= read -r l; do bad "$l"; done < <(jq -r '
+# Quickshell 0.3.2 split Quickshell.Hyprland into sub-modules its qmldir pulls in with `import`
+# (_Ipc, _FocusGrab...), which the qmllint of Qt 6.12.1 does not follow (2026-11-25): the
+# Hyprland singleton reads as unqualified and HyprlandFocusGrab as missing in every file. Those
+# two, and only on lines that name them, are skipped; the bar itself resolves them fine
+hypr_noise() {   # hypr_noise "<file>:<line>: <message> [id]"
+  local f=${1%%:*} rest=${1#*:} n
+  n=${rest%%:*}
+  case $1 in
+    *"HyprlandFocusGrab was not found"*) return 0 ;;
+    *"Unqualified access [unqualified]") sed -n "${n}p" "$f" 2>/dev/null | grep -qE '(^|[^A-Za-z_.])Hyprland([^A-Za-z_]|$)' ;;
+    *) return 1 ;;
+  esac
+}
+while IFS= read -r l; do hypr_noise "$l" || bad "$l"; done < <(jq -r '
   .files[] | (.filename | sub(".*/quickshell/"; "")) as $f | .warnings[]
   | select(.type == "critical"
            or (.id == "unqualified" and (.message | startswith("Unqualified access")) and ($f | startswith("lock/") | not))

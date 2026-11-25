@@ -120,6 +120,45 @@ def failure_incidents(events: list[dict], gap: int = FAILURE_GAP_S) -> list[dict
     return out
 
 
+OOMD_KILL_RE = re.compile(r"(?:Killed|Marked) (/\S+) (?:for killing )?due to (.+)")   # "Marked" since systemd 262
+KERNEL_OOM_RE = re.compile(r"Out of memory: Killed process (\d+) \(([^)]*)\)")
+
+
+def oom_app(cgroup: str) -> str:
+    """The app behind a cgroup systemd-oomd killed: '.../app-Hyprland-foot-1a2b3c4d.scope' -> 'foot',
+    '.../app-org.chromium.Chromium-4345.scope' -> 'org.chromium.Chromium', 'barch-voice.service' ->
+    'barch-voice' (uwsm's random suffix and a PID dropped, systemd's \\x2d escapes undone)."""
+    name = cgroup.rstrip("/").rsplit("/", 1)[-1]
+    name = re.sub(r"\.(scope|service)$", "", name).replace("\\x2d", "-")
+    name = re.sub(r"^app-(Hyprland-)?", "", name)
+    name = re.sub(r"@autostart$", "", name)
+    return re.sub(r"-([0-9a-f]{8}|\d+)$", "", name) or name
+
+
+def oom_kills(entries: list[dict]) -> list[dict]:
+    """Journal entries (journalctl -o json) -> `oom.kill` events: systemd-oomd killing a cgroup
+    (source oomd: app, unit, reason with the cgroup paths cut to their last part) or the kernel's
+    OOM killer, the last resort when oomd was too slow or off (source kernel: app, pid)."""
+    out = []
+    for e in entries:
+        msg = e.get("MESSAGE")
+        if isinstance(msg, list):            # journalctl gives non-UTF-8 messages as a byte list
+            msg = bytes(b for b in msg if isinstance(b, int)).decode(errors="replace")
+        if not isinstance(msg, str):
+            continue
+        m = OOMD_KILL_RE.search(msg)
+        if m and e.get("_TRANSPORT") != "kernel":
+            reason = re.sub(r"/\S*/([^/\s]+)", r"\1", m.group(2)).strip()
+            out.append({"source": "oomd", "app": oom_app(m.group(1)), "unit": m.group(1).rsplit("/", 1)[-1],
+                        "reason": reason[:200]})
+            continue
+        m = KERNEL_OOM_RE.search(msg)
+        if m and e.get("_TRANSPORT") == "kernel":
+            out.append({"source": "kernel", "app": m.group(2) or "?", "pid": m.group(1),
+                        "reason": "the kernel OOM killer: memory ran out before systemd-oomd acted"})
+    return out
+
+
 def fmt_value(v) -> str:
     if v is None:
         return ""
@@ -1012,6 +1051,38 @@ class Daemon:
             self.rules.save_state()
         return rows
 
+    # -- systemd-oomd and the kernel OOM killer, from the journal
+    def watch_oom(self):
+        """`oom.kill` for every app systemd-oomd (or the kernel) killed since the last look: oomd
+        itself only writes to the journal, earlyoom used to notify. Resumes from a journal cursor."""
+        st = self.rules.state
+        cmd = ["journalctl", "-q", "-o", "json", "--no-pager", "-g", "Killed|Marked /",
+               "_SYSTEMD_UNIT=systemd-oomd.service", "+", "_TRANSPORT=kernel"]
+        if st.get("oom_cursor"):
+            cmd += ["--after-cursor", st["oom_cursor"]]
+        else:
+            if "oom_since" not in st:          # the first start: only what happens from now on
+                st["oom_since"] = int(time.time())
+                self.rules.save_state()
+            cmd += ["--since", f"@{int(st['oom_since'])}"]
+        try:
+            r = run(cmd, timeout=10)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            log("watch_oom:", e)
+            return
+        entries = []
+        for line in (r.stdout or "").splitlines():
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        if not entries:
+            return
+        for ev in oom_kills(entries):
+            self.emit("oom.kill", ev)
+        st["oom_cursor"] = entries[-1].get("__CURSOR", st.get("oom_cursor"))
+        self.rules.save_state()
+
     # -- files that grow: failure logs, the Claude cost log, agent reports
     def watch_files(self, first=False):
         st = self.rules.state
@@ -1196,6 +1267,7 @@ class Daemon:
                     for m, v in rows:
                         self.rules.on_sample(m, v)
                 self.watch_files()
+                self.watch_oom()
                 self.boot_once()
                 if time.time() - self.last_prune > 6 * 3600:
                     self.last_prune = time.time()

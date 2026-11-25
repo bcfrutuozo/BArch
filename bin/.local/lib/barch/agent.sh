@@ -176,7 +176,7 @@ agent_dismiss() {
 agent_continue() {
   [[ ${1:-} =~ $UUID_RE ]] || usage_error "agent continue <session id>"
   need foot
-  setsid -f foot -D "$REPO" -T "Claude" claude --resume "$1" >/dev/null 2>&1
+  setsid -f uwsm app -- foot -D "$REPO" -T "Claude" claude --resume "$1" >/dev/null 2>&1
 }
 
 agent_ask() {
@@ -191,7 +191,7 @@ agent_ask() {
   need foot
   need claude
   ((${#text[@]})) && args+=("${text[*]}")
-  setsid -f foot -D "$REPO" -T "Claude" claude "${args[@]}" >/dev/null 2>&1
+  setsid -f uwsm app -- foot -D "$REPO" -T "Claude" claude "${args[@]}" >/dev/null 2>&1
 }
 
 agent_investigate() {
@@ -200,7 +200,7 @@ agent_investigate() {
   need foot
   need claude
   unit=$(sed -n 's/^Unit: //p' "$log" | head -1)
-  setsid -f foot -D "$REPO" -T "Investigate: $unit" claude \
+  setsid -f uwsm app -- foot -D "$REPO" -T "Investigate: $unit" claude \
     "The service $unit failed. Its status and the journal of the failed run are in $log. Read it, find the cause (check more of the journal, the unit and its config as needed) and explain it to me. Propose the fix and wait for my go-ahead before changing anything." \
     >/dev/null 2>&1
 }

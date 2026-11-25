@@ -373,7 +373,7 @@ Singleton {
     }
     // hypridle is started by conf/autostart.lua (not a unit) and does not re-read its file
     function restartIdle() {
-        Quickshell.execDetached(["sh", "-c", "pkill -x hypridle; sleep 0.3; exec uwsm app -- hypridle"])
+        Quickshell.execDetached(["sh", "-c", "pkill -x hypridle; sleep 0.3; exec uwsm app -s s -- hypridle"])
         say("hypridle.conf saved; hypridle restarted")
     }
     function restartSunset() {

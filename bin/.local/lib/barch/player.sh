@@ -44,7 +44,7 @@ cmd_player() {
     search)
       [[ -n ${1:-} ]] || usage_error "player search <text>"
       if qs -p "$HOME/.config/quickshell/player" ipc show >/dev/null 2>&1; then qs -p "$HOME/.config/quickshell/player" ipc call app search "$1" >/dev/null
-      else BARCH_PLAYER_PAGE=search setsid -f qs -p "$HOME/.config/quickshell/player" >/dev/null 2>&1; fi ;;
+      else BARCH_PLAYER_PAGE=search setsid -f uwsm app -- qs -p "$HOME/.config/quickshell/player" >/dev/null 2>&1; fi ;;
     plex)
       case ${1:-status} in
         status)

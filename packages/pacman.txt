@@ -31,7 +31,6 @@ docker-compose
 dosfstools
 dotnet-sdk
 drm-info
-earlyoom
 edk2-ovmf
 efibootmgr
 evolution

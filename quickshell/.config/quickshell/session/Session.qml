@@ -112,8 +112,10 @@ Singleton {
             // menos navegadores, que já reabrem as próprias janelas sozinhos
             if (launched[w.cls] && /brave|chrom|firefox|zen|vivaldi/i.test(w.cls)) continue
             launched[w.cls] = (launched[w.cls] || 0) + 1
-            if (e.runInTerminal) Quickshell.execDetached(["foot", "-e"].concat(e.command))
-            else e.execute()
+            // each one in its own systemd scope, like the launcher does (systemd-oomd, docs/machine.md)
+            const argv = e.runInTerminal ? ["foot", "-e"].concat(e.command) : e.command
+            const cd = e.workingDirectory ? ["env", "-C", e.workingDirectory] : []
+            Quickshell.execDetached(cd.concat(["uwsm", "app", "-a", e.id, "--"], argv))
         }
         giveUp.restart()
     }

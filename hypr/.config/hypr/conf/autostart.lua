@@ -2,9 +2,12 @@
 -- https://wiki.hypr.land/Configuring/Basics/Autostart/
 
 hl.on("hyprland.start", function ()
-    -- Screen lock (Quickshell, resident; lock.sh starts it, locks, and restarts it if it dies) and idle
+    -- Screen lock (Quickshell, resident; lock.sh starts it, locks, and restarts it if it dies) and idle.
+    -- Both stay under session.slice, out of systemd-oomd's reach (it watches app.slice only): lock.sh
+    -- in Hyprland's own unit, hypridle in session-graphical.slice ("-s s"), because its lock_cmd runs
+    -- lock.sh, which restarts the resident lock inside whatever unit called it
     hl.exec_cmd("~/.config/hypr/scripts/lock.sh")
-    hl.exec_cmd("hypridle")
+    hl.exec_cmd("uwsm app -s s -- hypridle")
 
     -- Automatic light/dark mode
     hl.exec_cmd("theme-auto")

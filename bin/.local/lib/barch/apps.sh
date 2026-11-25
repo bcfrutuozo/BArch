@@ -38,7 +38,7 @@ cmd_clip() {
       if qs -p "$cfg" ipc show >/dev/null 2>&1; then
         qs -p "$cfg" ipc call app open "$file" >/dev/null
       else
-        env "BARCH_CLIP_FILE=$file" setsid -f qs -p "$cfg" >/dev/null 2>&1
+        env "BARCH_CLIP_FILE=$file" setsid -f uwsm app -- qs -p "$cfg" >/dev/null 2>&1
       fi ;;
   esac
 }

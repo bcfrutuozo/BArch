@@ -66,7 +66,7 @@ theme_edit() {
     if [[ -n ${1:-} ]]; then qs -p "$cfg" ipc call editor open "$1" >/dev/null; fi
     return 0
   fi
-  BARCH_PALETTE_EDIT=${1:-} setsid -f qs -p "$cfg" >/dev/null 2>&1
+  BARCH_PALETTE_EDIT=${1:-} setsid -f uwsm app -- qs -p "$cfg" >/dev/null 2>&1
 }
 
 # theme from-image <image> [--id ID] [--label NAME] [--dark|--light]: tools/palette_from_image.py
@@ -85,7 +85,7 @@ theme_from_image() {
   if qs -p "$cfg" ipc show >/dev/null 2>&1; then
     qs -p "$cfg" ipc call editor draft "$draft" >/dev/null
   else
-    BARCH_PALETTE_DRAFT=$draft setsid -f qs -p "$cfg" >/dev/null 2>&1
+    BARCH_PALETTE_DRAFT=$draft setsid -f uwsm app -- qs -p "$cfg" >/dev/null 2>&1
   fi
 }
 
