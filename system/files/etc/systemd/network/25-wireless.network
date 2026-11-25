@@ -1,0 +1,27 @@
+# BArch: Wi-Fi. iwd joins the network (/etc/iwd/main.conf: no addressing of its own), networkd
+# does DHCP, the same as the cable but with a higher metric. Drop-ins as in 20-wired.network.
+[Match]
+Type=wlan
+
+[Network]
+DHCP=yes
+IPv6AcceptRA=yes
+IPv6LinkLocalAddressGenerationMode=stable-privacy
+LLMNR=no
+MulticastDNS=no
+# roaming between access points drops the carrier for a moment: keep the address meanwhile
+IgnoreCarrierLoss=3s
+
+[DHCPv4]
+RouteMetric=600
+UseDomains=yes
+UseNTP=yes
+
+[DHCPv6]
+UseDomains=yes
+UseNTP=yes
+
+[IPv6AcceptRA]
+RouteMetric=600
+Token=prefixstable
+UseDomains=yes

@@ -2,6 +2,7 @@
 # Checks the repo before a save. sync.sh runs it first (BARCH_NO_CHECK=1 skips it); on its own:
 #   ./scripts/check.sh
 # - every shell script: bash -n and shellcheck (warnings and up), barch's sourced modules included
+# - the Wi-Fi backend (quickshell/network/wifi.py) and its tests
 # - QML: scripts/qml-check.sh (qmldir complete, no broken links, the reliable part of qmllint)
 # - every Lua file (the Hyprland config): luac -p
 # - every JSON file: jq
@@ -90,6 +91,12 @@ step "Clip (quickshell/clip)"
 python3 -m py_compile quickshell/.config/quickshell/clip/clip.py 2>/dev/null || problem "clip: clip.py does not compile"
 python3 -m unittest discover -s quickshell/.config/quickshell/clip/tests -q >/dev/null 2>&1 || problem "clip: unit tests fail (python3 -m unittest discover -s quickshell/.config/quickshell/clip/tests)"
 find quickshell/.config/quickshell/clip -name __pycache__ -prune -exec rm -rf {} +
+((fail)) || ok "compiles, tests pass"
+
+step "Wi-Fi backend (quickshell/network)"
+python3 -m py_compile quickshell/.config/quickshell/network/wifi.py 2>/dev/null || problem "wifi: wifi.py does not compile"
+python3 -m unittest discover -s quickshell/.config/quickshell/network/tests -q >/dev/null 2>&1 || problem "wifi: unit tests fail (python3 -m unittest discover -s quickshell/.config/quickshell/network/tests)"
+find quickshell/.config/quickshell/network -name __pycache__ -prune -exec rm -rf {} +
 ((fail)) || ok "compiles, tests pass"
 
 step "Book templates (server/books)"

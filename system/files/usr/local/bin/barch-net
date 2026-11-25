@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+# /usr/local/bin/barch-net <op>_<user> — the root half of the VPN and of Anonymous Mode's DHCP bit
+# under systemd-networkd, whose configuration only root may write (docs/network.md).
+#
+# Run as root by barch-net@<op>_<user>.service, which polkit lets that same user start when in
+# wheel (50-barch-net.rules). Everything it writes is in /run, so nothing outlives a boot:
+#
+#   vpn-key        a new WireGuard key pair for the PIA tunnel: private key in /run/barch-net/pia.key
+#                  (root:systemd-network 0640, only networkd reads it), public key in pia.pub (0644)
+#   vpn-up         the tunnel "pia" from the request $XDG_RUNTIME_DIR/barch-net/vpn.json of <user>
+#                  (written by quickshell/vpn/pia.sh: server_key, server_ip, server_port, peer_ip,
+#                  dns), every field validated. Full tunnel the way wg-quick does it: the peer's
+#                  0.0.0.0/0 and ::/0 go to table 51820, packets not marked by WireGuard look there,
+#                  the main table answers only for more specific routes (the LAN). DNS: the tunnel's
+#                  server for every name ("~."), and the LAN links lose theirs until vpn-down, so no
+#                  lookup leaves outside the tunnel (what dns-priority -1 did under NetworkManager).
+#   vpn-down       the tunnel and those drop-ins removed, the key forgotten
+#   hostname-off   no hostname in DHCP requests on the cable and the Wi-Fi (Anonymous Mode)
+#   hostname-on    the hostname sent again
+set -euo pipefail
+
+arg=${1:-}
+op=${arg%_*}
+user=${arg##*_}
+run=/run/barch-net
+netdir=/run/systemd/network
+key=$run/pia.key
+pub=$run/pia.pub
+table=51820
+# the rules must come before main's (32766), or main's default route always wins and nothing
+# enters the tunnel; wg-quick's numbers: suppress main's default at 32764, the tunnel at 32765
+lan=(20-wired 25-wireless)            # the .network files in /etc/systemd/network the drop-ins extend
+
+usage() { echo "usage: $0 {vpn-key|vpn-up|vpn-down|hostname-off|hostname-on}_<user>" >&2; exit 2; }
+log() { logger -t barch-net -- "$*"; echo "$*"; }
+
+[[ $arg == *_* && $user =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || usage
+uid=$(id -u "$user" 2>/dev/null) || usage
+
+ipv4() { [[ $1 =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || return 1
+         local o; for o in "${BASH_REMATCH[@]:1}"; do (( 10#$o <= 255 )) || return 1; done; }
+wgkey() { [[ $1 =~ ^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$ ]]; }
+
+dropins() {   # dropins <name> <content|"">: the same drop-in on every LAN .network, or removed
+  local n
+  for n in "${lan[@]}"; do
+    if [[ -n $2 ]]; then
+      install -d -m 755 "$netdir/$n.network.d"
+      printf '%s\n' "$2" > "$netdir/$n.network.d/$1.conf"
+    else
+      rm -f "$netdir/$n.network.d/$1.conf"
+      rmdir "$netdir/$n.network.d" 2>/dev/null || true
+    fi
+  done
+}
+
+case $op in
+  vpn-key)
+    install -d -m 755 "$run"
+    umask 027
+    python3 -I - "$key" "$pub" <<'PY'
+import base64, os, sys
+from cryptography.hazmat.primitives import serialization as s
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+k = X25519PrivateKey.generate()
+raw = lambda b: base64.b64encode(b).decode()
+priv = raw(k.private_bytes(s.Encoding.Raw, s.PrivateFormat.Raw, s.NoEncryption()))
+pub = raw(k.public_key().public_bytes(s.Encoding.Raw, s.PublicFormat.Raw))
+with open(sys.argv[1] + ".tmp", "w") as f: f.write(priv + "\n")
+with open(sys.argv[2] + ".tmp", "w") as f: f.write(pub + "\n")
+PY
+    chown root:systemd-network "$key.tmp"; chmod 640 "$key.tmp"; mv "$key.tmp" "$key"
+    chmod 644 "$pub.tmp"; mv "$pub.tmp" "$pub"
+    log "new WireGuard key for the PIA tunnel ($user)"
+    ;;
+
+  vpn-up)
+    req=/run/user/$uid/barch-net/vpn.json
+    # the request must be the user's own regular file, not a link to something else
+    [[ -f $req && ! -L $req && $(stat -c %u "$req") == "$uid" ]] || { echo "no request at $req" >&2; exit 1; }
+    [[ -s $key ]] || { echo "no key: run vpn-key first" >&2; exit 1; }
+    server_key=$(jq -r '.server_key // ""' "$req"); server_ip=$(jq -r '.server_ip // ""' "$req")
+    server_port=$(jq -r '.server_port // ""' "$req"); peer_ip=$(jq -r '.peer_ip // ""' "$req")
+    dns=$(jq -r '.dns // ""' "$req")
+    wgkey "$server_key" || { echo "bad server key" >&2; exit 1; }
+    ipv4 "$server_ip" && ipv4 "$peer_ip" && ipv4 "$dns" || { echo "bad address in the request" >&2; exit 1; }
+    [[ $server_port =~ ^[0-9]{1,5}$ ]] && (( server_port >= 1 && server_port <= 65535 )) || { echo "bad port" >&2; exit 1; }
+
+    install -d -m 755 "$netdir"
+    cat > "$netdir/50-pia.netdev" <<EOF
+# written by /usr/local/bin/barch-net vpn-up ($user); removed by vpn-down
+[NetDev]
+Name=pia
+Kind=wireguard
+
+[WireGuard]
+PrivateKeyFile=$key
+FirewallMark=$table
+RouteTable=$table
+
+[WireGuardPeer]
+PublicKey=$server_key
+Endpoint=$server_ip:$server_port
+AllowedIPs=0.0.0.0/0
+AllowedIPs=::/0
+PersistentKeepalive=25
+EOF
+    cat > "$netdir/50-pia.network" <<EOF
+# written by /usr/local/bin/barch-net vpn-up ($user); removed by vpn-down
+[Match]
+Name=pia
+
+[Link]
+RequiredForOnline=no
+
+[Network]
+Address=$peer_ip/32
+DNS=$dns
+Domains=~.
+DNSDefaultRoute=yes
+# IPv6 goes into the tunnel too (::/0 above), where PIA drops it: nothing leaks around it
+IPv6AcceptRA=no
+LinkLocalAddressing=no
+
+[RoutingPolicyRule]
+Table=main
+SuppressPrefixLength=0
+Family=both
+Priority=32764
+
+[RoutingPolicyRule]
+Table=$table
+FirewallMark=$table
+InvertRule=yes
+Family=both
+Priority=32765
+EOF
+    dropins 50-vpn "# barch-net vpn-up: while the VPN is up, DNS only through the tunnel
+[Network]
+DNSDefaultRoute=no
+
+[DHCPv4]
+UseDNS=no
+UseDomains=no
+
+[DHCPv6]
+UseDNS=no
+UseDomains=no
+
+[IPv6AcceptRA]
+UseDNS=no
+UseDomains=no"
+    networkctl delete pia >/dev/null 2>&1 || true      # a previous tunnel with another peer
+    networkctl reload
+    /usr/lib/systemd/systemd-networkd-wait-online -i pia --operational-state=routable --timeout=20 \
+      || { echo "the tunnel did not come up" >&2; exit 1; }
+    log "tunnel up: $server_ip:$server_port as $peer_ip, DNS $dns ($user)"
+    ;;
+
+  vpn-down)
+    rm -f "$netdir/50-pia.netdev" "$netdir/50-pia.network"
+    dropins 50-vpn ""
+    networkctl delete pia >/dev/null 2>&1 || true
+    networkctl reload
+    rm -f "$key" "$pub"
+    log "tunnel down ($user)"
+    ;;
+
+  hostname-off)
+    dropins 40-anon "# barch-net hostname-off (Anonymous Mode): the hostname stays off the DHCP requests
+[DHCPv4]
+SendHostname=no
+
+[DHCPv6]
+SendHostname=no"
+    networkctl reload
+    log "DHCP hostname off ($user)"
+    ;;
+
+  hostname-on)
+    dropins 40-anon ""
+    networkctl reload
+    log "DHCP hostname on ($user)"
+    ;;
+
+  *) usage ;;
+esac

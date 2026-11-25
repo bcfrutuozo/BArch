@@ -61,6 +61,7 @@ hyprland
 hyprpicker
 hyprsunset
 inter-font
+iwd
 jdk17-openjdk
 jq
 kcalc
@@ -91,7 +92,6 @@ mousepad
 mpv
 mpv-mpris
 neovim
-networkmanager
 nextcloud-client
 nftables
 ninja

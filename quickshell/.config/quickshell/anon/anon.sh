@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # anon.sh — Anonymous Mode: the VPN plus what else on this machine would still give it away.
 #
-#   anon.sh on [REGION|auto]   mode on: Mullvad Browser becomes the default browser, no network
-#                              profile sends the hostname over DHCP, the VPN comes up (vpn/pia.sh
+#   anon.sh on [REGION|auto]   mode on: Mullvad Browser becomes the default browser, the hostname
+#                              leaves the DHCP requests (until off), the VPN comes up (vpn/pia.sh
 #                              connect) and the kill switch is armed for its server. If the tunnel
 #                              fails everything is rolled back.
-#   anon.sh off                kill switch off, VPN down, the previous default browser back
+#   anon.sh off                kill switch off, VPN down, the hostname back in DHCP, the previous browser back
 #   anon.sh status             JSON: on, browser (current default), previous, mullvad (installed),
-#                              webrtc (policy in place), dhcpHostname (some profile still sends it),
+#                              webrtc (policy in place), dhcpHostname (the hostname still goes out over DHCP),
 #                              killswitch (installed, armed, endpoint), missing (what the mode
 #                              cannot cover right now), error
 #
@@ -25,7 +25,7 @@
 # Files: ~/.local/state/barch/anon/ (state, browser.prev, error), $XDG_RUNTIME_DIR/barch-anon
 #        (marks the session that turned the mode on: after a logout or boot the mode is found
 #        "on" without it and is turned off, kill switch included, instead of blocking everything).
-# Needs: xdg-settings (xdg-utils), nmcli, jq, systemctl, and vpn/pia.sh next to this folder.
+# Needs: xdg-settings (xdg-utils), jq, systemctl, barch-net (system/files) and vpn/pia.sh next to this folder.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -80,29 +80,16 @@ browser_off() {   # the previous default browser back, if the mode had changed i
 }
 
 # ---------------------------------------------------------------- network
-lan_connections() {   # NetworkManager profiles that talk DHCP to the local network
-  nmcli -t -f NAME,TYPE connection show 2>/dev/null | awk -F: '$2 == "802-3-ethernet" || $2 == "802-11-wireless" { print $1 }'
+anon_dropin=/run/systemd/network/20-wired.network.d/40-anon.conf   # written by barch-net hostname-off
+dhcp_hostname_sent() {   # 0 while the cable and the Wi-Fi still send the hostname in DHCP requests
+  [[ ! -e $anon_dropin ]]
 }
-sends_hostname() {   # sends_hostname <profile>: 0 unless both IPv4 and IPv6 DHCP have it off (nmcli -g prints 0 = no, 1 = yes, -1 = default)
-  local v
-  v=$(nmcli -g ipv4.dhcp-send-hostname,ipv6.dhcp-send-hostname connection show "$1" 2>/dev/null | tr '\n' ' ')
-  [[ $v != "0 0 " && $v != "no no " ]]
-}
-dhcp_hostname_sent() {   # 0 if some profile still sends the hostname over DHCP
-  local c
-  while IFS= read -r c; do sends_hostname "$c" && return 0; done < <(lan_connections)
-  return 1
-}
-dhcp_hostname_off() {   # idempotent; the profiles are system ones, polkit lets the active user change them
-  local c
-  while IFS= read -r c; do
-    sends_hostname "$c" || continue
-    if nmcli connection modify "$c" ipv4.dhcp-send-hostname no ipv6.dhcp-send-hostname no 2>/dev/null; then
-      log "DHCP hostname off: $c"
-    else
-      log "could not change '$c' (dhcp-send-hostname)"
-    fi
-  done < <(lan_connections)
+dhcp_hostname() {   # dhcp_hostname off|on: barch-net (root) adds or removes the drop-in, networkd renews
+  if systemctl start --no-ask-password "barch-net@hostname-${1}_$USER.service" >/dev/null 2>&1; then
+    log "DHCP hostname $1"
+  else
+    log "could not turn the DHCP hostname $1 (barch-net@hostname-${1}_$USER.service)"
+  fi
 }
 webrtc_ok() {   # the Chromium browsers only use the default route's address for WebRTC
   cat /etc/brave/policies/managed/*.json /etc/chromium/policies/managed/*.json 2>/dev/null \
@@ -139,9 +126,9 @@ on() {
   echo on > "$state/state"; rm -f "$state/error"; : > "$session_mark"
   log "on"
   browser_on
-  dhcp_hostname_off
+  dhcp_hostname_sent && dhcp_hostname off
   if ! bash "$pia" connect "${1:-}"; then     # pia.sh already said why on stderr
-    ks_off; browser_off; echo off > "$state/state"; rm -f "$session_mark"
+    ks_off; browser_off; dhcp_hostname_sent || dhcp_hostname on; echo off > "$state/state"; rm -f "$session_mark"
     log "off again: the tunnel did not come up"
     exit 1
   fi
@@ -152,6 +139,7 @@ on() {
 off() {
   ks_off                                     # first: pia.sh disconnect would leave everything blocked
   bash "$pia" disconnect >/dev/null || true
+  dhcp_hostname_sent || dhcp_hostname on
   browser_off
   echo off > "$state/state"; rm -f "$state/error" "$session_mark"
   log "off"
@@ -175,7 +163,7 @@ status() {
   [[ $ksi == true ]] || missing+=("kill switch not installed (system/files: barch-killswitch, its service and polkit rule)")
   [[ $on == false || $ksi == false || $ksa == true ]] || missing+=("kill switch not armed")
   [[ $webrtc == true ]] || missing+=("WebRTC policy missing (system/files/etc/*/policies)")
-  [[ $dhcp == false ]] || missing+=("a network profile still sends the hostname over DHCP")
+  [[ $on == false || $dhcp == false ]] || missing+=("the hostname still goes out in DHCP requests")
   jq -n --argjson on "$on" --arg browser "$(default_browser)" --arg previous "$(cat "$state/browser.prev" 2>/dev/null || true)" \
     --argjson mullvad "$([[ -n $md ]] && echo true || echo false)" --argjson webrtc "$webrtc" --argjson dhcp "$dhcp" \
     --argjson ksi "$ksi" --argjson ksa "$ksa" --arg kse "$(ks_endpoint)" \

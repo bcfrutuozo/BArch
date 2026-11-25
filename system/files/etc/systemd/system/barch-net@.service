@@ -1,0 +1,11 @@
+# The root half of the VPN and of Anonymous Mode under systemd-networkd: <op>_<user>, see
+# /usr/local/bin/barch-net. Started by quickshell/vpn/pia.sh and anon/anon.sh; polkit lets a wheel
+# user start the instances that name that same user, without a password (50-barch-net.rules).
+[Unit]
+Description=BArch network helper (%I)
+After=systemd-networkd.service
+
+[Service]
+Type=oneshot
+# %i, not %I: the op names have dashes, which %I would turn into slashes
+ExecStart=/usr/local/bin/barch-net %i

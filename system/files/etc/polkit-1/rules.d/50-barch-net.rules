@@ -1,0 +1,18 @@
+// systemd-networkd for the desktop session (docs/network.md):
+// - barch-net@<op>_<user>.service, the VPN tunnel and Anonymous Mode's DHCP bit, only for the
+//   wheel user that the instance names (pia.sh, anon.sh)
+// - networkd's own actions (networkctl up/down from the bar's cable widget) for the active local
+//   wheel user, the way NetworkManager let that user switch a device off and on
+polkit.addRule(function (action, subject) {
+    if (!subject.isInGroup("wheel")) return;
+    if (action.id === "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("verb") === "start" &&
+        action.lookup("unit") ===
+            "barch-net@" + String(action.lookup("unit")).replace(/^barch-net@(vpn-key|vpn-up|vpn-down|hostname-off|hostname-on)_.*$/, "$1") +
+            "_" + subject.user + ".service") {
+        return polkit.Result.YES;
+    }
+    if (action.id.indexOf("org.freedesktop.network1.") === 0 && subject.local && subject.active) {
+        return polkit.Result.YES;
+    }
+});

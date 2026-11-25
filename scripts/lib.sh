@@ -32,7 +32,7 @@ declare -A PACKAGES=(
 USER_SERVICES=(cliphist.service)
 
 # System services and timers to enable on a fresh install (apply-system.sh asks first)
-SYSTEM_SERVICES=(earlyoom.service smartd.service paccache.timer fstrim.timer btrfs-scrub@-.timer setvtrgb.service numlock.service nftables.service rtkit-daemon.service bluetooth.service barch-bt-le.service snapper-timeline.timer snapper-cleanup.timer limine-snapper-sync.service libvirtd.socket docker.socket barch-backup-root.timer barch-disk-health.timer ckb-next-daemon.service systemd-timesyncd.service)
+SYSTEM_SERVICES=(systemd-networkd.service systemd-resolved.service iwd.service systemd-networkd-wait-online.service earlyoom.service smartd.service paccache.timer fstrim.timer btrfs-scrub@-.timer setvtrgb.service numlock.service nftables.service rtkit-daemon.service bluetooth.service barch-bt-le.service snapper-timeline.timer snapper-cleanup.timer limine-snapper-sync.service libvirtd.socket docker.socket barch-backup-root.timer barch-disk-health.timer ckb-next-daemon.service systemd-timesyncd.service)
 
 # System files copied into system/files/ (never symlinked).
 # Globs are allowed. Anything missing is skipped, and so are symlinks.
@@ -76,12 +76,17 @@ SYSTEM_FILES=(
   /usr/local/bin/barch-agent-snapshot
   /usr/local/bin/barch-failure-relay
   /usr/local/bin/barch-killswitch
+  /usr/local/bin/barch-net
   /usr/local/bin/barch-backup-root
   /usr/local/bin/barch-disk-health
   /usr/local/bin/numlock
   /usr/local/bin/barch-bt-le
   /etc/polkit-1/rules.d/50-barch-agent-snapshot.rules
   /etc/polkit-1/rules.d/50-barch-killswitch.rules
+  /etc/polkit-1/rules.d/50-barch-net.rules
+  "/etc/systemd/network/*"
+  /etc/iwd/main.conf
+  "/etc/systemd/resolved.conf.d/*"
   /etc/pam.d/barch-lock
   "/etc/pacman.d/hooks/*"
   "/etc/modprobe.d/*"
@@ -97,7 +102,7 @@ SYSTEM_FILES=(
   "/etc/systemd/sleep.conf.d/*"
 )
 # Never copied, even if a glob above matches them
-SYSTEM_EXCLUDE_RE='(credentials|\.smbcred|/secrets?/|\.key$|\.pem$|/sbctl/|NetworkManager/system-connections)'
+SYSTEM_EXCLUDE_RE='(credentials|\.smbcred|/secrets?/|\.key$|\.pem$|/sbctl/|NetworkManager/system-connections|/var/lib/iwd/)'
 
 bold=$'\e[1m'; blue=$'\e[34m'; green=$'\e[32m'; yellow=$'\e[33m'; red=$'\e[31m'; reset=$'\e[0m'
 step() { printf '\n%s%s==> %s%s\n' "$bold" "$blue" "$*" "$reset"; }

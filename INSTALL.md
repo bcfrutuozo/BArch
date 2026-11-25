@@ -40,7 +40,7 @@ exact partitions, step 16 Windows and step 17 the games disk; the reasoning is i
 
 ```bash
 loadkeys br-abnt2                 # your keymap
-iwctl                             # Wi-Fi only: station wlan0 connect <SSID>
+iwctl                             # Wi-Fi only: station wlan0 connect <SSID> (the installed system uses iwctl too)
 ping -c2 archlinux.org
 timedatectl set-ntp true
 ```
@@ -172,7 +172,7 @@ What this machine was installed with:
 
 ```bash
 pacstrap -K /mnt base base-devel linux linux-headers linux-firmware amd-ucode \
-  btrfs-progs cryptsetup networkmanager sudo git neovim efibootmgr limine sbctl tpm2-tss \
+  btrfs-progs cryptsetup iwd sudo git neovim efibootmgr limine sbctl tpm2-tss \
   zram-generator snapper snap-pac \
   nvidia-open-dkms nvidia-utils          # (this machine) RTX 5090 (Blackwell: the open modules only)
 ```
@@ -210,7 +210,14 @@ echo 'yourhostname'      > /etc/hostname
 passwd                                       # root
 useradd -m -G wheel you && passwd you
 EDITOR=nvim visudo                           # uncomment: %wheel ALL=(ALL:ALL) ALL
-systemctl enable NetworkManager fstrim.timer
+# network: systemd-networkd + iwd + systemd-resolved, no NetworkManager (docs/network.md); the
+# .network files come from the repo now so the first boot is online, apply-system.sh brings the rest
+mkdir -p /etc/systemd/network /etc/iwd
+printf '[Match]\nName=en*\n\n[Network]\nDHCP=yes\n' > /etc/systemd/network/20-wired.network
+printf '[Match]\nType=wlan\n\n[Network]\nDHCP=yes\n\n[DHCPv4]\nRouteMetric=600\n' > /etc/systemd/network/25-wireless.network
+printf '[General]\nEnableNetworkConfiguration=false\n\n[Network]\nNameResolvingService=systemd\n' > /etc/iwd/main.conf
+systemctl enable systemd-networkd systemd-resolved iwd fstrim.timer
+# /etc/resolv.conf -> resolved's stub: after leaving the chroot (arch-chroot bind-mounts it), step 9
 
 # (this machine) the games subvolume, owned by the user
 mkdir -p /home/you/Games && chown you: /home/you/Games
@@ -311,11 +318,30 @@ The UKI carries the command line, the microcode and the initramfs, so the entry 
 
 ```bash
 exit
+ln -sf ../run/systemd/resolve/stub-resolv.conf /mnt/etc/resolv.conf   # DNS through systemd-resolved
+install -d -m 700 /mnt/var/lib/iwd && cp /var/lib/iwd/*.psk /mnt/var/lib/iwd/ 2>/dev/null  # Wi-Fi only: the ISO's password
 umount -R /mnt
 reboot
 ```
 
 It should ask for the LUKS passphrase and boot to a console.
+
+**No network after this boot?** Log in as root (or your user, with `sudo`) and:
+
+```bash
+networkctl                                   # the cable shows routable, or the Wi-Fi does
+systemctl status systemd-networkd iwd systemd-resolved   # all three active; else: systemctl enable --now <unit>
+iwctl station wlan0 get-networks             # Wi-Fi: iwctl device list if it is not wlan0
+iwctl station wlan0 connect <SSID>           # asks the password, keeps it in /var/lib/iwd
+networkctl status wlan0                      # an address from DHCP (or enp…: the cable)
+ls -l /etc/resolv.conf                       # must point to ../run/systemd/resolve/stub-resolv.conf
+ping -c2 archlinux.org
+```
+
+`networkctl` showing the link as `unmanaged` means no `.network` matched it (step 7: `Name=en*`,
+`Type=wlan`); `routable` but no names means `/etc/resolv.conf` (the `ln -sf` above). The first boot
+may wait up to two minutes on "Wait for Network to be Online" when a second Ethernet port has no
+cable; harmless, `apply-system.sh` (step 11) brings the drop-in that waits for any one link.
 
 **(this machine)** Stop here for the hardware tests of [docs/new-machine.md](docs/new-machine.md)
 (console only, stock kernel: MemTest86+ first, then mprime, y-cruncher, gpu-burn). Continue

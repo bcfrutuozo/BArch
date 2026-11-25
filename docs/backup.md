@@ -36,8 +36,8 @@ a failed run or check also goes through `barch failure` like any other service. 
 files under `~/Restore/<snapshot>/` with their full paths, never in place.
 
 What only root can read goes in through `barch-backup-root.timer` (system unit, daily at 12:30,
-script `/usr/local/bin/barch-backup-root`, both in `system/`): the NetworkManager profiles (Wi-Fi
-passwords), the SMB credentials, the Secure Boot keys (`/var/lib/sbctl`), the SSH host keys,
+script `/usr/local/bin/barch-backup-root`, both in `system/`): iwd's saved networks (Wi-Fi
+passwords, `/var/lib/iwd`), the SMB credentials, the Secure Boot keys (`/var/lib/sbctl`), the SSH host keys,
 root's own keys and a `cryptsetup luksHeaderBackup` of the root disk, written as `system.tar`
 and `luks-header-<device>.img` into `~/.local/state/barch/backup/root/` (owned by you, mode
 600), which the 13:00 run then encrypts with the rest. Restore them with

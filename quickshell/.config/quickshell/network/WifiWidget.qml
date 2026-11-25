@@ -2,7 +2,7 @@
 // Na barra: ícone desenhado com o nível do sinal (some se não houver placa Wi-Fi).
 // Clique: painel com liga/desliga do Wi-Fi, a rede conectada (com os dados da conexão
 // e o botão de desconectar) e a lista de redes disponíveis, com campo de senha.
-// Depende do NetworkManager (nmcli), do net-info.sh (nesta pasta) e do wl-clipboard.
+// Depende do iwd (por wifi.py, nesta pasta: D-Bus pelo busctl), do net-info.sh e do wl-clipboard.
 
 pragma ComponentBehavior: Bound
 import QtQuick
@@ -29,7 +29,7 @@ Item {
     property string device: ""
     property bool radioOn: true
     property var networks: []        // [{ ssid, signal, secure, active }]
-    property var savedWifi: []       // perfis Wi-Fi já salvos no NetworkManager
+    property var savedWifi: []       // redes já salvas no iwd (/var/lib/iwd)
     property string pendingSsid: ""  // rede aguardando senha
     property string statusText: ""
     property var details: []         // entradas "wifi" do net-info.sh
@@ -45,32 +45,15 @@ Item {
     function glyph(cp) { return String.fromCodePoint(cp) }
     function level(sig) { return sig >= 75 ? 4 : sig >= 50 ? 3 : sig >= 25 ? 2 : 1 }
 
-    // nmcli -t separa campos com ":" e escapa ":" dentro dos valores com "\:"
-    function splitTerse(line) {
-        const out = []
-        let cur = ""
-        for (let i = 0; i < line.length; i++) {
-            const c = line[i]
-            if (c === "\\" && i + 1 < line.length) { cur += line[++i]; continue }
-            if (c === ":") { out.push(cur); cur = ""; continue }
-            cur += c
-        }
-        out.push(cur)
-        return out
-    }
-
     function copy(label, value) {
         Quickshell.execDetached(["wl-copy", value])
         statusText = label + " copied"
         statusClear.restart()
     }
 
-    function refresh() {
-        devProc.running = true
-        radioProc.running = true
-        savedProc.running = true
-        wifiProc.running = true
-    }
+    readonly property var wifiCmd: ["python3", "-I", Quickshell.shellDir + "/network/wifi.py"]
+
+    function refresh() { if (!statusProc.running) statusProc.running = true }
     function refreshDetails() { infoProc.running = true }
 
     function rescan() {
@@ -80,13 +63,8 @@ Item {
 
     function connectTo(ssid, password) {
         statusText = "Connecting to " + ssid + "…"
-        let cmd
-        if (!password && savedWifi.includes(ssid))
-            cmd = ["nmcli", "connection", "up", "id", ssid]
-        else {
-            cmd = ["nmcli", "device", "wifi", "connect", ssid]
-            if (password) cmd.push("password", password)
-        }
+        const cmd = root.wifiCmd.concat(["connect", ssid])
+        if (password) cmd.push(password)
         connectProc.command = cmd
         connectProc.running = true
     }
@@ -98,65 +76,27 @@ Item {
     }
 
     // ---------- processos ----------
+    // wifi.py status: { device, radio, networks: [{ ssid, signal, secure, active, known }], saved }
     Process {
-        id: devProc
-        command: ["nmcli", "-t", "-f", "DEVICE,TYPE", "device"]
+        id: statusProc
+        command: root.wifiCmd.concat(["status"])
         stdout: StdioCollector {
             onStreamFinished: {
-                let dev = ""
-                for (const line of text.trim().split("\n")) {
-                    const [d, type] = root.splitTerse(line)
-                    if (type === "wifi" && !dev) dev = d
-                }
-                root.device = dev
-            }
-        }
-    }
-
-    Process {
-        id: radioProc
-        command: ["nmcli", "radio", "wifi"]
-        stdout: StdioCollector { onStreamFinished: root.radioOn = text.trim() === "enabled" }
-    }
-
-    Process {
-        id: savedProc
-        command: ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const s = []
-                for (const line of text.trim().split("\n")) {
-                    const [name, type] = root.splitTerse(line)
-                    if (type === "802-11-wireless") s.push(name)
-                }
-                root.savedWifi = s
-            }
-        }
-    }
-
-    Process {
-        id: wifiProc
-        command: ["nmcli", "-t", "-f", "IN-USE,SIGNAL,SECURITY,SSID", "device", "wifi", "list"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const seen = {}
-                for (const line of text.trim().split("\n")) {
-                    if (!line) continue
-                    const [inuse, sig, sec, ssid] = root.splitTerse(line)
-                    if (!ssid) continue // redes ocultas
-                    const n = {
-                        ssid: ssid,
-                        signal: parseInt(sig) || 0,
-                        secure: sec !== "" && sec !== "--",
-                        active: inuse === "*"
-                    }
-                    const prev = seen[ssid]
-                    if (!prev || n.active || (!prev.active && n.signal > prev.signal))
-                        seen[ssid] = n
-                }
+                let st
+                try { st = JSON.parse(text) } catch (e) { root.device = ""; return }
+                root.device = st.device || ""
+                root.radioOn = st.radio === true
+                root.savedWifi = st.saved || []
+                // a new array recreates every row of the list, and the password field with it (it lost
+                // the focus at each refresh): keep the list while a password is being typed, and replace
+                // it only when something in it changed
+                if (root.pendingSsid !== "") return
+                const list = (st.networks || []).map(n => ({
+                    ssid: n.ssid, signal: n.signal, secure: n.secure, active: n.active
+                }))
+                if (JSON.stringify(list) === JSON.stringify(root.networks)) return
                 const wasActive = root.activeWifi ? root.activeWifi.ssid : ""
-                root.networks = Object.values(seen)
-                    .sort((a, b) => (b.active - a.active) || (b.signal - a.signal))
+                root.networks = list
                 const nowActive = root.activeWifi ? root.activeWifi.ssid : ""
                 if (wasActive !== nowActive && popup.visible) root.refreshDetails()
             }
@@ -176,7 +116,7 @@ Item {
 
     Process {
         id: rescanProc
-        command: ["nmcli", "device", "wifi", "rescan"]
+        command: root.wifiCmd.concat(["scan"])
         onExited: rescanDelay.restart()
     }
 
@@ -358,7 +298,7 @@ Item {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: root.run(["nmcli", "radio", "wifi", root.radioOn ? "off" : "on"],
+                            onClicked: root.run(root.wifiCmd.concat(["radio", root.radioOn ? "off" : "on"]),
                                                 root.radioOn ? "Turning Wi-Fi off…" : "Turning Wi-Fi on…")
                         }
                     }
@@ -510,7 +450,7 @@ Item {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: root.run(["nmcli", "device", "disconnect", root.device], "Disconnecting…")
+                                onClicked: root.run(root.wifiCmd.concat(["disconnect"]), "Disconnecting…")
                             }
                         }
                     }

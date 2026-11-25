@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pia.sh — Private Internet Access over WireGuard, through NetworkManager, without root.
+# pia.sh — Private Internet Access over WireGuard, through systemd-networkd.
 #
 #   pia.sh connect [REGION|auto]   register a fresh WireGuard key with PIA and bring the tunnel up
 #                                  (default: the saved region, see `region`; auto = lowest latency)
@@ -15,26 +15,28 @@
 # How it works (the same flow as PIA's own manual-connections scripts): a token from the PIA API
 # (username + password, cached 23 h), a new X25519 key pair per connection, the public key
 # registered on the chosen server (https://<server>:1337/addKey, PIA's CA next to this file), and
-# the answer (server key, endpoint, our address, DNS) written into a NetworkManager WireGuard
-# profile named "pia" that belongs to this user (connection.permissions), so nmcli can create,
-# change and activate it with the session's polkit rights, no password. DNS is exclusive while
-# connected (dns-priority -1) and IPv6 is routed into the tunnel, where PIA drops it, so neither
-# leaks. The profile never autoconnects: PIA forgets the key after a while, every connection
-# registers a new one. While Anonymous Mode's kill switch is armed (anon/anon.sh, table
+# the answer (server key, endpoint, our address, DNS) handed to /usr/local/bin/barch-net, the root
+# helper that writes the tunnel "pia" for systemd-networkd into /run (barch-net@<op>_$USER.service,
+# which polkit lets this user start without a password). The private key is made by that helper and
+# never leaves root and networkd; this script only sees the public one. DNS is exclusive while
+# connected (the tunnel takes "~.", the LAN links lose their DNS) and IPv6 is routed into the
+# tunnel, where PIA drops it, so neither leaks. Nothing autoconnects or survives a boot: PIA
+# forgets the key after a while, every connection registers a new one. While Anonymous Mode's kill switch is armed (anon/anon.sh, table
 # inet barch-killswitch), a region change re-arms it for the new server before the tunnel moves,
 # so the new handshake is let through; the API calls before that go through the current tunnel.
 #
 # Files: ~/.config/pia/credentials (two lines: username, password; chmod 600; NOT in the repo),
 #        ~/.local/state/barch/pia/ (token, server list, latencies, preferred region, current tunnel).
-# Needs: curl, jq, nmcli (NetworkManager ≥ 1.42 for wireguard.peers), python3 with cryptography
-#        (or wireguard-tools) for the key pair.
+# Needs: curl, jq, systemctl, and barch-net with its unit and polkit rule (system/files).
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ca="$here/ca.rsa.4096.crt"
 creds="${XDG_CONFIG_HOME:-$HOME/.config}/pia/credentials"
 state="${XDG_STATE_HOME:-$HOME/.local/state}/barch/pia"
-con=pia                                  # NetworkManager connection and interface name
+con=pia                                  # the WireGuard interface barch-net creates
+request="${XDG_RUNTIME_DIR:-/run/user/$UID}/barch-net/vpn.json"   # what barch-net vpn-up reads
+pubkey=/run/barch-net/pia.pub            # written by barch-net vpn-key
 servers_url=https://serverlist.piaservers.net/vpninfo/servers/v6
 token_url=https://www.privateinternetaccess.com/api/client/v2/token
 status_url=https://www.privateinternetaccess.com/api/client/status
@@ -98,18 +100,8 @@ token() {   # cached for 23 h; PIA tokens last 24 h
   cat "$f"
 }
 
-keypair() {   # prints the private key, then the public key (base64, WireGuard format)
-  if command -v wg >/dev/null; then
-    local priv; priv=$(wg genkey); echo "$priv"; wg pubkey <<<"$priv"; return
-  fi
-  python3 -I - <<'PY'
-import base64
-from cryptography.hazmat.primitives import serialization as s
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
-k = X25519PrivateKey.generate()
-print(base64.b64encode(k.private_bytes(s.Encoding.Raw, s.PrivateFormat.Raw, s.NoEncryption())).decode())
-print(base64.b64encode(k.public_key().public_bytes(s.Encoding.Raw, s.PublicFormat.Raw)).decode())
-PY
+net_helper() {   # net_helper <op>: barch-net@<op>_$USER.service (root, see /usr/local/bin/barch-net)
+  systemctl start --no-ask-password "barch-net@${1}_$USER.service"
 }
 
 add_key() {   # add_key <cn> <ip> <token> <pubkey> -> PIA's JSON answer (status, server_key, ...)
@@ -127,20 +119,21 @@ ks_rearm() {   # ks_rearm <server ip> <port>: let the new endpoint through befor
   fi
 }
 
-# ---------------------------------------------------------------- NetworkManager
-nm_active() { nmcli -t -f NAME connection show --active 2>/dev/null | grep -qx "$con"; }
-nm_exists() { nmcli -t -f NAME connection show 2>/dev/null | grep -qx "$con"; }
+# ---------------------------------------------------------------- the tunnel
+# the link exists and is administratively up: `networkctl down pia` (or a dying tunnel) leaves the
+# link in place, and "connected" then would hide the orange "kill switch holding" shield
+tunnel_up() { local f; f=$(cat "/sys/class/net/$con/flags" 2>/dev/null) && (( f & 1 )); }
 
 # ---------------------------------------------------------------- commands
 connect() {
-  local want=${1:-} id rj name country cn ip tok priv pub resp server_key server_ip server_port peer_ip dns auto=false
+  local want=${1:-} id rj name country cn ip tok pub resp server_key server_ip server_port peer_ip dns auto=false
   [[ -r $creds ]] || fail "no credentials: put the PIA username and password, one per line, in $creds (chmod 600)"
   [[ -n $want ]] || want=$(preferred)
   # already up in that region (Anonymous Mode turned on over a running VPN, `barch vpn on` twice):
   # keep the tunnel. Registering a new key means calling the server's own API (port 1337) from
   # inside its tunnel, which never answers, and the fresh token asked for after that failed too
   # (2026-11-02 15:06: Anonymous Mode off again, "PIA did not give a token")
-  if nm_active && [[ -s $state/current.json ]] \
+  if tunnel_up && [[ -s $state/current.json ]] \
     && jq -e --arg w "$want" '(.region == $w) or ($w == "auto" and .auto == true)' "$state/current.json" >/dev/null 2>&1; then
     rm -f "$state/error"
     log "already connected to $(jq -r .name "$state/current.json"); keeping the tunnel"
@@ -157,7 +150,8 @@ connect() {
   log "connecting to $name ($cn, $ip)"
 
   tok=$(token)
-  { read -r priv; read -r pub; } < <(keypair)
+  net_helper vpn-key || fail "could not make a WireGuard key (barch-net@vpn-key_$USER.service)"
+  pub=$(cat "$pubkey" 2>/dev/null) || fail "no public key in $pubkey"
   resp=$(add_key "$cn" "$ip" "$tok" "$pub") || resp=""
   if [[ $(jq -r '.status // empty' <<<"$resp" 2>/dev/null) != OK ]]; then
     rm -f "$state/token"                   # expired or revoked token: once more with a fresh one
@@ -169,23 +163,23 @@ connect() {
   server_port=$(jq -r .server_port <<<"$resp"); peer_ip=$(jq -r .peer_ip <<<"$resp")
   dns=$(jq -r '.dns_servers[0] // "10.0.0.243"' <<<"$resp")
 
-  # the profile: owned by this user (no root needed), never autoconnects (the key is per session)
-  local props=(
-    wireguard.private-key "$priv"
-    wireguard.peers "$server_key endpoint=$server_ip:$server_port allowed-ips=0.0.0.0/0;::/0 persistent-keepalive=25"
-    ipv4.method manual ipv4.addresses "$peer_ip/32" ipv4.dns "$dns" ipv4.dns-priority -1
-    ipv6.method link-local connection.autoconnect no
-  )
-  if nm_exists; then
-    nmcli connection modify "$con" "${props[@]}" >/dev/null || fail "NetworkManager refused to update the profile '$con'"
-  else
-    nmcli connection add type wireguard con-name "$con" ifname "$con" connection.permissions "user:$USER" "${props[@]}" >/dev/null \
-      || fail "NetworkManager refused to create the profile '$con'"
-  fi
+  # the request barch-net vpn-up reads (it validates every field before writing anything)
+  mkdir -p "$(dirname "$request")"
+  jq -n --arg k "$server_key" --arg ip "$server_ip" --argjson port "$server_port" --arg peer "$peer_ip" --arg dns "$dns" \
+    '{server_key: $k, server_ip: $ip, server_port: $port, peer_ip: $peer, dns: $dns}' > "$request"
   jq --arg sip "$server_ip" --argjson sport "$server_port" '. + {server_ip: $sip, server_port: $sport}' "$state/current.json" > "$state/current.json.tmp" && mv "$state/current.json.tmp" "$state/current.json"
   ks_armed && ks_rearm "$server_ip" "$server_port"
-  nm_active && nmcli connection down "$con" >/dev/null 2>&1
-  nmcli --wait 25 connection up "$con" >/dev/null 2>&1 || fail "could not bring the tunnel up (nmcli connection up $con)"
+  net_helper vpn-up || fail "could not bring the tunnel up (journalctl -u 'barch-net@vpn-up_$USER')"
+  rm -f "$request"
+  # "connected" only once traffic really takes the tunnel: networkd applies the rules a moment later
+  for _ in {1..20}; do
+    [[ $(ip -o route get 1.1.1.1 2>/dev/null) == *" dev pia "* ]] && break
+    sleep 0.25
+  done
+  if [[ $(ip -o route get 1.1.1.1 2>/dev/null) != *" dev pia "* ]]; then
+    net_helper vpn-down >/dev/null 2>&1 || true
+    fail "the tunnel came up but traffic does not go through it (ip rule; ip route get 1.1.1.1)"
+  fi
 
   jq --arg since "$(date +%s)" '. + {since: ($since | tonumber)}' "$state/current.json" > "$state/current.json.tmp" && mv "$state/current.json.tmp" "$state/current.json"
   echo connected > "$state/state"
@@ -198,7 +192,7 @@ connect() {
 }
 
 disconnect() {
-  nm_exists && nmcli connection down "$con" >/dev/null 2>&1 || true
+  net_helper vpn-down >/dev/null 2>&1 || log "barch-net vpn-down failed (journalctl -u 'barch-net@vpn-down_$USER')"
   echo disconnected > "$state/state"; rm -f "$state/current.json" "$state/pid"
   date +%s > "$state/stopped"
   log "disconnected"
@@ -207,7 +201,7 @@ disconnect() {
 
 status() {
   local st=disconnected cur='{}' err pid
-  if nm_active; then
+  if tunnel_up; then
     st=connected; cur=$(cat "$state/current.json" 2>/dev/null || echo '{}')
   elif [[ $(cat "$state/state" 2>/dev/null) == connecting ]] && pid=$(cat "$state/pid" 2>/dev/null) && kill -0 "$pid" 2>/dev/null; then
     st=connecting; cur=$(cat "$state/current.json" 2>/dev/null || echo '{}')

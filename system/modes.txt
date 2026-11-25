@@ -10,6 +10,7 @@
 644 /etc/fstab
 644 /etc/hostname
 644 /etc/initcpio/acpi_override/apic.aml
+644 /etc/iwd/main.conf
 644 /etc/kernel/cmdline
 644 /etc/limine-entry-tool.conf
 644 /etc/limine-snapper-sync.conf
@@ -30,8 +31,12 @@
 644 /etc/plymouth/plymouthd.conf
 644 /etc/polkit-1/rules.d/50-barch-agent-snapshot.rules
 644 /etc/polkit-1/rules.d/50-barch-killswitch.rules
+644 /etc/polkit-1/rules.d/50-barch-net.rules
 644 /etc/smartd.conf
 644 /etc/sysctl.d/10-barch-net.conf
+644 /etc/systemd/network/20-wired.network
+644 /etc/systemd/network/25-wireless.network
+644 /etc/systemd/resolved.conf.d/barch.conf
 644 /etc/systemd/system/archlinux-keyring-wkd-sync.service.d/barch-timeout.conf
 644 /etc/systemd/system/barch-agent-snapshot@.service
 644 /etc/systemd/system/barch-backup-root.service
@@ -42,6 +47,7 @@
 644 /etc/systemd/system/barch-failure@.service
 644 /etc/systemd/system/barch-failure@.service.d/zz-no-onfailure.conf
 644 /etc/systemd/system/barch-killswitch@.service
+644 /etc/systemd/system/barch-net@.service
 644 /etc/systemd/system/btrfs-scrub@.service.d/report.conf
 644 /etc/systemd/system/dirmngr@.service.d/barch-stop-timeout.conf
 644 /etc/systemd/system/getty@tty1.service.d/autologin.conf
@@ -50,6 +56,7 @@
 644 /etc/systemd/system/paccache.service.d/override.conf
 644 /etc/systemd/system/service.d/barch-onfailure.conf
 644 /etc/systemd/system/setvtrgb.service
+644 /etc/systemd/system/systemd-networkd-wait-online.service.d/any.conf
 644 /etc/systemd/system/systemd-vconsole-setup.service.d/retry.conf
 644 /etc/systemd/zram-generator.conf
 644 /etc/udev/rules.d/90-barch-bt-le.rules
@@ -62,6 +69,7 @@
 755 /usr/local/bin/barch-disk-health
 755 /usr/local/bin/barch-failure-relay
 755 /usr/local/bin/barch-killswitch
+755 /usr/local/bin/barch-net
 755 /usr/local/bin/btrfs-scrub-report
 755 /usr/local/bin/desktop-notify
 755 /usr/local/bin/numlock

@@ -11,8 +11,10 @@ so links from other apps open there, every Ethernet and Wi-Fi profile stops send
 over DHCP, the VPN comes up and the **kill switch** is armed: `/usr/local/bin/barch-killswitch`
 (root, through `barch-killswitch@.service`, which polkit lets wheel users start) adds an nftables
 table whose output and forward chains only let through the tunnel itself (UDP to the PIA server),
-anything inside the tunnel, the directly connected networks (LAN, libvirt, Docker) and their
-broadcast/multicast/link-local traffic; everything else is rejected, so a dropped tunnel means
+anything inside the tunnel, the directly connected networks (LAN, libvirt, Docker: the routes at
+arming plus the `docker0`/`br-*`/`virbr*` bridges by name) and their broadcast/multicast/link-local
+traffic, but never DNS (53/853) outside the tunnel, or a query sent straight to the pfSense would be
+resolved through the real address; everything else is rejected, so a dropped tunnel means
 no traffic, not exposed traffic, for VMs and containers too. A region change re-arms it for the
 new server before the tunnel moves. Off removes the table, disconnects and brings the previous
 browser back; the mode never survives a logout or boot (`/run` is empty, the session mark is
@@ -41,11 +43,11 @@ opened either. `sudo nft list table inet barch` shows it with counters.
 ## VPN
 
 **VPN** (`quickshell/vpn/`, what Anonymous Mode uses; `barch vpn` drives it alone): Private
-Internet Access over WireGuard, without root. `pia.sh` gets a token from the PIA API, registers a
-fresh key pair on the chosen server and writes the answer into
-a NetworkManager profile owned by the user (`connection.permissions`), so `nmcli` brings it up
-with the session's polkit rights. Region "Auto" is the lowest latency measured at that moment;
+Internet Access over WireGuard. `pia.sh` gets a token from the PIA API, registers a fresh key
+pair on the chosen server and hands the answer to `barch-net`, the root helper that writes the
+tunnel for systemd-networkd into `/run` (the private key never leaves root and networkd; polkit
+lets the user start it without a password, see [network.md](network.md)). Region "Auto" is the lowest latency measured at that moment;
 the VPN Region tile lists them all with a filter, fastest first. DNS is exclusive and IPv6 is
-routed into the tunnel (dropped there) while connected. A shield with the country shows in the
+routed into the tunnel (dropped there) while connected: the tunnel takes every name (`~.`) and the LAN links lose their DNS until it goes down. A shield with the country shows in the
 bar while connected (click: IP, time, Change region, Disconnect). Credentials go in `~/.config/pia/credentials`
 (username and password, one per line, `chmod 600`), never in the repo.

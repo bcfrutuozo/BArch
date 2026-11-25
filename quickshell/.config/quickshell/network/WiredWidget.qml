@@ -1,9 +1,10 @@
 // WiredWidget.qml — conexão por cabo na barra do Quickshell
 // Na barra: porta RJ45 em contorno (apagada com o cabo desconectado; some se não houver placa de rede).
 // Clique: painel com os dados da conexão (IP, máscara, gateway, DNS, MAC, velocidade, IP público)
-// e um botão para desligar/religar a placa (nmcli device disconnect/connect), para ficar só no Wi-Fi.
+// e um botão para desligar/religar a placa (networkctl down/up), para ficar só no Wi-Fi.
 // Clique em qualquer valor para copiá-lo.
-// Depende do NetworkManager (nmcli), do net-info.sh (nesta pasta) e do wl-clipboard.
+// Lê o estado do kernel (ip -j addr), sem depender de daemon; usa o net-info.sh (nesta pasta) e o wl-clipboard.
+// O networkctl up/down passa pelo polkit (50-barch-net.rules: o usuário wheel da sessão ativa).
 
 pragma ComponentBehavior: Bound
 import QtQuick
@@ -29,23 +30,9 @@ Item {
     property string device: ""
     property string connection: ""
     property bool up: false
-    property bool off: false        // cabo ligado, mas a placa desligada (Turn off) ou sem perfil ativo
+    property bool off: false        // placa desligada (Turn off: networkctl down)
     property var details: []        // entradas "ethernet" do net-info.sh
     property string statusText: ""
-
-    // nmcli -t separa campos com ":" e escapa ":" dentro dos valores com "\:"
-    function splitTerse(line) {
-        const out = []
-        let cur = ""
-        for (let i = 0; i < line.length; i++) {
-            const c = line[i]
-            if (c === "\\" && i + 1 < line.length) { cur += line[++i]; continue }
-            if (c === ":") { out.push(cur); cur = ""; continue }
-            cur += c
-        }
-        out.push(cur)
-        return out
-    }
 
     function copy(label, value) {
         Quickshell.execDetached(["wl-copy", value])
@@ -63,28 +50,33 @@ Item {
     }
 
     // ---------- processos ----------
+    // as placas en* do kernel: com mais de uma, conectada (link + IPv4) > link sem endereço ainda >
+    // desligada (networkctl down: sem a flag UP) > sem cabo
     Process {
         id: devProc
-        command: ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device"]
+        command: ["ip", "-j", "addr", "show"]
         stdout: StdioCollector {
             onStreamFinished: {
-                // com mais de uma placa: conectada > conectando > desligada com cabo > sem cabo
-                const rank = st => st === "connected" ? 3 : st.startsWith("connecting") ? 2
-                                 : st === "disconnected" ? 1 : 0
-                let dev = "", conn = "", state = "", best = -1
-                for (const line of text.trim().split("\n")) {
-                    if (!line) continue
-                    const [d, type, st, c] = root.splitTerse(line)
-                    if (type === "ethernet" && rank(st) > best) {
-                        dev = d; conn = c; state = st; best = rank(st)
-                    }
+                let links
+                try { links = JSON.parse(text) } catch (e) { return }
+                const stateOf = l => {
+                    const flags = l.flags || []
+                    if (!flags.includes("UP")) return 1
+                    if (!flags.includes("LOWER_UP")) return 0
+                    return (l.addr_info || []).some(a => a.family === "inet") ? 3 : 2
                 }
-                const up = state === "connected"
+                let dev = "", best = -1
+                for (const l of links) {
+                    if (!/^en/.test(l.ifname)) continue
+                    const st = stateOf(l)
+                    if (st > best) { dev = l.ifname; best = st }
+                }
+                const up = best === 3
                 const changed = up !== root.up
                 root.device = dev
-                root.connection = conn
+                root.connection = up ? "Wired" : ""
                 root.up = up
-                root.off = state === "disconnected"
+                root.off = best === 1
                 if (changed && popup.visible) root.refreshDetails()
             }
         }
@@ -294,8 +286,8 @@ Item {
                         cursorShape: Qt.PointingHandCursor
                         enabled: !actionProc.running
                         onClicked: root.up
-                            ? root.run(["nmcli", "device", "disconnect", root.device], "Turning off…")
-                            : root.run(["nmcli", "device", "connect", root.device], "Turning on…")
+                            ? root.run(["networkctl", "down", root.device], "Turning off…")
+                            : root.run(["networkctl", "up", root.device], "Turning on…")
                     }
                 }
 

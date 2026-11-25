@@ -1,0 +1,29 @@
+# BArch: every Ethernet port (systemd-networkd; docs/network.md). DHCP from the pfSense, IPv4 and IPv6.
+# Only en* is matched: Docker's and libvirt's bridges and veths stay theirs (networkd leaves
+# unmatched links alone). Anonymous Mode adds runtime drop-ins in /run/systemd/network/
+# 20-wired.network.d/ (no hostname over DHCP; no DNS here while the VPN is up), see barch-net.
+[Match]
+Name=en*
+
+[Network]
+DHCP=yes
+IPv6AcceptRA=yes
+IPv6LinkLocalAddressGenerationMode=stable-privacy
+LLMNR=no
+MulticastDNS=no
+
+[DHCPv4]
+# the cable wins over the Wi-Fi when both are up (the metrics NetworkManager used)
+RouteMetric=100
+UseDomains=yes
+# the NTP server the pfSense announces goes to systemd-timesyncd
+UseNTP=yes
+
+[DHCPv6]
+UseDomains=yes
+UseNTP=yes
+
+[IPv6AcceptRA]
+RouteMetric=100
+Token=prefixstable
+UseDomains=yes

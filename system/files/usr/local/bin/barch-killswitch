@@ -6,7 +6,8 @@
 # when the region changes). It adds the table "inet barch-killswitch" with output and forward
 # chains that only let through: the tunnel itself (UDP to <ip>:<port>, the PIA server), anything
 # inside the tunnel (interface pia), the networks directly connected to this machine (LAN, libvirt,
-# Docker bridges), loopback, and the broadcast / multicast / link-local traffic those networks
+# Docker bridges, also by interface name) except for DNS (53/853: the pfSense would resolve a name
+# through the real address; resolved only asks inside the tunnel while connected), loopback, and the broadcast / multicast / link-local traffic those networks
 # need (DHCP, mDNS, IPv6 neighbour discovery). Everything else is rejected, so when the tunnel
 # drops the applications fail at once instead of silently falling back to the real address;
 # the forward chain does the same for VMs and containers using the host's NAT.
@@ -50,6 +51,8 @@ table inet $table {
     oifname "lo" accept
     oifname "$iface" accept comment "inside the tunnel"
     ip daddr $ip udp dport $port accept comment "the tunnel itself (PIA server)"
+    meta l4proto { tcp, udp } th dport { 53, 853 } counter reject with icmpx type admin-prohibited comment "DNS only inside the tunnel: the pfSense would resolve through the real address"
+    oifname { "docker0", "virbr*", "br-*" } accept comment "local bridges (Docker, libvirt), whatever the routes said at arming"
     $out_nets
     ip daddr { 224.0.0.0/4, 255.255.255.255 } accept comment "multicast and broadcast (mDNS, DHCP)"
     ip6 daddr { fe80::/10, ff02::/16 } accept comment "IPv6 link-local and multicast (neighbour discovery, DHCPv6)"
@@ -58,6 +61,8 @@ table inet $table {
   chain forward {
     type filter hook forward priority filter + 10; policy drop;
     oifname "$iface" accept comment "guests and containers through the tunnel"
+    meta l4proto { tcp, udp } th dport { 53, 853 } counter reject with icmpx type admin-prohibited comment "no DNS around the tunnel for guests and containers either"
+    oifname { "docker0", "virbr*", "br-*" } accept comment "between local bridges"
     $fwd_nets
     ip daddr 224.0.0.0/4 accept
     counter reject with icmpx type admin-prohibited comment "no tunnel, no traffic for guests and containers either"

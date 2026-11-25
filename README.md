@@ -73,6 +73,7 @@ Around it, apps with their own window and services, each with its page:
 | Page | What |
 |---|---|
 | [docs/apps.md](docs/apps.md) | Hyprland Settings (every option of the installed version), System Center, Packages, Audio Mixer, Clip (video editor), BArch Drop (files from the iPhone), Applio |
+| [docs/network.md](docs/network.md) | systemd-networkd, iwd and systemd-resolved (no NetworkManager), NTP from the pfSense, the root helper of the VPN |
 | [docs/privacy.md](docs/privacy.md) | Anonymous Mode, the nftables firewall and kill switch, the PIA VPN |
 | [docs/theme.md](docs/theme.md) | Palettes, the palette editor, what is generated from them, RGB lighting, the wallpapers |
 | [docs/music.md](docs/music.md) | The music pipeline on the NAS and the Music app (review, covers, library, artists) |
