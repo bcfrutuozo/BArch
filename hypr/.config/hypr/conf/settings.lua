@@ -113,6 +113,7 @@ local function decode(str)
     if pos <= #str then err("trailing data") end
     return v
 end
+S.decode = decode   -- conf/monitors.lua reads the bar's display.json with it
 
 local function fail(what, e) S.errors[#S.errors + 1] = what .. ": " .. tostring(e) end
 

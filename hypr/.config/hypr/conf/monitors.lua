@@ -48,6 +48,26 @@ BArch.monitors = {
 -- mudanças feitas pela barra (a barra manda de novo depois de cada reload)
 BArch.monitor_overrides = BArch.monitor_overrides or {}
 
+-- What the Control Center saved for the main output (HDR, SDR brightness) is read here too, so
+-- the first modeset at login already carries it. Before, the AW came up with these defaults and the
+-- bar re-sent its values 1.5 s later: a second modeset, and each one on the AW costs a 3 s NVIDIA
+-- "Flip event timeout" (2026-11-25, ~6 s of a frozen compositor at login). The output is the bar's
+-- `mainOutput` (control/ControlCenter.qml).
+BArch.main_output = "HDMI-A-2"
+do
+    local f = io.open((os.getenv("HOME") or "") .. "/.local/state/quickshell/display.json", "r")
+    if f then
+        local text = f:read("a")
+        f:close()
+        local ok, saved = pcall(BArch.settings and BArch.settings.decode or error, text)
+        if ok and type(saved) == "table" then
+            local o = BArch.monitor_overrides[BArch.main_output] or {}
+            for k, v in pairs(saved) do o[k] = v end
+            BArch.monitor_overrides[BArch.main_output] = o
+        end
+    end
+end
+
 function BArch.apply_monitor(name)
     local t = {}
     for k, v in pairs(BArch.monitors[name] or {}) do t[k] = v end
@@ -58,10 +78,26 @@ function BArch.apply_monitor(name)
     hl.monitor(t)
 end
 
+-- the values apply_monitor would hand to hl.monitor for this output
+function BArch.monitor_config(name)
+    local t = {}
+    for k, v in pairs(BArch.monitors[name] or {}) do t[k] = v end
+    for k, v in pairs((BArch.settings and BArch.settings.monitor(name)) or {}) do t[k] = v end
+    for k, v in pairs(BArch.monitor_overrides[name] or {}) do t[k] = v end
+    return t
+end
+
+-- only a real change reaches hl.monitor: every call re-applies the output, a modeset (the bar sends
+-- its saved values again after each start and reload, usually the ones already in place)
 function BArch.set_monitor(name, changes)
+    local cur, changed = BArch.monitor_config(name), false
     BArch.monitor_overrides[name] = BArch.monitor_overrides[name] or {}
-    for k, v in pairs(changes) do BArch.monitor_overrides[name][k] = v end
-    BArch.apply_monitor(name)
+    for k, v in pairs(changes) do
+        if cur[k] ~= v then changed = true end
+        BArch.monitor_overrides[name][k] = v
+    end
+    if changed then BArch.apply_monitor(name) end
+    return changed
 end
 
 for name in pairs(BArch.monitors) do BArch.apply_monitor(name) end

@@ -30,6 +30,15 @@ True for this machine only; review before using the repo elsewhere.
 - **Monitors:** AW3225QF on `HDMI-A-2` (4K 240 Hz, 10-bit, HDR, scale 2, the bar lives here);
   P2723QE on `HDMI-A-1`, portrait, to the left. Values in `hypr/.config/hypr/conf/monitors.lua`
   (`BArch.monitors`); the bar changes HDR/SDR brightness through `BArch.set_monitor(...)`.
+  Every modeset of the AW costs a 3 s NVIDIA "Flip event timeout" (the HDMI 2.1 link), during which
+  Hyprland answers no client: so `monitors.lua` reads the bar's saved values
+  (`~/.local/state/quickshell/display.json`) before the first modeset, and `set_monitor` skips
+  `hl.monitor` when nothing changes (the bar re-sends its values after every start and reload).
+  That keeps reloads free of modesets (the bar's re-send at login caused none on the 2026-11-25 boot),
+  but the login still pays two timeouts (~6 s, before any client connects): the monitor rule modesets
+  the AW, and the first frame modesets it again to send the HDR metadata (`handleFullscreenSettings`
+  "[CM] Updating HDR metadata from monitor"; aquamarine does not carry that blob in the first commit).
+  It is inside Hyprland, not the config (turning HDR on later would cost the same modeset).
   XWayland has no negative coordinates, so the portrait monitor becomes its `+0+0` and, without a
   primary output, Wine/Proton takes it as the main display (games list portrait resolutions or open
   there). `hypr/scripts/xwayland-primary.sh` marks the AW as primary at login, and the rule
