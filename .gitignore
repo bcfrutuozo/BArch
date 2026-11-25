@@ -6,6 +6,8 @@ hypr/.config/hypr/themes/current.lua
 
 # systemd "enable" links: machine-specific, install.sh enables the services again
 systemd/.config/systemd/user/*.wants/
+# Alias= links made by enable (Sunshine names itself sunshine.service -> /usr/lib/...): machine-specific too
+systemd/.config/systemd/user/sunshine.service
 
 # Editor and backup leftovers
 *.bak

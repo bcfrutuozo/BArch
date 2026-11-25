@@ -1,0 +1,15 @@
+[Desktop Entry]
+Name=Moonlight
+Comment=Stream games and other applications from another PC running Sunshine or GeForce Experience
+# FORCE_VAAPI=1: on NVIDIA Moonlight skips VA-API and draws with Vulkan (libplacebo), which maps an
+# SDR stream into the HDR desktop with its own, lower white: the picture came out dim on the AW.
+# VA-API + EGL is a plain SDR surface that Hyprland converts like every other window. On Intel/AMD
+# VA-API is already the first choice, so the variable changes nothing there.
+TryExec=moonlight
+Exec=env FORCE_VAAPI=1 moonlight
+Icon=moonlight
+Terminal=false
+Type=Application
+Categories=Qt;Game;Network;RemoteAccess;
+Keywords=nvidia;gamestream;stream;sunshine;remote play;
+StartupWMClass=com.moonlight_stream.Moonlight

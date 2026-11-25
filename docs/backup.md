@@ -8,7 +8,19 @@ personal files, encrypted with [restic](https://restic.net) on the NAS
 `~/.config/barch/backup.conf` as `BACKUP_REPO=`). What goes in is `backup/include.txt` (SSH and
 GPG keys, PIA, the vdirsyncer password, the keyring, Firefly data and the finance ledger, browser
 profiles, Parsec, Steam user data, Claude's project memory, the VM definitions dumped by
-`virsh`, Documents, Pictures, Videos); `exclude.txt` drops caches and sockets. The restic
+`virsh`, the secrets of projects whose code is on GitHub (`~/Source/Fragmenta/.env`), Documents,
+Pictures, Videos); `exclude.txt` drops caches and sockets.
+
+Docker holds the rest of a project: before restic runs, `barch backup run` writes every running
+Postgres container as a `pg_dumpall` (`<container>.sql.gz`: consistent while it runs, unlike its data
+folder, and restorable into any Postgres version) and every named Compose volume as a tar
+(`<volume>.tar`; anonymous volumes are test leftovers, a Postgres container's own volume is
+covered by its dump) into `~/.local/state/barch/backup/docker/` (mode 700), which goes in with the
+rest. Images are not saved, they rebuild (`docker compose build`/`pull`). It runs only when the
+daemon is already up; a stopped container keeps its last dump, and a dump that fails is logged
+without failing the backup. Restore: `barch backup restore latest .local/state/barch/backup/docker`,
+then `zcat <container>.sql.gz | docker exec -i <container> psql -U postgres` into a fresh database
+container and `docker run --rm -v <volume>:/v -i alpine tar -C /v -xf - < <volume>.tar`. The restic
 password lives in `~/.config/barch/backup/password` and nowhere in the repo: `barch backup init`
 generates it, prints it once, and it belongs in Bitwarden too, because a reinstalled machine
 needs it before anything can be restored.

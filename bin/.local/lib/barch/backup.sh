@@ -46,6 +46,38 @@ backup_check() {
   fi
   logger -t barch-backup -- "check ok ($subset of the data read, $(( $(date +%s) - start )) s)"
 }
+# backup_docker: what lives only inside Docker, dumped where restic picks it up ($BACKUP_STATE/docker):
+# every running Postgres container as pg_dumpall (consistent while it runs, unlike its data folder,
+# and portable across Postgres versions) and every named Compose volume (anonymous ones are test
+# leftovers) as a tar, except those a Postgres container holds. Images are left out: they rebuild.
+# Only when the daemon is already up (docker.socket would start it); a container that is stopped
+# keeps its last dump. A failure here is logged, never fails the backup of everything else.
+backup_docker() {
+  command -v docker >/dev/null && systemctl is-active --quiet docker.service || return 0
+  local dir=$BACKUP_STATE/docker c v pgvols=" " tmp
+  install -d -m 700 "$dir" "$dir/postgres" "$dir/volumes"
+  while IFS= read -r c; do
+    [[ -n $c ]] || continue
+    tmp=$dir/postgres/$c.sql.gz.tmp
+    if (umask 077; set -o pipefail; docker exec "$c" sh -c 'pg_dumpall -U "${POSTGRES_USER:-postgres}"' 2>>"$BACKUP_STATE/last.err" | gzip > "$tmp") \
+       && zcat "$tmp" 2>/dev/null | grep -q -m1 'PostgreSQL database cluster dump'; then
+      mv "$tmp" "$dir/postgres/$c.sql.gz"
+    else
+      rm -f "$tmp"; logger -t barch-backup -- "docker: pg_dumpall of $c failed, the last dump is kept"
+    fi
+    pgvols+="$(docker inspect -f '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}} {{end}}{{end}}' "$c" 2>/dev/null) "
+  done < <(docker ps --format '{{.Names}} {{.Image}}' 2>/dev/null | awk '$2 ~ /(^|\/)postgres(:|$)/ {print $1}')
+  while IFS= read -r v; do
+    [[ -n $v && $pgvols != *" $v "* ]] || continue
+    tmp=$dir/volumes/$v.tar.tmp
+    if (umask 077; docker run --rm --network none -v "$v":/v:ro alpine tar -C /v -cf - . > "$tmp" 2>>"$BACKUP_STATE/last.err"); then
+      mv "$tmp" "$dir/volumes/$v.tar"
+    else
+      rm -f "$tmp"; logger -t barch-backup -- "docker: volume $v could not be read, the last copy is kept"
+    fi
+  done < <(docker volume ls -q --filter label=com.docker.compose.project 2>/dev/null)
+  return 0
+}
 
 cmd_backup() {
   local sub=${1:-status}
@@ -76,6 +108,7 @@ cmd_backup() {
       while IFS= read -r vm; do
         [[ -n $vm ]] && virsh --connect qemu:///system dumpxml --inactive "$vm" > "$BACKUP_STATE/vm/${vm// /_}.xml" 2>/dev/null
       done < <(virsh --connect qemu:///system list --all --name 2>/dev/null)
+      backup_docker
       # include list → absolute paths that exist
       local files start summary rc
       files=$(mktemp)

@@ -86,6 +86,7 @@ mangohud
 memtest86+-efi
 mingw-w64-gcc
 mono
+moonlight-qt
 mousepad
 mpv
 mpv-mpris

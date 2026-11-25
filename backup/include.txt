@@ -25,6 +25,10 @@
 .local/share/Steam/userdata
 .claude/projects
 
+# projects: the code is on GitHub; their secrets are not (git-ignored). The Docker side of a project
+# (Postgres dumps, named Compose volumes) is written by `barch backup run` into .local/state/barch/backup/docker
+Source/Fragmenta/.env
+
 # the Windows VM definition (the disk image is too big and is rebuilt; the XML is what took work)
 .local/state/barch/backup/vm
 
