@@ -6,7 +6,7 @@ The repo holds the configuration; `barch backup` holds the rest: secrets, per-ap
 personal files, encrypted with [restic](https://restic.net) on the NAS
 (`/mnt/nasfrutuozo/organization/desktops/bcfrutuozo/restic`; another path or a restic URL goes in
 `~/.config/barch/backup.conf` as `BACKUP_REPO=`). What goes in is `backup/include.txt` (SSH and
-GPG keys, PIA, the vdirsyncer password, the keyring, Firefly data and the finance ledger, browser
+GPG keys, PIA, the API keys of `~/.config/barch` (Fragmenta, NAS, pfSense...; not the restic password), the vdirsyncer password, the keyring, Firefly data and the finance ledger, browser
 profiles, Parsec, Steam user data, Claude's project memory, the VM definitions dumped by
 `virsh`, the secrets of projects whose code is on GitHub (`~/Source/Fragmenta/.env`), Documents,
 Pictures, Videos); `exclude.txt` drops caches and sockets.

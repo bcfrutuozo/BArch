@@ -129,6 +129,10 @@ for s in "${SYSTEM_SERVICES[@]}"; do
   if systemctl is-enabled --quiet "$s" 2>/dev/null; then ok "$s already enabled"; continue; fi
   ask "Enable $s?" && sudo systemctl enable --now "$s" && ok "$s"
 done
+for s in "${SYSTEM_MASKED[@]}"; do
+  if [[ "$(systemctl is-enabled "$s" 2>/dev/null)" == masked ]]; then ok "$s already masked"; continue; fi
+  ask "Mask $s?" && sudo systemctl mask "$s" && ok "$s masked"
+done
 
 # libvirt's network "default" is only a pointer to virbr0, the bridge systemd-networkd serves
 # (30-virbr0.*): no dnsmasq. A fresh libvirt (or the old NAT network) gets the repo's definition

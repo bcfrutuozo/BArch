@@ -12,6 +12,9 @@
 # vdirsyncer: the folder is real (icloud-password); only its config is a repo symlink
 .config/vdirsyncer
 .config/gh
+# API keys and private URLs barch reads (fragmenta.json, nas.json, pfsense.json, ...); the restic
+# password inside it stays out (exclude.txt)
+.config/barch
 .local/share/keyrings
 
 # app state this machine would lose on a reinstall

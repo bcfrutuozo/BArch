@@ -3,7 +3,7 @@ Description=Bluetooth LE off on the AirPods adapter (the other keeps it for the 
 After=bluetooth.service
 
 [Service]
-Type=oneshot
+Type=exec
 ExecStart=/usr/local/bin/barch-bt-le
 
 [Install]
